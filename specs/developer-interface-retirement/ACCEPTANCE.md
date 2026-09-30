@@ -2,7 +2,7 @@
 
 日期：2026-09-30。
 
-本文件记录办公模式移除阶段的实测结果。首次引导随后收敛为单页助手偏好，当前引导验收见 [助手偏好验收](../onboarding-preferences/ACCEPTANCE.md)。
+本文件记录办公模式与 CUA 移除阶段的实测结果。首次引导随后收敛为单页助手偏好，当前引导验收见 [助手偏好验收](../onboarding-preferences/ACCEPTANCE.md)。
 
 ## 环境
 
@@ -21,7 +21,9 @@
 | 旧办公模式偏好      | 写入 zcode-interface-mode=office 后刷新，仍进入统一界面，无办公/编程界面模式设置或提示                                                                      | review-legacy-office.png                                                                 |
 | 侧边栏菜单          | 保留语言、主题、统计、升级、连接；无办公/编程模式入口                                                                                                       | sidebar-menu-no-mode.png                                                                 |
 | 终端与审查入口      | 旧 office 值仍存在时，命令面板能打开终端与审查；真实终端面板显示 workspace 标签和 Terminal input，审查面板显示“未暂存”与刷新按钮                            | terminal-legacy-office.png、review-legacy-office.png                                     |
-| 窄屏                | 390 × 844 的主界面输入框与操作区可用                                                                                                           | mobile-main.png                                                                          |
+| 不可用 CUA 产品入口 | 输入框没有 v4-composer-cua-entry；设置导航及插件管理无电脑控制入口、不可用内置能力卡片                                                                      | review-legacy-office.png（插件管理以 AX 快照与 DOM 检查为证据）                          |
+| 浏览器能力保留      | 浏览器控制设置及已启用的浏览器操作插件可见；Web 的浏览器数据管理操作仍按平台能力禁用                                                                        | browser-control-web.png（插件管理以 AX 快照与 DOM 检查为证据）                           |
+| 窄屏                | 390 × 844 的主界面输入框与操作区可用，无 CUA 入口                                                                                                           | mobile-main.png                                                                          |
 
 截图保存在 C:/Users/Administrator/AppData/Local/Temp/zcode-retirement-e2e-KFXkha，未提交到仓库。主动建议开关控制开发任务列表；关闭后现有场景 chips 仍可见，本轮没有将其记为主动建议列表。
 
@@ -41,6 +43,7 @@
 
 - 未启动 Electron；原生编辑器打开、macOS/Linux 权限行为未实测。
 - 窄屏仅验证本地 Web 响应式界面，未连接真实手机或桌面 Host attachment，未将其记为远程 replayable 链路通过。
-- 未发送真实模型任务，未执行浏览器自动化动作。
+- 未发送真实模型任务，未执行浏览器自动化动作；历史 CUA transcript 渲染本轮保留原实现，未构造历史会话 UI 验收。
 - 审查验证到面板与入口可用；测试 workspace 没有 Git 变更，未验证 diff 内容。
+- 临时 runtime 缓存中的 Node Repl Host 描述曾包含 Computer Use；当前仓库 manifest 已由主任务修正，本轮未重装整套 runtime 缓存。
 - agent-browser 在此 Windows 环境的 open/reload 偶发返回 EOF 或 about:blank；使用新快照确认页面、通过页面 reload 恢复后才记录通过。统一浏览器工具连接失败且 IAB 不可用。

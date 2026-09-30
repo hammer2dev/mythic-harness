@@ -126,7 +126,6 @@ const zhCN: Record<string, string> = {
   "offPeak.nav.listUnavailable": "闲时任务列表加载失败，请刷新后重试",
   "offPeak.boundSession.hint": "任务将在该会话中执行；执行期间停止会话会取消任务。",
   "offPeak.chatCreated.boundHint": "将在本会话中运行",
-  "settings.computerUse.disabledToast": "电脑控制已关闭，已有对话需重启 ZCode 后生效。",
   "settings.modelProvider.connectionUnavailableNotice": "当前套餐已不可用。",
   "settings.modelProvider.switchConnection": "切换至「{connection}」",
   "settings.modelProvider.connectionSuggestionStale": "套餐状态已变化，请在模型设置中重新选择。",
@@ -2198,8 +2197,7 @@ const zhCN: Record<string, string> = {
     "应用与 Agent 日志、崩溃报告；清理时保留当天。",
   "resourceManager.storage.categoryDescription.backups": "升级或迁移前自动留下的数据库与配置副本。",
   "resourceManager.storage.categoryDescription.exports": "导出的日志包与反馈附件。",
-  "resourceManager.storage.categoryDescription.runtimes":
-    "内置 Agent 运行时、Computer Use 组件与插件。",
+  "resourceManager.storage.categoryDescription.runtimes": "内置 Agent 运行时与插件。",
   "resourceManager.storage.categoryDescription.config": "设置、凭据、记忆与默认工作区文件。",
   "resourceManager.storage.categoryDescription.other":
     "未归类的文件，以及切换数据存储路径后遗留的旧副本。",
@@ -4471,15 +4469,6 @@ const zhCN: Record<string, string> = {
     "压缩完成后，当前会话已使用的上下文仍大于目标模型预留最大输出后的可用上下文，模型切换已取消。",
   "chat.toolbar.mode.label": "切换模式",
   // CUA 输入框常驻入口按钮
-  "chat.toolbar.computerUse.label": "电脑操作",
-  "chat.toolbar.computerUse.tooltip.idle": "电脑操作空闲——首次使用时自动启动",
-  "chat.toolbar.computerUse.tooltip.starting": "正在启用电脑操作插件…",
-  "chat.toolbar.computerUse.tooltip.ready": "电脑操作已就绪 · 直接描述你想让 ZCode 做的事",
-  "chat.toolbar.computerUse.tooltip.permissionRequired": "缺少 macOS 权限，点击完成授权",
-  "chat.toolbar.computerUse.tooltip.error":
-    "电脑操作启用失败 · 重启 ZCode 应用后重试，或让 ZCode 排查日志",
-  "chat.toolbar.computerUse.tooltip.sessionBusy":
-    "会话进行中，暂不能切换电脑操作；任务结束后可再试",
   "chat.toolbar.mode.description": "切换当前任务的权限/执行模式，例如默认、计划或接受编辑。",
   "chat.toolbar.thoughtLevel.label": "推理强度",
   "chat.toolbar.thoughtLevel.tooltip": "思考级别",
@@ -5481,8 +5470,6 @@ const zhCN: Record<string, string> = {
   "chat.permission.allowCommand.description": "项目范围内，后续相同命令不再询问",
   "chat.permission.allowCommand": "始终允许此命令",
   "chat.permission.allowForProject": "始终允许本项目",
-  "chat.permission.cua.allowForProject": "始终允许本项目中的电脑控制",
-  "chat.permission.cua.allowForProject.description": "本项目后续官方电脑控制操作不再询问",
   "chat.permission.deny": "拒绝",
   "chat.permission.denyAlways": "始终拒绝",
   "chat.permission.files": "涉及文件",
@@ -5534,10 +5521,6 @@ const zhCN: Record<string, string> = {
   "chat.permission.workflow.save.args.default": "默认值",
   "chat.interactionOrigin.subagent": "子智能体",
   "chat.interactionOrigin.subagent.title": "来自子智能体：{agentType}",
-  "chat.cuaPermission.openAccessibility": "打开辅助功能设置",
-  "chat.cuaPermission.openScreenRecording": "打开屏幕录制设置",
-  "chat.cuaPermission.opening": "正在打开...",
-  "chat.cuaPermission.openFailed": "无法打开 CUA 权限引导：{error}",
 
   // 用户问答
   "chat.elicitation.title": "需要确认",
@@ -6258,10 +6241,6 @@ const zhCN: Record<string, string> = {
   "automations.runs.prevPage": "上一页",
   "automations.runs.nextPage": "下一页",
   // CUA (Computer Use)
-  "chat.cuaReadiness.toolsNotLoaded":
-    "ZCode 电脑控制仍在准备中——工具尚未加载（已加载 {count} 个）。请先授予下方权限，Helper 就绪后工具会自动出现。",
-  "chat.cuaReadiness.toolsPreparing":
-    "ZCode 电脑控制仍在准备中——工具尚未加载。请先授予下方权限，Helper 就绪后工具会自动出现。",
   "chat.toolCall.cua.requestAccess": "检查 Computer Use 权限",
   "chat.toolCall.cua.appName": "电脑控制",
   "chat.toolCall.cua.group.completedLabel": "电脑控制",
@@ -6377,57 +6356,6 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.cua.writeClipboard": "写入剪贴板",
   "chat.toolCall.cua.stop": "停止控制电脑",
   "chat.toolCall.cua.default": "使用 Computer Use",
-  "cuaPermission.modal.unavailable":
-    "暂时无法确认 Helper 权限状态（Helper 可能还在启动）。请重新检查后再打开系统设置。",
-  "cuaPermission.live.title": "电脑操作需要 macOS 权限",
-  "cuaPermission.live.description": "正在运行的电脑操作任务需要 macOS 权限，是否前往授权？",
-  "cuaPermission.live.confirm": "前往授权",
-  "cuaPermission.live.cancel": "暂不授权",
-  "cuaPermission.modal.restartButton": "重启 Helper",
-  "cuaPermission.modal.restarting": "正在重启 Helper…",
-  "cuaPermission.modal.restartFailed": "无法重启 Helper：{error}",
-  "cuaPermission.modal.relaunchAppButton": "重启 ZCode",
-  "cuaPermission.modal.relaunchAppHint":
-    "重启 Helper 后仍未生效？重启 ZCode 可彻底重载 Helper 进程。",
-  "cuaPermission.status.granted": "已授权",
-  "cuaPermission.status.missing": "未授权",
-  "cuaPermission.status.unknown": "未知",
-  "cuaPermission.status.stale": "授权状态需要重新确认",
-  "cuaPermission.status.verifying": "已授权，正在验证",
-  "cuaPermission.probeVerifyingHint": "系统授权已存在，正在验证实际控制与截图能力。",
-  "cuaPermission.tools.preparing":
-    "系统权限与本机控制能力已就绪，正在等待当前会话加载电脑控制工具。",
-  "cuaPermission.grantAlreadySatisfied": "此权限已授予",
-  "cuaPermission.tools.agentUpdateRequired":
-    "当前 Agent 版本过旧，无法安全检查工具就绪状态。请更新或重启 Agent 后重新检查。",
-  "cuaPermission.tools.untrustedRuntime":
-    "检测到电脑控制工具，但它们并非来自已校验的 ZCode 官方插件。请检查插件安装后重新验证。",
-  "cuaPermission.perm.accessibility": "辅助功能 (Accessibility)",
-  "cuaPermission.perm.accessibility.purpose": "读取/驱动 UI 元素 + 合成键鼠输入",
-  "cuaPermission.perm.screenRecording": "屏幕录制 (Screen Recording)",
-  "cuaPermission.perm.screenRecording.purpose": "截屏",
-  "cuaPermission.osFloorTitle":
-    "电脑控制功能需要 macOS {minimum} 或更高版本（当前约为 macOS {current}）",
-  "cuaPermission.osFloorDescription": "请先升级系统后再使用。授权设置在低版本系统上无法完成。",
-  "cuaPermission.ready": "权限已就绪",
-  "cuaPermission.ready.sessionValidationHint":
-    "首个会话启动时，ZCode 会针对该会话精确验证电脑控制工具。",
-  "settings.computerUse.title": "电脑控制",
-  "settings.computerUse.toggleLabel": "启用电脑控制",
-  "settings.computerUse.toggleDescription": "开启后将启用电脑控制及其 MCP 与技能。",
-  "settings.computerUse.composerEntry.label": "在输入框显示电脑操作按钮",
-  "settings.computerUse.composerEntry.description": "关闭后输入框不再显示电脑操作按钮。",
-  "settings.computerUse.composerEntry.requiresEnabled":
-    "需先开启电脑控制，才能在输入框显示该按钮。",
-  "settings.computerUse.composerEntry.saveFailed": "保存失败：{error}",
-  "settings.computerUse.pluginDisabledHint": "电脑控制插件未启用。前往插件开启后即可使用电脑控制。",
-  "settings.computerUse.unsupported.title": "当前环境暂不支持电脑控制",
-  "settings.computerUse.unsupported.remoteDescription":
-    "Computer Use 暂不支持 SSH、WSL、Docker 或其他远端环境。请切换到本机 macOS 或 Windows 工作区。",
-  "settings.computerUse.unsupported.linuxDescription":
-    "Computer Use 暂不支持 Linux 桌面环境。请切换到本机 macOS 或 Windows 工作区。",
-  "settings.computerUse.unsupported.badge": "当前环境不可用",
-  "settings.computerUse.unsupported.group": "不可用的内置能力",
   "scheduledPreview.keepAwakeEnabled": "已开启保持唤醒",
   "scheduledPreview.keepAwakeDisabled": "已关闭保持唤醒",
   "scheduledPreview.toast.running": "正在运行“{title}”…",

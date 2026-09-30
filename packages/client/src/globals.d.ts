@@ -1,51 +1,48 @@
 import type {
-  DesktopCommandId,
-  DesktopZoomState,
-  DesktopWindowChromeState,
-  DesktopTitleBarTheme,
-  CuaAccessibilitySettingsResult,
-  OpenCuaPermissionOnboardingOptions,
-  PrepareCuaHelperPermissionDragResult,
+  ApplicationIconInfo,
+  ApplicationIconRequest,
   AppSettings,
-  BrowserViewOperationPayload,
+  BotRemoteWorkspaceReconnectedEvent,
   BrowserGuestAttachResult,
-  BrowserViewScreenshotSurfacePreparePayload,
-  BrowserViewScreenshotSurfaceReadyPayload,
-  BrowserViewScreenshotSurfaceReleasePayload,
-  BrowserViewViewportChangedPayload,
   BrowserViewCloseTabNotification,
   BrowserViewCloseTabRequest,
+  BrowserViewOperationPayload,
+  BrowserViewportSize,
   BrowserViewResidencyReportPayload,
   BrowserViewResidencyTransitionPayload,
   BrowserViewRestoredTabShell,
   BrowserViewRestoreTabsRequest,
-  BrowserViewportSize,
+  BrowserViewScreenshotSurfacePreparePayload,
+  BrowserViewScreenshotSurfaceReadyPayload,
+  BrowserViewScreenshotSurfaceReleasePayload,
+  BrowserViewViewportChangedPayload,
   ChromeBrowserDataImportResult,
+  DesktopCommandId,
+  DesktopTitleBarTheme,
+  DesktopWindowChromeState,
+  DesktopZoomState,
   DockerContainerInfo,
-  EmbeddedBrowserOpenUrlRequest,
   EditorInfo,
-  ApplicationIconInfo,
-  ApplicationIconRequest,
+  EmbeddedBrowserDataClearResult,
+  EmbeddedBrowserOpenUrlRequest,
   Locale,
   OAuthStateRegistration,
+  OpenInEditorOptions,
   PostUpdateReleaseNotesPayload,
   RemoteConnectionRuntimeLog,
   RemoteSessionClosedEvent,
-  BotRemoteWorkspaceReconnectedEvent,
   RemoteTarget,
-  SSHConfigAliasOption,
-  RendererTelemetryEventPayload,
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
   RendererHeapSample,
-  TelemetryRendererContext,
+  RendererTelemetryEventPayload,
+  SSHConfigAliasOption,
   TaskNotificationPayload,
-  WindowScreenshotResult,
-  EmbeddedBrowserDataClearResult,
-  WSLDistro,
+  TelemetryRendererContext,
   UpdateCheckResultPayload,
   UpdateStatePayload,
-  OpenInEditorOptions,
+  WindowScreenshotResult,
+  WSLDistro,
 } from "@zcode/shared";
 
 /**
@@ -113,7 +110,6 @@ declare global {
       syncWindowTabs(paths: string[]): void;
       /** 同步当前窗口的未读 task 数到 main 进程 */
       syncWindowUnreadCount(count: number): void;
-      syncActiveTaskSession(sessionId: string | null): void;
       /** 同步需要 main 进程即时感知的应用设置 */
       syncAppSettings?(patch: Partial<AppSettings>): void;
       /** 注册 main 进程要求聚焦指定 workspace tab 的回调，返回 disposer */
@@ -191,16 +187,6 @@ declare global {
       openInFileManager(path: string): Promise<{ success: boolean; error?: string }>;
       /** 使用系统默认应用打开本地文件 */
       openExternalFile(path: string): Promise<{ success: boolean; error?: string }>;
-      /** 打开 ZCode Computer Use 完整权限引导 */
-      openCuaPermissionOnboarding?(
-        options?: OpenCuaPermissionOnboardingOptions,
-      ): Promise<CuaAccessibilitySettingsResult>;
-      /** 只取消当前 renderer 以 operationId 发起的 onboarding participant。 */
-      cancelCuaPermissionOnboarding?(operationId: string): void;
-      /** 预热并缓存已验证的 Helper 路径，使 dragstart 能同步 startDrag */
-      prepareCuaHelperPermissionDrag?(): Promise<PrepareCuaHelperPermissionDragResult>;
-      /** 从权限浮窗拖拽 Helper.app 到 macOS 权限列表 */
-      startCuaHelperPermissionDrag?(): void;
       /** 上报 OAuth state 用于 deep link 路由 */
       registerOAuthState(payload: OAuthStateRegistration): void;
       /** 注册 OAuth deep link 回调，返回 disposer */

@@ -6,7 +6,7 @@
  * /api/v1/client/configs 旁路请求机制，只有 `data.configs.<key>` 的解析不同；复制两份
  * 170 行机制代码会让超时/TTL 语义悄悄分叉。
  *
- * 语义约定（与 desktopContextPromptRollout 一致，CUA 灰度 fail-close 也复用同一语义）：
+ * 语义约定（与 desktopContextPromptRollout 一致）：
  * - 请求失败/超时/解析失败：沿用上次快照（首次即失败 → 初始快照，由 defaultValue 决定）；
  * - 服务端成功但未下发该 key：视为"未启用"，覆盖旧缓存（不能继续沿用旧的开启快照）。
  */

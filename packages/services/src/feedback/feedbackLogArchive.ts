@@ -12,7 +12,6 @@ const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 interface FeedbackLogSource {
   directory: string;
   archivePrefix: string;
-  exitLogsOnly?: boolean;
 }
 
 function decodeDiagnosticLog(buffer: Buffer): string | null {
@@ -72,16 +71,11 @@ export async function createFeedbackDiagnosticArchive(options: {
           if (entry.isSymbolicLink()) continue;
           const absolutePath = join(directory, entry.name);
           const name = posix.join(prefix, entry.name);
-          if (entry.isDirectory() && !source.exitLogsOnly) {
+          if (entry.isDirectory()) {
             await walk(absolutePath, name, depth + 1);
             continue;
           }
-          if (
-            !entry.isFile() ||
-            !(source.exitLogsOnly
-              ? entry.name.endsWith(".exit.log")
-              : /(?:\.log(?:\.\d+)?|\.jsonl|\.ndjson)$/i.test(entry.name))
-          )
+          if (!entry.isFile() || !/(?:\.log(?:\.\d+)?|\.jsonl|\.ndjson)$/i.test(entry.name))
             continue;
           if ((await realpath(absolutePath).catch(() => null)) !== absolutePath) {
             skipLogFile("unsafe-path");

@@ -132,8 +132,6 @@ const enUS: Record<string, string> = {
   "offPeak.chatCreated.queued": "Queued for idle-time compute",
   "offPeak.chatCreated.queuedAt": "#{position} in queue",
   "offPeak.chatCreated.open": "Go to idle-time tasks",
-  "settings.computerUse.disabledToast":
-    "Computer Use is disabled. Existing conversations require a ZCode restart to take effect.",
   "settings.modelProvider.connectionUnavailableNotice": "The current plan is unavailable.",
   "settings.modelProvider.switchConnection": "Switch to “{connection}”",
   "settings.modelProvider.connectionSuggestionStale":
@@ -2344,8 +2342,7 @@ const enUS: Record<string, string> = {
     "Database and settings copies made before upgrades or migrations.",
   "resourceManager.storage.categoryDescription.exports":
     "Exported log bundles and feedback attachments.",
-  "resourceManager.storage.categoryDescription.runtimes":
-    "Bundled agent runtimes, Computer Use components and plugins.",
+  "resourceManager.storage.categoryDescription.runtimes": "Bundled agent runtimes and plugins.",
   "resourceManager.storage.categoryDescription.config":
     "Settings, credentials, memories and default workspace files.",
   "resourceManager.storage.categoryDescription.other":
@@ -4771,19 +4768,6 @@ const enUS: Record<string, string> = {
   "chat.modelSwitch.contextWindowGuard.stillTooLarge":
     "After compression, the context used by this conversation is still larger than the target model's available context after reserving maximum output. Model switching was canceled.",
   "chat.toolbar.mode.label": "Switch mode",
-  // CUA composer entry button
-  "chat.toolbar.computerUse.label": "Computer Use",
-  "chat.toolbar.computerUse.tooltip.idle":
-    "Computer Use is idle — it will start automatically on first use",
-  "chat.toolbar.computerUse.tooltip.starting": "Enabling Computer Use plugin…",
-  "chat.toolbar.computerUse.tooltip.ready":
-    "Computer Use ready — just describe what you want ZCode to do",
-  "chat.toolbar.computerUse.tooltip.permissionRequired":
-    "Missing macOS permissions — click to grant",
-  "chat.toolbar.computerUse.tooltip.error":
-    "Computer Use enablement failed. Please restart ZCode app and retry, or ask ZCode to investigate the logs",
-  "chat.toolbar.computerUse.tooltip.sessionBusy":
-    "A conversation is running. Computer Use can't be toggled right now — try again after it finishes.",
   "chat.toolbar.mode.description":
     "Switch the task's permission and execution mode, such as default, plan, or accept edits.",
   "chat.toolbar.thoughtLevel.label": "Reasoning effort",
@@ -5742,9 +5726,6 @@ const enUS: Record<string, string> = {
     "Do not ask again for matching commands in this project",
   "chat.permission.allowCommand": "Always allow this command",
   "chat.permission.allowForProject": "Always allow in this project",
-  "chat.permission.cua.allowForProject": "Always allow Computer Use in this project",
-  "chat.permission.cua.allowForProject.description":
-    "Do not ask again for official Computer Use actions in this project",
   "chat.permission.deny": "Deny",
   "chat.permission.denyAlways": "Always deny",
   "chat.permission.files": "Files",
@@ -5784,10 +5765,6 @@ const enUS: Record<string, string> = {
   "chat.permission.workflow.save.args.default": "Default",
   "chat.interactionOrigin.subagent": "Subagent",
   "chat.interactionOrigin.subagent.title": "Request from subagent: {agentType}",
-  "chat.cuaPermission.openAccessibility": "Open Accessibility Settings",
-  "chat.cuaPermission.openScreenRecording": "Open Screen Recording",
-  "chat.cuaPermission.opening": "Opening...",
-  "chat.cuaPermission.openFailed": "Could not open CUA permissions: {error}",
 
   // Elicitation
   "chat.elicitation.title": "Input required",
@@ -6574,10 +6551,6 @@ const enUS: Record<string, string> = {
   "automations.runs.prevPage": "Previous",
   "automations.runs.nextPage": "Next",
   // CUA (Computer Use)
-  "chat.cuaReadiness.toolsNotLoaded":
-    "ZCode Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
-  "chat.cuaReadiness.toolsPreparing":
-    "ZCode Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
   "chat.toolCall.cua.requestAccess": "Check Computer Use access",
   "chat.toolCall.cua.appName": "Computer Use",
   "chat.toolCall.cua.group.completedLabel": "Computer Use",
@@ -6695,62 +6668,6 @@ const enUS: Record<string, string> = {
   "chat.toolCall.cua.writeClipboard": "Write clipboard",
   "chat.toolCall.cua.stop": "Stop computer control",
   "chat.toolCall.cua.default": "Use Computer Use",
-  "cuaPermission.modal.unavailable":
-    "Couldn't verify the Helper permission status yet (it may still be starting). Check again before opening System Settings.",
-  "cuaPermission.live.title": "Computer Use needs macOS permissions",
-  "cuaPermission.live.description":
-    "A running Computer Use task needs macOS permissions. Open the authorization guide?",
-  "cuaPermission.live.confirm": "Authorize",
-  "cuaPermission.live.cancel": "Not now",
-  "cuaPermission.modal.restartButton": "Restart Helper",
-  "cuaPermission.modal.restarting": "Restarting Helper…",
-  "cuaPermission.modal.restartFailed": "Couldn't restart Helper: {error}",
-  "cuaPermission.modal.relaunchAppButton": "Restart ZCode",
-  "cuaPermission.modal.relaunchAppHint":
-    "Still not working after restarting Helper? Restart ZCode to fully reload the Helper process.",
-  "cuaPermission.status.granted": "Granted",
-  "cuaPermission.status.missing": "Missing",
-  "cuaPermission.status.unknown": "Unknown",
-  "cuaPermission.status.stale": "Authorization needs verification",
-  "cuaPermission.status.verifying": "Granted, verifying",
-  "cuaPermission.probeVerifyingHint":
-    "System permission is present. Verifying real control and screen capture now.",
-  "cuaPermission.tools.preparing":
-    "System permissions and local control are ready. Waiting for this session to load Computer Use tools.",
-  "cuaPermission.grantAlreadySatisfied": "This permission has already been granted.",
-  "cuaPermission.tools.agentUpdateRequired":
-    "The connected Agent is too old for a safe readiness check. Update or restart it, then check again.",
-  "cuaPermission.tools.untrustedRuntime":
-    "Computer Use tools were found, but they did not come from the verified ZCode plugin. Review the plugin installation, then check again.",
-  "cuaPermission.perm.accessibility": "Accessibility",
-  "cuaPermission.perm.accessibility.purpose": "Read/drive UI elements + synthesize input",
-  "cuaPermission.perm.screenRecording": "Screen Recording",
-  "cuaPermission.perm.screenRecording.purpose": "Capture the screen",
-  "cuaPermission.osFloorTitle":
-    "Computer Use requires macOS {minimum} or later (currently around macOS {current})",
-  "cuaPermission.osFloorDescription":
-    "Please upgrade macOS before using it. Permission setup cannot be completed on older versions.",
-  "cuaPermission.ready": "Permissions ready",
-  "cuaPermission.ready.sessionValidationHint":
-    "ZCode will verify the Computer Use tools against the exact session when your first session starts.",
-  "settings.computerUse.title": "Computer Use",
-  "settings.computerUse.toggleLabel": "Enable Computer Use",
-  "settings.computerUse.toggleDescription":
-    "Turning this on enables Computer Use — its MCP server and skills.",
-  "settings.computerUse.composerEntry.label": "Show Computer Use button in the composer",
-  "settings.computerUse.composerEntry.description": "When off, the composer button is hidden.",
-  "settings.computerUse.composerEntry.requiresEnabled":
-    "Turn on Computer Use first to show this button in the composer.",
-  "settings.computerUse.composerEntry.saveFailed": "Failed to save: {error}",
-  "settings.computerUse.pluginDisabledHint":
-    "The Computer Use plugin is not enabled. Enable it in Plugins to use Computer Use.",
-  "settings.computerUse.unsupported.title": "Computer Use is unavailable here",
-  "settings.computerUse.unsupported.remoteDescription":
-    "Computer Use is not yet supported for SSH, WSL, Docker, or other remote environments. Switch to a local macOS or Windows workspace.",
-  "settings.computerUse.unsupported.linuxDescription":
-    "Computer Use is not yet supported on Linux desktops. Switch to a local macOS or Windows workspace.",
-  "settings.computerUse.unsupported.badge": "Unavailable here",
-  "settings.computerUse.unsupported.group": "Unavailable built-in capabilities",
   "scheduledPreview.keepAwakeEnabled": "Keep awake enabled",
   "scheduledPreview.keepAwakeDisabled": "Keep awake disabled",
   "scheduledPreview.toast.running": "Running “{title}”…",

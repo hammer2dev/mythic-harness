@@ -1,7 +1,7 @@
 import {
   databaseStartupControlSchema,
-  databaseStartupStateSchema,
   databaseStartupPortPayloadSchema,
+  databaseStartupStateSchema,
 } from "@zcode/shared";
 /* eslint-disable max-lines -- preload bridge 集中暴露桌面平台 IPC，拆散会让 contextBridge 权限边界更难审计。 */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
@@ -30,53 +30,52 @@ contextBridge.exposeInMainWorld("__ZCODE_DEVICE_ID__", parseDeviceIdFromArgs());
 import type {
   AppSettings,
   ApplicationIconRequest,
-  BrowserViewOperationPayload,
+  BotRemoteWorkspaceReconnectedEvent,
   BrowserGuestAttachResult,
+  BrowserViewCloseTabNotification,
+  BrowserViewCloseTabRequest,
+  BrowserViewOperationPayload,
+  BrowserViewResidencyReportPayload,
+  BrowserViewResidencyTransitionPayload,
+  BrowserViewRestoreTabsRequest,
+  BrowserViewRestoredTabShell,
   BrowserViewScreenshotSurfacePreparePayload,
   BrowserViewScreenshotSurfaceReadyPayload,
   BrowserViewScreenshotSurfaceReleasePayload,
   BrowserViewViewportChangedPayload,
-  BrowserViewCloseTabNotification,
-  BrowserViewCloseTabRequest,
-  BrowserViewResidencyReportPayload,
-  BrowserViewResidencyTransitionPayload,
-  BrowserViewRestoredTabShell,
-  BrowserViewRestoreTabsRequest,
   BrowserViewportSize,
-  DesktopZoomState,
-  DesktopWindowChromeState,
+  ConfigureFinalArmsCustomEventE2ERequest,
+  CreateTempTextAttachmentRequest,
   DesktopCommandId,
   DesktopTitleBarTheme,
+  DesktopWindowChromeState,
+  DesktopZoomState,
   EmbeddedBrowserOpenUrlRequest,
+  FinalArmsCustomEventE2EEntry,
+  LoadCliMcpFromUserDirectoryRequest,
   Locale,
+  MigrateLegacyCommonMcpRequest,
   OAuthStateRegistration,
   OpenInEditorOptions,
+  PostUpdateReleaseNotesPayload,
+  PrintPageToPdfResult,
+  RemoteConnectionRuntimeLog,
+  RemoteSessionClosedEvent,
   RemoteTarget,
-  TaskNotificationPayload,
-  TelemetryRendererContext,
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
   RendererHeapSample,
-  PostUpdateReleaseNotesPayload,
-  RemoteSessionClosedEvent,
-  BotRemoteWorkspaceReconnectedEvent,
-  UpdateCheckResultPayload,
-  UpdateStatePayload,
-  ZCodeStdioTapDevState,
-  LoadCliMcpFromUserDirectoryRequest,
-  MigrateLegacyCommonMcpRequest,
+  SSHConfigAliasOption,
   SaveCliMcpToUserDirectoryRequest,
   SaveFileRequest,
   SaveFileResult,
-  PrintPageToPdfResult,
-  SSHConfigAliasOption,
-  RemoteConnectionRuntimeLog,
+  TaskNotificationPayload,
+  TelemetryRendererContext,
+  UpdateCheckResultPayload,
+  UpdateStatePayload,
   WindowControlsOverlayMetrics,
   WindowControlsOverlayReadyPayload,
-  CreateTempTextAttachmentRequest,
-  OpenCuaPermissionOnboardingOptions,
-  ConfigureFinalArmsCustomEventE2ERequest,
-  FinalArmsCustomEventE2EEntry,
+  ZCodeStdioTapDevState,
 } from "@zcode/shared";
 import {
   InternalChannels,
@@ -342,8 +341,6 @@ contextBridge.exposeInMainWorld("zcode", {
   /** 同步当前窗口的未读 task 数到 main 进程 */
   syncWindowUnreadCount: (count: number) =>
     ipcRenderer.send(PlatformChannels.SyncWindowUnreadCount, count),
-  syncActiveTaskSession: (sessionId: string | null) =>
-    ipcRenderer.send(PlatformChannels.SyncActiveTaskSession, sessionId),
   /** 同步需要 main 进程即时感知的应用设置 */
   syncAppSettings: (patch: Partial<AppSettings>) =>
     ipcRenderer.send(PlatformChannels.SyncAppSettings, patch),
@@ -587,20 +584,6 @@ contextBridge.exposeInMainWorld("zcode", {
   openInFileManager: (path: string) => ipcRenderer.invoke(PlatformChannels.OpenInFileManager, path),
   /** 使用系统默认应用打开本地文件 */
   openExternalFile: (path: string) => ipcRenderer.invoke(PlatformChannels.OpenExternalFile, path),
-  /** 打开 ZCode Computer Use 完整权限引导 */
-  openCuaPermissionOnboarding: (options?: OpenCuaPermissionOnboardingOptions) =>
-    ipcRenderer.invoke(PlatformChannels.OpenCuaPermissionOnboarding, options),
-  /** 只取消当前 renderer 以 operationId 发起的 onboarding participant。 */
-  cancelCuaPermissionOnboarding: (operationId: string) =>
-    ipcRenderer.send(PlatformChannels.CancelCuaPermissionOnboarding, {
-      operationId,
-    }),
-  /** 预热并缓存已验证的 Helper 路径，使 dragstart 能同步 startDrag（避免异步 I/O 错过手势） */
-  prepareCuaHelperPermissionDrag: () =>
-    ipcRenderer.invoke(PlatformChannels.PrepareCuaHelperPermissionDrag),
-  /** 从权限浮窗拖拽 Helper.app 到 macOS 权限列表。必须是 send —— invoke 的往返会错过手势。 */
-  startCuaHelperPermissionDrag: () =>
-    ipcRenderer.send(PlatformChannels.StartCuaHelperPermissionDrag),
   /** 上报 OAuth state 用于 deep link 路由 */
   registerOAuthState: (payload: OAuthStateRegistration) =>
     ipcRenderer.send(PlatformChannels.OAuthRegisterState, payload),

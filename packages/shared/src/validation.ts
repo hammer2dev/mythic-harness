@@ -1,30 +1,16 @@
 import { databaseStartupControlSchema, databaseStartupStateSchema } from "./database-startup.js";
-import {
-  sessionCreateTelemetrySchema,
-  automationSessionCreateTelemetrySchema,
-} from "./sessionCreateTelemetry.js";
+import { automationSessionCreateTelemetrySchema } from "./sessionCreateTelemetry.js";
 /* eslint-disable max-lines -- 运行时 schema 当前集中在共享包入口，外部 relay payload 校验加入后先保持单一导出面。 */
 import { z } from "zod";
-import { zcodeProcessDiagnosticSchema } from "./process-diagnostic.js";
 import { browserCommandSchema } from "./browser-use/commands.js";
 import { browserCommandResultSchema } from "./browser-use/result.js";
-import { REMOTE_ASSET_INSTALL_MODES } from "./remoteAssetInstallMode.js";
-import { PROCESS_RESOURCE_CLI_LANES } from "./processResourceTelemetry.js";
-import { isKnownRemoteResourcePackageId } from "./remoteResourcePackages.js";
-import { zcodeProviderSchema } from "./providers.js";
-import { zcodeAgentProviderSchema } from "./zcode-agent-policy.js";
 import { modelSelectionSchema } from "./model-selection.js";
+import { zcodeProcessDiagnosticSchema } from "./process-diagnostic.js";
+import { PROCESS_RESOURCE_CLI_LANES } from "./processResourceTelemetry.js";
 import { providerProvisioningTriggerSchema } from "./provider-provisioning.js";
-import {
-  zcodeMcpTelemetryEventSchema,
-  zcodeMcpResourceSamplesSchema,
-  zcodeToolExecResourceSchema,
-  zcodeProcessResourceSampleSchema,
-} from "./zcode-protocol/index.js";
-import { zcodeTaskModeSchema } from "./zcode-task-mode-schema.js";
-import { PROTOCOL_V4_LIMITS } from "./zcode-protocol-v4/core.js";
-import { errorAttributionSchema } from "./zcode-protocol-v4/snapshot.js";
-import { sessionWorkflowActivitySchema } from "./zcode-protocol-v4/sessions-index-workflow-activity.js";
+import { zcodeProviderSchema } from "./providers.js";
+import { REMOTE_ASSET_INSTALL_MODES } from "./remoteAssetInstallMode.js";
+import { isKnownRemoteResourcePackageId } from "./remoteResourcePackages.js";
 import {
   taskOwnerCommandDeliverySchema,
   taskOwnerCommandRequestSchema,
@@ -38,10 +24,17 @@ import {
   taskStreamMirrorPublishOpSchema,
   taskStreamMirrorTargetSchema,
 } from "./task-realtime-core.js";
-
-export { WSL_USER_MAX_LENGTH, isValidWslUser, wslUserSchema } from "./wslUserValidation.js";
-export { zcodeTaskModeSchema } from "./zcode-task-mode-schema.js";
 import { wslUserSchema } from "./wslUserValidation.js";
+import { zcodeAgentProviderSchema } from "./zcode-agent-policy.js";
+import { errorAttributionSchema } from "./zcode-protocol-v4/snapshot.js";
+import {
+  zcodeMcpResourceSamplesSchema,
+  zcodeMcpTelemetryEventSchema,
+  zcodeProcessResourceSampleSchema,
+  zcodeToolExecResourceSchema,
+} from "./zcode-protocol/index.js";
+import { zcodeTaskModeSchema } from "./zcode-task-mode-schema.js";
+
 export {
   appSettingsOccupationEnum,
   appSettingsPatchSchema,
@@ -49,6 +42,8 @@ export {
   localeSchema,
   postUpdateReleaseNotesPayloadSchema,
 } from "./validationAppSettings.js";
+export { isValidWslUser, WSL_USER_MAX_LENGTH, wslUserSchema } from "./wslUserValidation.js";
+export { zcodeTaskModeSchema } from "./zcode-task-mode-schema.js";
 
 export function formatZodError(error: z.ZodError): string {
   return error.issues
@@ -432,21 +427,6 @@ export const hostLocalMediaPreviewPathAuthorizeResultMessageSchema = z
     error: z.string().optional(),
   })
   .strict();
-
-export const hostCuaPipFocusChangedMessageSchema = z
-  .object({
-    type: z.literal("cua-pip-focus-changed"),
-    event: z
-      .object({
-        kind: z.literal("focus-changed"),
-        revision: z.number().int().nonnegative().safe(),
-        sourceWindowId: nonEmptyStringSchema.max(255),
-        sessionId: nonEmptyStringSchema.max(255).nullable(),
-      })
-      .strict(),
-  })
-  .strict();
-
 export const hostProviderProvisioningExecuteMessageSchema = z
   .object({
     type: z.literal("provider-provisioning-execute"),
@@ -499,7 +479,6 @@ export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   hostOffPeakRunMessageSchema,
   hostBrowserExecuteResultMessageSchema,
   hostLocalMediaPreviewPathAuthorizeResultMessageSchema,
-  hostCuaPipFocusChangedMessageSchema,
   hostProviderProvisioningExecuteMessageSchema,
 ]);
 
@@ -753,20 +732,6 @@ export const hostWorkspaceRunningTaskCountChangedResponseSchema = z.object({
   workspaceIdentity: nonEmptyStringSchema.optional(),
   runningTaskCount: z.number().int().nonnegative(),
 });
-
-export const hostCuaOperationStateResponseSchema = z
-  .object({
-    type: z.literal("cua-operation-state"),
-    active: z.boolean(),
-    sessionId: nonEmptyStringSchema,
-    turnId: nonEmptyStringSchema,
-    workspacePath: nonEmptyStringSchema,
-    workspaceIdentity: nonEmptyStringSchema.optional(),
-  })
-  .strict();
-
-export type HostCuaOperationStateResponse = z.infer<typeof hostCuaOperationStateResponseSchema>;
-
 export const hostBroadcastClaimRequestResponseSchema = z.object({
   type: z.literal("broadcast-claim-request"),
   requestId: nonEmptyStringSchema,
@@ -1005,7 +970,6 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostSessionCreateTelemetryResponseSchema,
   hostAgentRunningTaskCountChangedResponseSchema,
   hostWorkspaceRunningTaskCountChangedResponseSchema,
-  hostCuaOperationStateResponseSchema,
   hostBroadcastEnvelopeSchema,
   hostBroadcastClaimRequestResponseSchema,
   hostBroadcastClaimCommitResponseSchema,

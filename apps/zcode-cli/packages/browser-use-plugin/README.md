@@ -4,7 +4,7 @@ The official built-in ZCode plugin for browser automation. It ships the browser-
 
 ## What it provides
 
-- `js` tool — served by the shared `node_repl` MCP host and seen by the model as `mcp__node_repl__js`. The host is shared with Computer Use, so its model-facing text is scoped to both official capabilities. Every `js` call starts in a fresh kernel; imports are limited to `node:*` builtins and absolute `file://` URLs under the skill root.
+- `js` tool — served by the `node_repl` MCP host and seen by the model as `mcp__node_repl__js`. Its model-facing instructions are scoped to Browser Use. Every `js` call starts in a fresh kernel; imports are limited to `node:*` builtins and absolute `file://` URLs under the skill root.
 - `scripts/browser-client.mjs` — explicitly bootstraps `agent.browsers` inside each fresh `js` kernel; BrowserControl tabs, not JavaScript globals, provide continuity.
 - `control-browser` skill — tells the agent how to bootstrap and drive an advertised ZCode browser backend (Desktop IAB or CLI-managed headless CDP), select a browser and read `browser.documentation()` once, use the Playwright DOM snapshot→locator→act workflow, observe controlled and user tab registries together after a possible popup action, and request screenshots only for visual evidence.
 - `web-gui-tester` skill — layers a pure-GUI black-box testing workflow on top of `control-browser`, requiring Browser Use semantic evidence plus inspected screenshots while respecting current console, upload, and runtime capability boundaries.

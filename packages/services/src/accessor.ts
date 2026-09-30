@@ -1,44 +1,43 @@
-import { IOffPeakTaskService } from "./session/offPeakTask.js";
+import type { IBotsService } from "./bots/bots.js";
+import type { IBroadcastService } from "./broadcast/broadcast.js";
+import type { IClientConfigService } from "./client-config/clientConfig.js";
+import type { IClientScenesService } from "./client-scenes/clientScenes.js";
+import type { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
+import type { ICommandsService } from "./commands/commands.js";
+import type { IConversationShareService } from "./conversation-share/conversationShare.js";
+import type { ICredentialService } from "./credential/credential.js";
+import type { IFeedbackService } from "./feedback/feedback.js";
 import type { IFileService } from "./file/file.js";
-import type { IMediaPreviewService } from "./media-preview/mediaPreview.js";
+import type { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 import type { IGitService } from "./git/git.js";
 import type { IGitCheckpointService } from "./git/gitCheckpoint.js";
-import type { ISystemService } from "./system/system.js";
-import type { ITerminalService } from "./terminal/terminal.js";
-import type { ISettingService } from "./setting/setting.js";
-import type { ICredentialService } from "./credential/credential.js";
-import type { IBroadcastService } from "./broadcast/broadcast.js";
-import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
-import type { IZCodeAgentService } from "./zcode-agent/zcodeAgent.js";
-import type { IZCodeSessionService } from "./zcode-session/zcodeSession.js";
-import type { ICuaPermissionService } from "./cua-permission-broker/cuaPermissionService.js";
-import type { IBotsService } from "./bots/bots.js";
-import type { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
-import type { IOAuthService } from "./oauth/oauth.js";
+import type { IHooksService } from "./hooks/hooks.js";
+import type { IMcpSyncService } from "./mcp-sync/mcpSync.js";
+import type { IMediaPreviewService } from "./media-preview/mediaPreview.js";
+import type { IMemoryService } from "./memory/memory.js";
 import type {
   IModelSelectionService,
   IProviderSettingsService,
 } from "./model-provider/providerFacadeServices.js";
-import type { IUsageStatsService } from "./usage-stats/usageStats.js";
-import type { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
-import type { IClientConfigService } from "./client-config/clientConfig.js";
-import type { IClientScenesService } from "./client-scenes/clientScenes.js";
-import type { ISkillsService } from "./skills/skills.js";
-import type { ISkillSyncService } from "./skill-sync/skillSync.js";
-import type { IMcpSyncService } from "./mcp-sync/mcpSync.js";
-import type { IPluginSyncService } from "./plugin-sync/pluginSync.js";
-import type { IPluginsService } from "./plugins/plugins.js";
-import type { IPluginManagementService } from "./plugins/pluginManagement.js";
-import type { ISubagentsService } from "./subagents/subagents.js";
-import type { ICommandsService } from "./commands/commands.js";
-import type { IHooksService } from "./hooks/hooks.js";
-import type { IMemoryService } from "./memory/memory.js";
-import type { ISettingsSyncService } from "./settings-sync/settingsSync.js";
-import type { IFeedbackService } from "./feedback/feedback.js";
-import type { IPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransfer.js";
-import type { IWindowControllerService } from "./window-controller/windowController.js";
+import type { IOAuthService } from "./oauth/oauth.js";
 import type { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
-import type { IConversationShareService } from "./conversation-share/conversationShare.js";
+import type { IPluginSyncService } from "./plugin-sync/pluginSync.js";
+import type { IPluginManagementService } from "./plugins/pluginManagement.js";
+import type { IPluginsService } from "./plugins/plugins.js";
+import type { IPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransfer.js";
+import { IOffPeakTaskService } from "./session/offPeakTask.js";
+import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
+import type { ISettingService } from "./setting/setting.js";
+import type { ISettingsSyncService } from "./settings-sync/settingsSync.js";
+import type { ISkillSyncService } from "./skill-sync/skillSync.js";
+import type { ISkillsService } from "./skills/skills.js";
+import type { ISubagentsService } from "./subagents/subagents.js";
+import type { ISystemService } from "./system/system.js";
+import type { ITerminalService } from "./terminal/terminal.js";
+import type { IUsageStatsService } from "./usage-stats/usageStats.js";
+import type { IWindowControllerService } from "./window-controller/windowController.js";
+import type { IZCodeAgentService } from "./zcode-agent/zcodeAgent.js";
+import type { IZCodeSessionService } from "./zcode-session/zcodeSession.js";
 
 /** UI 层消费的统一服务接口 */
 export interface IServiceAccessor {
@@ -58,8 +57,6 @@ export interface IServiceAccessor {
   readonly windowControllerService?: IWindowControllerService;
   readonly zcodeAgentService: IZCodeAgentService;
   readonly zcodeSessionService: IZCodeSessionService;
-  // CUA 是 opt-in 内测特性：local macOS host 提供，远端 等 host 没有。可选避免连锁必填。
-  readonly cuaPermissionService?: ICuaPermissionService;
   readonly conversationShareService: IConversationShareService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;

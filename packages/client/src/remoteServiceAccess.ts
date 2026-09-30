@@ -1,45 +1,44 @@
 import { ProxyChannel, type IChannelClient } from "@zcode/rpc";
 import {
-  IFileService,
-  IMediaPreviewService,
-  IGitService,
-  IGitCheckpointService,
-  ISystemService,
-  ITerminalService,
-  ISettingService,
-  IOnboardingRecordService,
-  ICredentialService,
-  IBroadcastService,
-  IZCodeTaskService,
-  IZCodeAgentService,
-  IZCodeSessionService,
-  ICuaPermissionService,
-  IConversationShareService,
   IBotsService,
-  IFileWatcherService,
-  IOAuthService,
-  IModelSelectionService,
-  IProviderSettingsService,
-  IProviderProvisioningTargetService,
-  IUsageStatsService,
-  ICodingPlanSubscriptionService,
+  IBroadcastService,
   IClientConfigService,
   IClientScenesService,
+  ICodingPlanSubscriptionService,
+  ICommandsService,
+  IConversationShareService,
+  ICredentialService,
+  IFeedbackService,
+  IFileService,
+  IFileWatcherService,
+  IGitCheckpointService,
+  IGitService,
+  IHooksService,
+  IMcpSyncService,
+  IMediaPreviewService,
+  IMemoryService,
+  IModelSelectionService,
+  IOAuthService,
   IOffPeakTaskService,
+  IOnboardingRecordService,
+  IPluginManagementService,
+  IPluginsService,
+  IPluginSyncService,
+  IPromptAttachmentTransferService,
+  IProviderProvisioningTargetService,
+  IProviderSettingsService,
+  ISettingService,
+  ISettingsSyncService,
   ISkillsService,
   ISkillSyncService,
-  IMcpSyncService,
-  IPluginSyncService,
-  IPluginsService,
-  IPluginManagementService,
   ISubagentsService,
-  ICommandsService,
-  IHooksService,
-  IMemoryService,
-  ISettingsSyncService,
-  IFeedbackService,
-  IPromptAttachmentTransferService,
+  ISystemService,
+  ITerminalService,
+  IUsageStatsService,
   IWindowControllerService,
+  IZCodeAgentService,
+  IZCodeSessionService,
+  IZCodeTaskService,
   type IServiceAccessor,
 } from "@zcode/services";
 
@@ -63,9 +62,7 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly windowControllerService: IWindowControllerService;
   readonly zcodeAgentService: IZCodeAgentService;
   readonly zcodeSessionService: IZCodeSessionService;
-  // cuaPermissionService 在 IServiceAccessor 上是可选（远端/bots host 不提供），但桌面 renderer
   // 经 RPC 一定能拿到（main host 始终注册此 descriptor；非 macOS / 未启用时方法返回 available:false）。
-  readonly cuaPermissionService: ICuaPermissionService;
   readonly conversationShareService: IConversationShareService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
@@ -137,9 +134,6 @@ export class RemoteServiceAccess implements IServiceAccessor {
     );
     this.zcodeSessionService = ProxyChannel.toService<IZCodeSessionService>(
       channelClient.getChannel(IZCodeSessionService.channelName),
-    );
-    this.cuaPermissionService = ProxyChannel.toService<ICuaPermissionService>(
-      channelClient.getChannel(ICuaPermissionService.channelName),
     );
     this.conversationShareService = ProxyChannel.toService<IConversationShareService>(
       channelClient.getChannel(IConversationShareService.channelName),

@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { CuaPermissionKind } from "../cuaAccessibilitySettings.js";
 import { timestampSchema } from "./core.js";
+
+type CuaPermissionKind = "accessibility" | "screen_recording";
 
 export const cuaRequestAccessStatusSchema = z
   .object({

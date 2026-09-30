@@ -1,60 +1,58 @@
 /* eslint-disable max-lines -- 桌面平台 IPC 集中装配，拆散会让权限边界更难审计；行数随平台能力增长。 */
-import { BrowserWindow, dialog, ipcMain, nativeTheme } from "electron";
 import { readZCodeStdioTapDevState } from "@zcode/services/node";
 import {
-  DesktopCommandIds,
   appSettingsPatchSchema,
+  DesktopCommandIds,
   formatZodError,
   localeSchema,
   nonEmptyStringSchema,
   PlatformChannels,
   rendererLogPayloadSchema,
   stringArraySchema,
-  type DesktopCommandId,
   type ApplicationIconRequest,
-  type Locale,
+  type CreateTempTextAttachmentRequest,
+  type DesktopCommandId,
   type LoadCliMcpFromUserDirectoryRequest,
+  type Locale,
   type MigrateLegacyCommonMcpRequest,
   type OpenInEditorOptions,
   type SaveCliMcpToUserDirectoryRequest,
-  type CreateTempTextAttachmentRequest,
   type UpdateStatePayload,
   type WindowControlsOverlayReadyPayload,
 } from "@zcode/shared";
-import { getInstalledEditors } from "./editors.js";
+import { BrowserWindow, dialog, ipcMain, nativeTheme } from "electron";
 import { getApplicationIcon } from "./applicationIcons.js";
-import { exportLogs } from "./exportLogs.js";
-import { resolveCommunityUrl } from "./desktopCommandHandlers.js";
-import { openInEditor } from "./openInEditor.js";
-import {
-  openResourceManager,
-  getResourceUsageSnapshot,
-  setResourceUsageSamplingActive,
-} from "./resourceManagerWindow.js";
-import { registerResourceManagerStorageIpc } from "./resourceManagerStorage.js";
-import { applyWindowsTitleBarTheme, getWindowOverlayTheme } from "./desktopWindowChrome.js";
-import { syncWindowControlsOverlayForZoomLevel } from "./desktopWindowButtonPosition.js";
-import { resolveDesktopZoomLevelFromFactor } from "./desktopZoom.js";
-import { resolveDesktopWindowChromeState } from "./desktopWindowChromeState.js";
-import { handleWindowUnreadCountSync } from "./desktopWindowLifecycle.js";
-import { captureWindowScreenshot, openPathInFileManager } from "./desktopMainIpcHelpers.js";
-import { registerCuaPermissionIpcHandlers } from "./desktopCuaPermissionIpc.js";
 import {
   registerDesktopBrowserIpcHandlers,
   type AttachBrowserGuest,
+  type BrowserViewResidencyIpcHandlers,
   type ReportBrowserScreenshotSurfaceReady,
   type UpdateBrowserGuestViewport,
-  type BrowserViewResidencyIpcHandlers,
 } from "./desktopBrowserViewIpc.js";
+import { resolveCommunityUrl } from "./desktopCommandHandlers.js";
+import { captureWindowScreenshot, openPathInFileManager } from "./desktopMainIpcHelpers.js";
+import { registerDesktopPrintToPdfIpcHandler } from "./desktopPrintToPdf.js";
+import { registerDesktopSaveFileIpcHandler } from "./desktopSaveFile.js";
+import { syncWindowControlsOverlayForZoomLevel } from "./desktopWindowButtonPosition.js";
+import { applyWindowsTitleBarTheme, getWindowOverlayTheme } from "./desktopWindowChrome.js";
+import { resolveDesktopWindowChromeState } from "./desktopWindowChromeState.js";
+import { handleWindowUnreadCountSync } from "./desktopWindowLifecycle.js";
+import { resolveDesktopZoomLevelFromFactor } from "./desktopZoom.js";
+import { getInstalledEditors } from "./editors.js";
+import { exportLogs } from "./exportLogs.js";
 import {
   loadCliMcpFromUserDirectory,
   migrateLegacyCommonMcp,
   saveCliMcpToUserDirectory,
 } from "./mcpUserDirectory/index.js";
+import { openInEditor } from "./openInEditor.js";
+import { registerResourceManagerStorageIpc } from "./resourceManagerStorage.js";
+import {
+  getResourceUsageSnapshot,
+  openResourceManager,
+  setResourceUsageSamplingActive,
+} from "./resourceManagerWindow.js";
 import { createTempTextAttachment } from "./tempTextAttachment.js";
-import { registerDesktopSaveFileIpcHandler } from "./desktopSaveFile.js";
-import { registerDesktopPrintToPdfIpcHandler } from "./desktopPrintToPdf.js";
-import { registerCuaPipActiveSessionIpc } from "./desktopCuaPipIpc.js";
 
 export function registerPlatformIpcHandlers(options: {
   fetchHelpConfig?: () => Promise<unknown>;
@@ -76,7 +74,6 @@ export function registerPlatformIpcHandlers(options: {
     senderWindow?: BrowserWindow | null,
   ) => Promise<unknown>;
   acknowledgePostUpdateReleaseNotes: (version: string) => Promise<void>;
-  syncActiveTaskSession: (windowId: number, sessionId: string | null) => void;
   syncTaskRealtimeWorkspaceKeys: (windowId: number, workspaceKeys: Iterable<string>) => void;
   getUpdateState: () => UpdateStatePayload;
   openUpdateStatusWindow: () => void;
@@ -260,10 +257,6 @@ export function registerPlatformIpcHandlers(options: {
       options.logger,
     );
   });
-  registerCuaPipActiveSessionIpc({
-    syncActiveTaskSession: options.syncActiveTaskSession,
-    warn: (message) => options.logger.warn(message),
-  });
   ipcMain.on(
     PlatformChannels.WindowControlsOverlayReady,
     (event, payload: WindowControlsOverlayReadyPayload) => {
@@ -316,12 +309,6 @@ export function registerPlatformIpcHandlers(options: {
   ipcMain.handle(PlatformChannels.OpenInFileManager, async (_event, rawPath: string) =>
     openPathInFileManager(rawPath, options.logger),
   );
-
-  registerCuaPermissionIpcHandlers({
-    logger: options.logger,
-    currentApplicationLocale: options.currentApplicationLocale,
-  });
-
   ipcMain.handle(PlatformChannels.CanOpenCommunity, async (_event, locale: unknown) => {
     const result = localeSchema.safeParse(locale);
     if (!result.success) {
@@ -404,7 +391,6 @@ export function registerPlatformIpcHandlers(options: {
       return;
     }
 
-    // 返回值直通 renderer 的 executeDesktopCommand promise（GetCuaOsSupport 依赖此行为）。
     return await options.executeDesktopCommand(command as DesktopCommandId, senderWindow);
   });
 }

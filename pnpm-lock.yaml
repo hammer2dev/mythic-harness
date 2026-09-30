@@ -684,9 +684,6 @@ importers:
       '@zcode/ui':
         specifier: workspace:*
         version: link:../ui
-      '@zcode/zcode-cua':
-        specifier: workspace:*
-        version: link:../zcode-cua
       electron-updater:
         specifier: ^6.8.3
         version: 6.8.3
@@ -968,9 +965,6 @@ importers:
       '@zcode/shared':
         specifier: workspace:*
         version: link:../shared
-      '@zcode/zcode-cua':
-        specifier: workspace:*
-        version: link:../zcode-cua
       croner:
         specifier: ^10.0.1
         version: 10.0.1

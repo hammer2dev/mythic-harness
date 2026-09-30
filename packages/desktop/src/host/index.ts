@@ -13,92 +13,91 @@
  * 2. main 进程只发送一次 init-local 初始化窗口 Host
  * 3. 后续远端 connect / scoped attachment 都由同一 Host 处理
  */
-import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
-import { randomUUID } from "node:crypto";
 import {
-  MessagePortProtocol,
   ChannelServer,
-  type IDisposable,
-  type IChannelServer,
   LoggingChannelServer,
+  MessagePortProtocol,
   NetworkTelemetryChannelServer,
+  type IChannelServer,
+  type IDisposable,
 } from "@zcode/rpc";
-import { registerHostNetworkTelemetry, stopHostNetworkTelemetry } from "./hostNetworkTelemetry.js";
-import { registerHostServiceResourceTelemetry } from "./hostServiceResourceTelemetry.js";
-import { resolveResourceTelemetryEnvironmentKey } from "./hostResourceTelemetryEnvironment.js";
-import { reportHostSessionCreate } from "./hostSessionCreateTelemetry.js";
-import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
-import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
 import {
-  ServiceCollection,
   IBotsService,
-  IFileService,
   IClientConfigService,
+  IConversationShareService,
+  IFileService,
   IMediaPreviewService,
-  IOffPeakTaskService,
   IModelSelectionService,
+  IOffPeakTaskService,
   ISettingService,
   IWindowControllerService,
-  IConversationShareService,
   IZCodeAgentService,
-  IZCodeTaskService,
   IZCodeSessionService,
-  ICuaPipSessionService,
+  IZCodeTaskService,
+  ServiceCollection,
+  collectServiceMemoryDiagnostics,
   createZCodeAgentConnectionScope,
   type ZCodeAgentV4ClientMode,
-  collectServiceMemoryDiagnostics,
 } from "@zcode/services";
 import {
-  createLocalServices,
-  getOffPeakRequestAuthBuilder,
-  disposeServiceResources,
-  disposeServiceResourcesAndWait,
   AutomationRepo,
-  OffPeakTaskRepo,
-  OffPeakTaskService,
-  createServiceLogger,
-  buildTaskChangeSummary,
-  createHostApiNetworkTransport,
-  createSettingServiceWithMigrations,
   OffPeakModelUnavailableError,
   OffPeakPermanentDispatchError,
+  OffPeakTaskRepo,
+  OffPeakTaskService,
+  buildTaskChangeSummary,
+  createHostApiNetworkTransport,
+  createLocalServices,
+  createServiceLogger,
+  createSettingServiceWithMigrations,
+  disposeServiceResources,
+  disposeServiceResourcesAndWait,
+  getOffPeakRequestAuthBuilder,
   type HostApiNetworkTransport,
   type OffPeakRequestAuthBuilder,
 } from "@zcode/services/node";
-import { createHostResourceUsageResponder } from "./hostResourceUsage.js";
-import {
-  assertBoundSessionDispatchable,
-  resolveOffPeakDispatchKind,
-} from "./offPeakDispatchPlan.js";
 import {
   HostMessageTypes,
   HostResponseTypes,
   ZCODE_VERSION,
+  buildRemoteEnvironmentKey,
+  buildRemoteWorkspaceIdentity,
   formatLogPrefix,
+  formatModelPickerValue,
   formatZCodeHostProcessName,
   formatZodError,
-  buildRemoteWorkspaceIdentity,
-  buildRemoteEnvironmentKey,
   isOffPeakTicketExpiredError,
   isRemoteWorkspaceIdentity,
   resolveWorkspaceKey,
-  formatModelPickerValue,
-  type ZCodePromptAttachment,
-  type ZCodeStreamEvent,
-  type ZCodeTaskMeta,
+  type ModelSelection,
   type TaskStreamMirrorableEvent,
   type TraceId,
-  type ZCodeTaskMode,
   type WindowHostAttachmentScope,
   type ZCodeAutomation,
   type ZCodeAutomationRun,
   type ZCodeAutomationRunOutcome,
-  type ModelSelection,
+  type ZCodePromptAttachment,
+  type ZCodeStreamEvent,
+  type ZCodeTaskMeta,
+  type ZCodeTaskMode,
 } from "@zcode/shared";
+import { randomUUID } from "node:crypto";
+import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
+import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
+import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
 import {
   parseHostIncomingMessageEvent,
   rejectUnavailableAttachedServicePort,
 } from "./hostMessagePortGuard.js";
+import { registerHostNetworkTelemetry, stopHostNetworkTelemetry } from "./hostNetworkTelemetry.js";
+import { resolveResourceTelemetryEnvironmentKey } from "./hostResourceTelemetryEnvironment.js";
+import { createHostResourceUsageResponder } from "./hostResourceUsage.js";
+import { registerHostServiceResourceTelemetry } from "./hostServiceResourceTelemetry.js";
+import { reportHostSessionCreate } from "./hostSessionCreateTelemetry.js";
+import {
+  assertBoundSessionDispatchable,
+  resolveOffPeakDispatchKind,
+} from "./offPeakDispatchPlan.js";
 // remote backend 相关模块延迟加载：ssh2 的 CJS 依赖链（asn1 等）在 asar 打包后路径断裂，
 // 静态 import 会导致 local 模式的 host process 也崩溃。
 // 改为动态 import，仅 remote 模式时才加载。
@@ -106,51 +105,51 @@ import type {
   ConnectOptions,
   DeployLockMode,
   IRemoteBackend,
-  RemoteRuntimeNetworkOptions,
   RemoteAssetNetworkPort,
   RemoteConnection,
+  RemoteRuntimeNetworkOptions,
 } from "@zcode/server/remote";
+import { createRemoteConnectionProgressContext } from "@zcode/server/remote/remoteConnectionProgressContext.js";
 import type { RemoteTarget } from "@zcode/shared";
+import { resolveAutomationSubmissionModelSelection } from "./automationModelSelection.js";
+import { scopeConversationShareServiceForAttachment } from "./conversationShareAttachmentService.js";
+import { watchCronRunBotDelivery } from "./cronBotDelivery.js";
+import {
+  recordCronRunOutcomeBestEffort,
+  settleCronRunTerminalOutcome,
+  settleManualDispatchFailureBestEffort,
+  startManualClaimHeartbeat,
+} from "./cronRunLifecycle.js";
+import { flushHostE2ECoverage } from "./e2eCoverage.js";
 import { wrapElectronPort } from "./electronPort.js";
-import { createTaskRealtimeBridgeForHostInit } from "./taskRealtimeBridge.js";
-import { resolveRpcLogLevel } from "./rpcLogLevel.js";
+import { initializeHostApiNetworkTransportOwner } from "./hostInitialization.js";
+import { shouldReportHostConsoleError, stringifyHostLogArg } from "./hostLog.js";
+import { createHostRemoteWorkspaceProxyState } from "./hostRemoteWorkspaceProxyState.js";
+import { startHostSelfResourceTelemetry } from "./hostSelfResourceTelemetry.js";
+import { runHostShutdownPhases, type HostShutdownResult } from "./hostShutdownPhases.js";
+import { createHostUncaughtExceptionHandler } from "./hostUncaughtExceptionGuard.js";
 import { createHostWorkspaceTaskTracker } from "./hostWorkspaceTaskTracker.js";
+import { createRemotePromptAttachmentTransferService } from "./promptAttachmentTransferService.js";
 import {
   createRemoteMediaPreviewProxy,
   type RemoteMediaPreviewProxy,
 } from "./remoteMediaPreviewProxy.js";
-import { watchCronRunBotDelivery } from "./cronBotDelivery.js";
-import { createHostRemoteWorkspaceProxyState } from "./hostRemoteWorkspaceProxyState.js";
-import { createRemoteWorkspaceServiceCollection } from "./remoteWorkspaceServiceCollection.js";
-import { getRemoteProviderProvisioningExecutor } from "./remoteProviderProvisioningService.js";
-import { createRemotePromptAttachmentTransferService } from "./promptAttachmentTransferService.js";
-import { shouldReportHostConsoleError, stringifyHostLogArg } from "./hostLog.js";
-import { flushHostE2ECoverage } from "./e2eCoverage.js";
-import { runHostShutdownPhases, type HostShutdownResult } from "./hostShutdownPhases.js";
-import { initializeHostApiNetworkTransportOwner } from "./hostInitialization.js";
-import { createHostUncaughtExceptionHandler } from "./hostUncaughtExceptionGuard.js";
-import {
-  recordCronRunOutcomeBestEffort,
-  startManualClaimHeartbeat,
-  settleCronRunTerminalOutcome,
-  settleManualDispatchFailureBestEffort,
-} from "./cronRunLifecycle.js";
 import {
   createRemotePromptAttachmentSessionService,
   createRemotePromptAttachmentTaskService,
   materializeRemotePromptAttachments,
 } from "./remotePromptAttachments.js";
+import { getRemoteProviderProvisioningExecutor } from "./remoteProviderProvisioningService.js";
+import { createRemoteWorkspaceServiceCollection } from "./remoteWorkspaceServiceCollection.js";
+import { resolveRpcLogLevel } from "./rpcLogLevel.js";
+import { createTaskRealtimeBridgeForHostInit } from "./taskRealtimeBridge.js";
 import { createWindowHostAttachmentRegistry } from "./windowHostAttachmentRegistry.js";
-import { scopeConversationShareServiceForAttachment } from "./conversationShareAttachmentService.js";
+import { createWindowHostControllerRuntime } from "./windowHostControllerService.js";
 import {
   createWindowRemoteConnectionRegistry,
   type WindowRemoteConnectionCloseEvent,
   type WindowRemoteConnectionHandle,
 } from "./windowRemoteConnectionRegistry.js";
-import { createWindowHostControllerRuntime } from "./windowHostControllerService.js";
-import { resolveAutomationSubmissionModelSelection } from "./automationModelSelection.js";
-import { createRemoteConnectionProgressContext } from "@zcode/server/remote/remoteConnectionProgressContext.js";
-import { startHostSelfResourceTelemetry } from "./hostSelfResourceTelemetry.js";
 type RemoteBackendHostConnection = RemoteConnection & {
   backend: IRemoteBackend;
 };
@@ -1112,19 +1111,6 @@ const runtimeTaskReporter = {
     });
   },
 } satisfies NonNullable<Parameters<typeof createLocalServices>[0]>["taskRuntimeReporter"];
-
-const cuaOperationStateReporter = {
-  onStateChanged(event) {
-    if (!parentPort) {
-      return;
-    }
-    parentPort.postMessage({
-      type: HostResponseTypes.CuaOperationState,
-      ...event,
-    });
-  },
-} satisfies NonNullable<Parameters<typeof createLocalServices>[0]>["cuaOperationStateReporter"];
-
 let untrackedPromptRpcCount = 0;
 function reportHostRunningTaskCount(): void {
   runtimeTaskReporter.onRunningTaskCountChanged({
@@ -2307,20 +2293,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
       void databaseStartup?.coordinator.retry(msg.control.attemptId);
     return;
   }
-
-  if (msg.type === HostMessageTypes.CuaPipFocusChanged) {
-    const service = activeServices?.getOptional(ICuaPipSessionService);
-    if (service) {
-      void service.publishFocus(msg.event);
-    } else {
-      // 取不到服务时过去静默丢弃，focus-changed 于是从链路上凭空消失
-      // （dev 实测 0 条，正式包同期 92 条）。补这条才能把「main 没发」与
-      // 「host 收到了但服务没注册」分开。
-      logger.warn("[cua-pip-session] focus event dropped: service unavailable");
-    }
-    return;
-  }
-
   if (msg.type === HostMessageTypes.ResourceUsageSnapshotRequest) {
     void hostResourceUsageResponder.handleRequest(msg);
     return;
@@ -2875,9 +2847,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               // browser-use：agent 的 interaction/browserExecute 经 zcodeAgentService 转到这个 executor，
               // 再经 parentPort 到 main 的 WebContentsView+CDP 执行。
               browserControlExecutor: browserControlMainBridge,
-              // CUA 顶部提示属于物理 Windows 桌面投影；非 Windows 和远端 authority 都不得上报。
-              cuaOperationStateReporter:
-                process.platform === "win32" ? cuaOperationStateReporter : undefined,
             });
             activeServices = initializedServices;
             activeHostApiNetworkTransport = hostApiNetworkTransport;

@@ -5,245 +5,158 @@ import {
   type LocalTtftFacts,
 } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
-import { randomUUID } from "node:crypto";
-import { ensureIndependentPlanSupport } from "./independentPlanSupport.js";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { Emitter } from "@zcode/rpc";
-import type { IDisposable } from "@zcode/rpc";
+import type { OffPeakClientConfig } from "#src/coding-plan-subscription/codingPlanSubscription.js";
+import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
+import type {
+  AccountRequestAuthMaterial,
+  IAccountRequestAuthService,
+} from "#src/model-provider/accountRequestAuthService.js";
+import { createOfficialMcpIssuanceAudit } from "#src/official-mcp/officialMcpIssuanceAudit.js";
+import { AutomationRepo } from "#src/session/automationRepo.js";
+import { AutomationService } from "#src/session/automationService.js";
+import type { IOffPeakTaskService } from "#src/session/offPeakTask.js";
+import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
+import {
+  mergeAutomationMutationToolDenylist,
+  mergeOffPeakMutationToolDenylist,
+} from "#src/zcode-agent/automationToolPolicy.js";
+import { ZCodeAgentMcpStatusModeUnsupportedError } from "#src/zcode-agent/zcodeAgentErrors.js";
+import { createBackgroundSessionEventCoalescer } from "#src/zcode-agent/zcodeSessionEventCoalescer.js";
 import type {
   AccountProviderConfigSnapshot,
   ModelSelectionView,
   ProviderSource,
 } from "@zcode/provider";
 import { completeNewModelSelection } from "@zcode/provider";
-import type { OffPeakClientConfig } from "#src/coding-plan-subscription/codingPlanSubscription.js";
+import type { IDisposable } from "@zcode/rpc";
+import { Emitter } from "@zcode/rpc";
+import type {
+  ModelSelection,
+  ZCodeProtocolRequestId,
+  ZCodeProviderRuntimeHeadersRequestParams,
+  ZCodeSavedWorkflowScope,
+  ZCodeSessionEvent,
+  ZCodeSessionRuntimePreferencesResult,
+  ZCodeSessionRuntimePreferencesScope,
+  ZCodeStateUpdatedNotification,
+  ZCodeWorkspacePresentation,
+  ZCodeWorkspaceRef,
+} from "@zcode/shared";
 import {
-  ZCODE_SESSION_RUNTIME_PREFERENCES_REQUEST_TIMEOUT_MS,
-  formatLogPrefix,
-  resolveWorkspaceKey,
-  type TraceId,
+  OFF_PEAK_PROVIDER_IDS,
   ZCODE_AGENT_PROVIDER,
   ZCODE_AGENT_PROVIDER_NOT_READY_CODE,
   ZCODE_AGENT_PROVIDER_NOT_READY_REASON,
   ZCODE_MODEL_REASONING_SEPARATOR,
-  isRemoteWorkspaceIdentity,
   ZCODE_PROTOCOL_NAME,
   ZCODE_PROTOCOL_VERSION,
-  zcodeMcpListResultSchema,
-  zcodePermissionRequestParamsSchema,
-  zcodeBrowserListParamsSchema,
+  ZCODE_SESSION_RUNTIME_PREFERENCES_REQUEST_TIMEOUT_MS,
+  formatLogPrefix,
+  isRemoteWorkspaceIdentity,
+  resolveWorkspaceKey,
+  summarizeOfficialMcpIdentityHeaders,
+  zcodeAutomationCheckTaskBindingParamsSchema,
+  zcodeAutomationCreateParamsSchema,
+  zcodeAutomationDeleteParamsSchema,
+  zcodeAutomationListParamsSchema,
+  zcodeAutomationUpdateParamsSchema,
   zcodeBrowserExecuteParamsSchema,
+  zcodeBrowserListParamsSchema,
+  zcodeMcpListResultSchema,
+  zcodeMcpResourceSamplesSchema,
+  zcodeMcpTelemetryEventSchema,
+  zcodeOffPeakCreateParamsSchema,
+  zcodeOffPeakListParamsSchema,
+  zcodeOfficialMcpAuthHeadersRequestParamsSchema,
+  zcodePermissionRequestParamsSchema,
+  zcodePluginOperationProgressNotificationSchema,
+  zcodePluginsCancelOperationResultSchema,
   zcodePluginsConfigureResultSchema,
+  zcodePluginsDescribeResultSchema,
   zcodePluginsInstallResultSchema,
   zcodePluginsListResultSchema,
   zcodePluginsMarketplaceMutationResultSchema,
   zcodePluginsOverviewResultSchema,
+  zcodePluginsResolveSuggestedReferenceResultSchema,
+  zcodePluginsRestoreBuiltinResultSchema,
+  zcodePluginsSetEnabledResultSchema,
+  zcodePluginsUninstallResultSchema,
+  zcodePluginsValidateResultSchema,
   zcodeProcessChildProcessesResultSchema,
-  type ZCodeProcessChildProcess,
+  zcodeProcessResourceSampleSchema,
+  zcodeProtocolEmptyResultSchema,
+  zcodeProtocolMethods,
+  zcodeProtocolNotifications,
+  zcodeProviderRuntimeHeadersCancelledSchema,
+  zcodeProviderRuntimeHeadersRequestParamsSchema,
+  zcodeProviderTestModelConnectivityResultSchema,
+  zcodeProviderUpdateAccountConfigResultSchema,
+  zcodeSessionCloseResultSchema,
+  zcodeSessionCompactResultSchema,
+  zcodeSessionEventSchema,
+  zcodeSessionEventsResultSchema,
+  zcodeSessionGoalResultSchema,
+  zcodeSessionListResultSchema,
+  zcodeSessionMessagesResultSchema,
+  zcodeSessionRequestRuntimePreferencesParamsSchema,
+  zcodeSessionRuntimePreferencesResultSchema,
+  zcodeSessionSendResultSchema,
+  zcodeSessionStateSnapshotSchema,
+  zcodeSessionSubagentsResultSchema,
+  zcodeSessionSubscribeResultSchema,
   zcodeSkillsReferenceCatalogResultSchema,
+  zcodeStateUpdatedNotificationSchema,
+  zcodeToolExecResourceSchema,
+  zcodeUserInputRequestParamsSchema,
   zcodeWorkflowsDeleteResultSchema,
   zcodeWorkflowsGetResultSchema,
   zcodeWorkflowsListResultSchema,
   zcodeWorkflowsMoveResultSchema,
   zcodeWorkflowsRunsResultSchema,
   zcodeWorkflowsUpdateMetaResultSchema,
-  zcodePluginsResolveSuggestedReferenceResultSchema,
-  zcodePluginOperationProgressNotificationSchema,
-  zcodePluginsRestoreBuiltinResultSchema,
-  zcodePluginsSetEnabledResultSchema,
-  zcodePluginsCancelOperationResultSchema,
-  zcodePluginsUninstallResultSchema,
-  zcodePluginsValidateResultSchema,
-  zcodePluginsDescribeResultSchema,
-  zcodeAutomationCheckTaskBindingParamsSchema,
-  zcodeAutomationCreateParamsSchema,
-  zcodeAutomationDeleteParamsSchema,
-  zcodeAutomationListParamsSchema,
-  zcodeAutomationUpdateParamsSchema,
-  zcodeOffPeakCreateParamsSchema,
-  zcodeOffPeakListParamsSchema,
-  OFF_PEAK_PROVIDER_IDS,
-  zcodeComputerUseOperationEventSchema,
-  zcodeProviderRuntimeHeadersCancelledSchema,
-  zcodeProviderRuntimeHeadersRequestParamsSchema,
-  zcodeProviderTestModelConnectivityResultSchema,
-  zcodeOfficialMcpAuthHeadersRequestParamsSchema,
-  summarizeOfficialMcpIdentityHeaders,
-  zcodeProtocolEmptyResultSchema,
-  zcodeProtocolMethods,
-  zcodeProtocolNotifications,
-  zcodeMcpTelemetryEventSchema,
-  zcodeMcpResourceSamplesSchema,
-  zcodeToolExecResourceSchema,
-  zcodeProcessResourceSampleSchema,
-  zcodeSessionCloseResultSchema,
-  zcodeSessionCompactResultSchema,
-  zcodeSessionEventsResultSchema,
-  zcodeSessionGoalResultSchema,
-  zcodeSessionListResultSchema,
-  zcodeSessionSubagentsResultSchema,
-  zcodeSessionMessagesResultSchema,
-  zcodeSessionEventSchema,
-  zcodeSessionSendResultSchema,
-  zcodeSessionRequestRuntimePreferencesParamsSchema,
-  zcodeSessionRuntimePreferencesResultSchema,
-  zcodeSessionStateSnapshotSchema,
-  zcodeSessionSubscribeResultSchema,
-  zcodeStateUpdatedNotificationSchema,
-  zcodeUserInputRequestParamsSchema,
-  zcodeWorkspacePresentationSchema,
   zcodeWorkspaceCancelGenerateTextResultSchema,
   zcodeWorkspaceGenerateTextResultSchema,
   zcodeWorkspaceHookTrustGrantResultSchema,
+  zcodeWorkspacePresentationSchema,
+  zcodeWorkspaceUpdateDynamicWorkflowPolicyResultSchema,
   zcodeWorkspaceUpdateInteractionPreferencesResultSchema,
   zcodeWorkspaceUpdateModelIoPreferencesResultSchema,
-  zcodeProviderUpdateAccountConfigResultSchema,
-  type ZCodeSessionStateSnapshot,
+  zcodeWorkspaceUpdateOffPeakToolPolicyResultSchema,
+  type AgentLaneResourceSample,
+  type DynamicWorkflowClientConfig,
+  type ProcessResourceCliLane,
+  type TraceId,
   type ZCodeAutomation,
   type ZCodeAutomationRun,
-  zcodeWorkspaceUpdateOffPeakToolPolicyResultSchema,
-  zcodeWorkspaceUpdateDynamicWorkflowPolicyResultSchema,
-  type DynamicWorkflowClientConfig,
-  type AgentLaneResourceSample,
-  type ProcessResourceCliLane,
-  type ZCodeMcpTelemetryEvent,
   type ZCodeMcpResourceSample,
-  type ZCodeToolExecResource,
+  type ZCodeMcpTelemetryEvent,
   type ZCodePluginOperationProgressNotification,
+  type ZCodeProcessChildProcess,
+  type ZCodeSessionStateSnapshot,
   type ZCodeTaskMode,
+  type ZCodeToolExecResource,
 } from "@zcode/shared";
-import { createServiceLogger } from "#src/logger/serviceLogger.js";
-import { createOfficialMcpIssuanceAudit } from "#src/official-mcp/officialMcpIssuanceAudit.js";
-import type {
-  AccountRequestAuthMaterial,
-  IAccountRequestAuthService,
-} from "#src/model-provider/accountRequestAuthService.js";
 import {
-  mergeAutomationMutationToolDenylist,
-  mergeOffPeakMutationToolDenylist,
-} from "#src/zcode-agent/automationToolPolicy.js";
-import { ZCODE_AGENT_RUNTIME_UNAVAILABLE_CODE } from "./zcodeAgent.js";
-import type {
-  ZCodeProtocolRequestId,
-  ModelSelection,
-  ZCodeProviderRuntimeHeadersRequestParams,
-  ZCodeSessionEvent,
-  ZCodeSessionRuntimePreferencesScope,
-  ZCodeSavedWorkflowScope,
-  ZCodeStateUpdatedNotification,
-  ZCodeWorkspacePresentation,
-  ZCodeWorkspaceRef,
-  ZCodeSessionRuntimePreferencesResult,
-} from "@zcode/shared";
-import type {
-  IZCodeAgentService,
-  ZCodeAgentBackgroundBashOutputParams,
-  ZCodeAgentAppRuntimePreferences,
-  ZCodeAgentRuntimeLifecycleEvent,
-  ZCodeAgentAddPluginMarketplaceParams,
-  ZCodeAgentAppUsageParams,
-  ZCodeAgentCancelPluginOperationParams,
-  ZCodeAgentCompactParams,
-  ZCodeAgentConfigurePluginParams,
-  ZCodeAgentResetPluginConfigParams,
-  ZCodeAgentCreateSessionParams,
-  ZCodeAgentInstallPluginParams,
-  ZCodeAgentGenerateWorkspaceTextParams,
-  ZCodeAgentTestModelConnectivityParams,
-  ZCodeAgentGoalParams,
-  ZCodeAgentGrantWorkspaceHookTrustParams,
-  ZCodeAgentInitializeResult,
-  ZCodeAgentListSessionsParams,
-  ZCodeAgentListSessionSubagentsParams,
-  ZCodeAgentReadWorkspacePresentationParams,
-  ZCodeAgentReadSessionEventsParams,
-  ZCodeAgentReadSessionMessagesParams,
-  ZCodeAgentReadSessionParams,
-  ZCodeAgentRemovePluginMarketplaceParams,
-  ZCodeAgentRespondSessionRuntimePreferencesParams,
-  ZCodeAgentResumeSessionParams,
-  ZCodeAgentSendPromptParams,
-  ZCodeAgentServiceEvent,
-  ZCodeAgentSessionSubscribeParams,
-  ZCodeAgentSessionTarget,
-  ZCodeAgentSessionRuntimePreferencesRequest,
-  ZCodeAgentTaskTokenUsageParams,
-  ZCodeAgentSetModeParams,
-  ZCodeAgentSetModelParams,
-  ZCodeAgentSetPluginEnabledParams,
-  ZCodeAgentSetThoughtLevelParams,
-  ZCodeAgentPluginReferenceCatalogParams,
-  ZCodeAgentSkillReferenceCatalogParams,
-  ZCodeAgentDeleteSavedWorkflowParams,
-  ZCodeAgentGetSavedWorkflowParams,
-  ZCodeAgentListSavedWorkflowRunsParams,
-  ZCodeAgentListSavedWorkflowsParams,
-  ZCodeAgentMoveSavedWorkflowParams,
-  ZCodeAgentSavedWorkflowTarget,
-  ZCodeAgentUpdateSavedWorkflowMetaParams,
-  ZCodeAgentResolveSuggestedPluginReferenceParams,
-  ZCodeAgentPluginViewParams,
-  ZCodeAgentUninstallPluginParams,
-  ZCodeAgentUpdatePluginParams,
-  ZCodeAgentRestoreBuiltinPluginParams,
-  ZCodeAgentUpdatePluginMarketplaceParams,
-  ZCodeAgentValidatePluginParams,
-  ZCodeAgentDescribePluginParams,
-  ZCodeAgentListMcpServerStatusesParams,
-  ZCodeAgentWorkspaceTarget,
-  ZCodeAgentCuaPermissionObservation,
-  ZCodeAgentCreateAutomationParams,
-  ZCodeAgentUpdateAutomationParams,
-  ZCodeAgentAutomationIdParams,
-  ZCodeAgentSetAutomationEnabledParams,
-  ZCodeAgentDeleteAutomationRunParams,
-  ZCodeAgentAttachmentBeginParams,
-  ZCodeAgentAttachmentChunkParams,
-  ZCodeAgentAttachmentReadParams,
-  ZCodeAgentConversationAttachmentReadParams,
-  ZCodeAgentConversationAttachmentStatParams,
-  ZCodeAgentAttachmentPreviewSourceParams,
-  ZCodeAgentAttachmentTerminalParams,
-  ZCodeAgentConversationCommandParams,
-  ZCodeAgentCommandsQueryParams,
-  ZCodeAgentConversationFileChangesParams,
-  ZCodeAgentConversationFileRewindPreviewParams,
-  ZCodeAgentConversationRowsRangeParams,
-  ZCodeAgentConversationPlansParams,
-  ZCodeAgentConversationWorkflowRunEventsParams,
-  ZCodeAgentConversationWorkflowRunArtifactDataParams,
-  ZCodeAgentConversationWorkflowRunArtifactReadParams,
-  ZCodeAgentConversationWorkflowRunArtifactsParams,
-  ZCodeAgentConversationWorkflowRunNodeResultParams,
-  ZCodeAgentConversationWorkflowRunWorkspaceParams,
-  ZCodeAgentConversationWorkflowRunsParams,
-  ZCodeAgentConversationResyncParams,
-  ZCodeAgentConversationSubscribeParams,
-  ZCodeAgentConversationUnsubscribeParams,
-  ZCodeAgentConnectionFlowParams,
-  ZCodeAgentSessionsIndexSubscribeParams,
-  ZCodeAgentWorkspaceConfigSubscribeParams,
-} from "./zcodeAgent.js";
-import {
-  backgroundBashOutputResultSchema,
-  v4BackgroundBashOutputParamsSchema,
-  V4_WIRE_PROTOCOL_VERSION,
+  MAX_LEGACY_TASK_IDS_PER_SUBSCRIBE,
   PROTOCOL_V4_LIMITS,
+  V4_METHODS,
+  V4_NOTIFICATIONS,
+  V4_WIRE_PROTOCOL_VERSION,
+  ZCODE_ATTACHMENT_FAULT_CODES,
+  ZCodeAttachmentFaultError,
+  backgroundBashOutputResultSchema,
   clientHelloSchema,
   commandAckSchema,
   commandPayloadSchemas,
   commandsQueryParamsSchema,
   commandsQueryResultSchema,
+  conversationTelemetryFactSchema,
   conversationTopic,
   conversationTopicWireCandidateSchema,
-  conversationTelemetryFactSchema,
-  cuaPermissionObservationSchema,
   sessionsIndexTopic,
   sessionsIndexTopicWireCandidateSchema,
-  MAX_LEGACY_TASK_IDS_PER_SUBSCRIBE,
-  V4_METHODS,
-  V4_NOTIFICATIONS,
+  utf8JsonByteLength,
   v4AttachmentAbortResultSchema,
   v4AttachmentBeginResultSchema,
   v4AttachmentChunkResultSchema,
@@ -252,72 +165,149 @@ import {
   v4AttachmentPreviewSourceResultSchema,
   v4AttachmentReadParamsSchema,
   v4AttachmentReadResultSchema,
+  v4BackgroundBashOutputParamsSchema,
+  v4ConnectionFlowResultSchema,
   v4ConversationAttachmentReadParamsSchema,
   v4ConversationAttachmentReadResultSchema,
   v4ConversationAttachmentStatParamsSchema,
   v4ConversationAttachmentStatResultSchema,
-  v4ConnectionFlowResultSchema,
   v4ConversationFileChangesResultSchema,
   v4ConversationFileRewindPreviewResultSchema,
-  v4ConversationRowsRangeResultSchema,
   v4ConversationPlansResultSchema,
-  v4ConversationWorkflowRunEventsResultSchema,
+  v4ConversationResyncResultSchema,
+  v4ConversationRowsRangeResultSchema,
+  v4ConversationSubscribeResultSchema,
+  v4ConversationUsageResultSchema,
   v4ConversationWorkflowRunArtifactDataResultSchema,
   v4ConversationWorkflowRunArtifactReadResultSchema,
   v4ConversationWorkflowRunArtifactsResultSchema,
+  v4ConversationWorkflowRunEventsResultSchema,
   v4ConversationWorkflowRunNodeResultResultSchema,
   v4ConversationWorkflowRunWorkspaceResultSchema,
   v4ConversationWorkflowRunsResultSchema,
-  v4ConversationResyncResultSchema,
-  v4ConversationSubscribeResultSchema,
-  v4ConversationUsageResultSchema,
   v4SessionsIndexSubscribeResultSchema,
   v4UsageStatsResultSchema,
   v4WorkspaceConfigSubscribeResultSchema,
   workspaceConfigTopic,
   workspaceConfigTopicWireCandidateSchema,
-  utf8JsonByteLength,
-  ZCODE_ATTACHMENT_FAULT_CODES,
-  ZCodeAttachmentFaultError,
   type CommandAck,
-  type ConversationTopicWireCandidate,
+  type CommandEnvelope,
   type ConversationTelemetryFact,
+  type ConversationTopicWireCandidate,
   type SessionsIndexTopicWireCandidate,
   type WorkspaceConfigTopicWireCandidate,
-  type CommandEnvelope,
 } from "@zcode/shared/zcode-protocol-v4";
-import {
-  readTrustedZCodeAgentV4Connection,
-  readTrustedZCodeAgentV4UnsubscribeRoute,
-  type ZCodeAgentV4ConnectionContext,
-} from "./zcodeAgentConnectionScope.js";
-import { createBackgroundSessionEventCoalescer } from "#src/zcode-agent/zcodeSessionEventCoalescer.js";
-import { AutomationService } from "#src/session/automationService.js";
-import { AutomationRepo } from "#src/session/automationRepo.js";
-import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
-import { ZCodeAgentMcpStatusModeUnsupportedError } from "#src/zcode-agent/zcodeAgentErrors.js";
-import { ZCodeAgentProcessManager } from "./zcodeAgentProcessManager.js";
-import type { ZCodeAgentProcessManagerOptions } from "./zcodeAgentProcessManager.js";
-import type { IOffPeakTaskService } from "#src/session/offPeakTask.js";
-import {
-  ZCodeProtocolRequestTimeoutError,
-  type ZCodeProtocolClient,
-} from "./zcodeProtocolClient.js";
+import { randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { getDataBaseDir } from "../paths.js";
+import { ensureIndependentPlanSupport } from "./independentPlanSupport.js";
+import type {
+  IZCodeAgentService,
+  ZCodeAgentAddPluginMarketplaceParams,
+  ZCodeAgentAppRuntimePreferences,
+  ZCodeAgentAppUsageParams,
+  ZCodeAgentAttachmentBeginParams,
+  ZCodeAgentAttachmentChunkParams,
+  ZCodeAgentAttachmentPreviewSourceParams,
+  ZCodeAgentAttachmentReadParams,
+  ZCodeAgentAttachmentTerminalParams,
+  ZCodeAgentAutomationIdParams,
+  ZCodeAgentBackgroundBashOutputParams,
+  ZCodeAgentCancelPluginOperationParams,
+  ZCodeAgentCommandsQueryParams,
+  ZCodeAgentCompactParams,
+  ZCodeAgentConfigurePluginParams,
+  ZCodeAgentConnectionFlowParams,
+  ZCodeAgentConversationAttachmentReadParams,
+  ZCodeAgentConversationAttachmentStatParams,
+  ZCodeAgentConversationCommandParams,
+  ZCodeAgentConversationFileChangesParams,
+  ZCodeAgentConversationFileRewindPreviewParams,
+  ZCodeAgentConversationPlansParams,
+  ZCodeAgentConversationResyncParams,
+  ZCodeAgentConversationRowsRangeParams,
+  ZCodeAgentConversationSubscribeParams,
+  ZCodeAgentConversationUnsubscribeParams,
+  ZCodeAgentConversationWorkflowRunArtifactDataParams,
+  ZCodeAgentConversationWorkflowRunArtifactReadParams,
+  ZCodeAgentConversationWorkflowRunArtifactsParams,
+  ZCodeAgentConversationWorkflowRunEventsParams,
+  ZCodeAgentConversationWorkflowRunNodeResultParams,
+  ZCodeAgentConversationWorkflowRunWorkspaceParams,
+  ZCodeAgentConversationWorkflowRunsParams,
+  ZCodeAgentCreateAutomationParams,
+  ZCodeAgentCreateSessionParams,
+  ZCodeAgentDeleteAutomationRunParams,
+  ZCodeAgentDeleteSavedWorkflowParams,
+  ZCodeAgentDescribePluginParams,
+  ZCodeAgentGenerateWorkspaceTextParams,
+  ZCodeAgentGetSavedWorkflowParams,
+  ZCodeAgentGoalParams,
+  ZCodeAgentGrantWorkspaceHookTrustParams,
+  ZCodeAgentInitializeResult,
+  ZCodeAgentInstallPluginParams,
+  ZCodeAgentListMcpServerStatusesParams,
+  ZCodeAgentListSavedWorkflowRunsParams,
+  ZCodeAgentListSavedWorkflowsParams,
+  ZCodeAgentListSessionSubagentsParams,
+  ZCodeAgentListSessionsParams,
+  ZCodeAgentMoveSavedWorkflowParams,
+  ZCodeAgentPluginReferenceCatalogParams,
+  ZCodeAgentPluginViewParams,
+  ZCodeAgentReadSessionEventsParams,
+  ZCodeAgentReadSessionMessagesParams,
+  ZCodeAgentReadSessionParams,
+  ZCodeAgentReadWorkspacePresentationParams,
+  ZCodeAgentRemovePluginMarketplaceParams,
+  ZCodeAgentResetPluginConfigParams,
+  ZCodeAgentResolveSuggestedPluginReferenceParams,
+  ZCodeAgentRespondSessionRuntimePreferencesParams,
+  ZCodeAgentRestoreBuiltinPluginParams,
+  ZCodeAgentResumeSessionParams,
+  ZCodeAgentRuntimeLifecycleEvent,
+  ZCodeAgentSavedWorkflowTarget,
+  ZCodeAgentSendPromptParams,
+  ZCodeAgentServiceEvent,
+  ZCodeAgentSessionRuntimePreferencesRequest,
+  ZCodeAgentSessionSubscribeParams,
+  ZCodeAgentSessionTarget,
+  ZCodeAgentSessionsIndexSubscribeParams,
+  ZCodeAgentSetAutomationEnabledParams,
+  ZCodeAgentSetModeParams,
+  ZCodeAgentSetModelParams,
+  ZCodeAgentSetPluginEnabledParams,
+  ZCodeAgentSetThoughtLevelParams,
+  ZCodeAgentSkillReferenceCatalogParams,
+  ZCodeAgentTaskTokenUsageParams,
+  ZCodeAgentTestModelConnectivityParams,
+  ZCodeAgentUninstallPluginParams,
+  ZCodeAgentUpdateAutomationParams,
+  ZCodeAgentUpdatePluginMarketplaceParams,
+  ZCodeAgentUpdatePluginParams,
+  ZCodeAgentUpdateSavedWorkflowMetaParams,
+  ZCodeAgentValidatePluginParams,
+  ZCodeAgentWorkspaceConfigSubscribeParams,
+  ZCodeAgentWorkspaceTarget,
+} from "./zcodeAgent.js";
+import { ZCODE_AGENT_RUNTIME_UNAVAILABLE_CODE } from "./zcodeAgent.js";
 import {
   collectBrowserAmbientContext,
   type BrowserAmbientContextExecutor,
 } from "./zcodeAgentBrowserAmbientContext.js";
 import {
-  createCuaOperationTurnTracker,
-  type CuaOperationWorkspaceTarget,
-  type CuaOperationStateReporter,
-} from "./cuaOperationTurnTracker.js";
-import type { PipSessionEvent } from "@zcode/zcode-cua/pip-session";
-import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
+  readTrustedZCodeAgentV4Connection,
+  readTrustedZCodeAgentV4UnsubscribeRoute,
+  type ZCodeAgentV4ConnectionContext,
+} from "./zcodeAgentConnectionScope.js";
+import type { ZCodeAgentProcessManagerOptions } from "./zcodeAgentProcessManager.js";
+import { ZCodeAgentProcessManager } from "./zcodeAgentProcessManager.js";
+import {
+  ZCodeProtocolRequestTimeoutError,
+  type ZCodeProtocolClient,
+} from "./zcodeProtocolClient.js";
 
 const logger = createServiceLogger("zcode-agent-service");
-const cuaOperationLogger = createServiceLogger("cua-operation-turn");
 const PLUGIN_MANAGEMENT_WORKSPACE_DIR_NAME = "plugin-workspace";
 // 状态探测完成后释放闲置的 MCP 子进程；只作用于控制面，不回收会话进程。
 const MCP_STATUS_LANE_IDLE_TIMEOUT_MS = 5 * 60_000;
@@ -372,7 +362,6 @@ const SESSION_CREATE_OPTIONAL_COMPAT_FIELDS = new Set<SessionCreateCompatField>(
   "persistence",
   "thoughtLevel",
   "mcpServers",
-  // CUA 工具隔离新增：buildSessionCreateParams 会带 toolAllowlist/toolDenylist。若旧 app-server
   // 的 .strict() schema 不认，需可降级重试而不是整个 createSession 硬失败。
   "toolAllowlist",
   "toolDenylist",
@@ -472,15 +461,6 @@ function ensurePluginManagementWorkspacePath(): string {
   return workspacePath;
 }
 
-// NOTE: this counts ONLY the per-session MCP servers passed through the ZCode Protocol
-// session/create params (the app→protocol channel). It is deliberately independent of the
-// CLI/bootstrap MCP servers configured in ~/.zcode/cli/config.json (mcp.servers), which the agent
-// runtime connects separately and reports via the `mcp.server.connected`/toolCount events. So a
-// createSession log line with mcpServerCount:0 is EXPECTED when zcode-cua is a CLI-config MCP server
-// (e.g. the product Helper broker path injected through the gated bootstrap env): the model still receives those
-// tools — the two numbers describe different channels, not a missing tool set. Verified on-machine:
-// real kimi-k2.6 turns call mcp__zcode-cua__* tools (get_app_state/type/open_application, status
-// completed) in sessions whose createSession logged mcpServerCount:0.
 function getMcpServerCount(params: { mcpServers?: readonly unknown[] }): number {
   return params.mcpServers?.length ?? 0;
 }
@@ -637,7 +617,6 @@ function buildSessionCreateParams(
     ...(params.mcpServers !== undefined && !omittedFields.has("mcpServers")
       ? { mcpServers: params.mcpServers }
       : {}),
-    // CUA 工具隔离字段是可降级的：旧 app-server 的 .strict() schema 若不认，兼容重试会把它们放进
     // omittedFields 省略后重试（而不是硬失败）。故这里必须同样受 omittedFields 门控。
     ...(params.toolAllowlist !== undefined && !omittedFields.has("toolAllowlist")
       ? { toolAllowlist: params.toolAllowlist }
@@ -678,7 +657,6 @@ function buildSessionResumeParams(
       ? { mcpServers: params.mcpServers }
       : {}),
     // 工具面约束必须和 create 路径一致随 resume 下发，否则冷恢复重建 runtime 后会丢失 allow/deny
-    // 隔离（CUA 会话会重新可见 Bash 等被禁工具）。旧 app-server 不认时经 omittedFields 降级。
     ...(params.toolAllowlist !== undefined && !omittedFields.has("toolAllowlist")
       ? { toolAllowlist: params.toolAllowlist }
       : {}),
@@ -935,12 +913,6 @@ interface CreateZCodeAgentServiceOptions extends Omit<
       trusted: boolean;
     }>;
   };
-  /** desktop-local Host 注入；只消费已校验、已去重的 live session event。 */
-  cuaOperationStateReporter?: CuaOperationStateReporter;
-  onCuaPipSessionLifecycle?: (
-    workspace: CuaOperationWorkspaceTarget,
-    event: Exclude<PipSessionEvent, { kind: "focus-changed" }>,
-  ) => void;
 }
 
 function toProtocolAutomation(automation: ZCodeAutomation) {
@@ -1058,24 +1030,6 @@ export function createZCodeAgentService(
   options?: CreateZCodeAgentServiceOptions,
 ): IZCodeAgentService & { disposeAllAndWait(): Promise<void> } {
   const processManager = new ZCodeAgentProcessManager(options);
-  // Windows indicator 与 macOS producer lifecycle client 共用已校验、去重的 sideband facts。
-  const cuaOperationTurnTracker =
-    options?.cuaOperationStateReporter || options?.onCuaPipSessionLifecycle
-      ? createCuaOperationTurnTracker({
-          ...(options?.cuaOperationStateReporter
-            ? { reporter: options.cuaOperationStateReporter }
-            : {}),
-          ...(options?.onCuaPipSessionLifecycle
-            ? { onPipSessionLifecycle: options.onCuaPipSessionLifecycle }
-            : {}),
-          logger: {
-            debug: (message) => cuaOperationLogger.debug(undefined, message),
-            info: (message) => cuaOperationLogger.info(undefined, message),
-            warn: (message) => cuaOperationLogger.warn(undefined, message),
-          },
-        })
-      : undefined;
-  // AutomationRepo 也持有 tasks-index.sqlite 连接，disposeAll 需一并收口（见下方 disposeAll 注释）
   const automationRepo = new AutomationRepo();
   const automationService = new AutomationService(automationRepo);
   const automationTaskIndexRepo = new TaskIndexRepo();
@@ -1134,7 +1088,6 @@ export function createZCodeAgentService(
   const conversationFrameEmitters = new Map<string, Emitter<ConversationTopicWireCandidate>>();
   const localTtftFactsEmitter = new Emitter<{ workspaceKey: string; facts: LocalTtftFacts }>();
   const conversationTelemetryFactEmitters = new Map<string, Emitter<ConversationTelemetryFact>>();
-  const cuaPermissionObservationEmitter = new Emitter<ZCodeAgentCuaPermissionObservation>();
   // sessions-index 帧 fan-out：与 conversation 同一 conversationFrame 通知，按 topic 前缀分流到此 emitter。
   const sessionsIndexFrameEmitters = new Map<string, Emitter<SessionsIndexTopicWireCandidate>>();
   // workspace-config 帧 fan-out：配置目录活性（task-index syncer 消费），同一通知按前缀分流。
@@ -1155,7 +1108,6 @@ export function createZCodeAgentService(
   const v4RouteKeyByOwnership = new Map<string, string>();
   const v4RouteRuntimeRestartDisposable = processManager.onRuntimeRestarted(({ workspaceKey }) => {
     clearV4SubscriptionRoutes(workspaceKey);
-    cuaOperationTurnTracker?.clearWorkspaceKey(workspaceKey);
   });
   const sessionEventSequenceStates = new Map<string, SessionEventSequenceState>();
   const wiredClients = new WeakSet<ZCodeProtocolClient>();
@@ -1246,8 +1198,6 @@ export function createZCodeAgentService(
     if (event.state !== "unavailable") return;
     // 协议关闭、进程崩溃或请求超时时，runtime 可能不会再发送 turn-failed/
     // session-closed，也不一定能成功启动下一代 runtime。必须在 unavailable 这个权威
-    // 生命周期边界清掉 CUA tracker，否则 Windows 顶部提示和 Helper 恢复门控会永久残留。
-    cuaOperationTurnTracker?.clearWorkspaceKey(event.workspaceKey);
     const active = activeClientsByWorkspaceKey.get(event.workspaceKey);
     if (!active) return;
     // Process manager 只会为当前 available runtime 发布 unavailable；这里再绑定当前
@@ -1947,26 +1897,6 @@ export function createZCodeAgentService(
           }
           return;
         }
-
-        if (message.method === zcodeProtocolMethods.computerUseOperationEvent) {
-          const parsed = zcodeComputerUseOperationEventSchema.safeParse(message.params);
-          if (parsed.success) {
-            // v4 会话不会投影 legacy session/event，CUA 提示必须直接消费 runtime sideband，
-            // 避免把两条独立事件流的 sequenceNumber/seq 混为同一顺序域。
-            cuaOperationTurnTracker?.accept(workspace, parsed.data);
-          } else {
-            logger.warn(undefined, "丢弃无效 ZCode Protocol Computer Use operation event", {
-              issues: parsed.error.issues.map((issue) => ({
-                code: issue.code,
-                message: issue.message,
-                path: issue.path.join("."),
-              })),
-              workspaceKey: resolveWorkspaceKey(workspace),
-            });
-          }
-          return;
-        }
-
         if (message.method === "session/event") {
           const parsed = zcodeSessionEventSchema.safeParse(message.params);
           if (parsed.success) {
@@ -2028,35 +1958,6 @@ export function createZCodeAgentService(
           }
           return;
         }
-
-        if (message.method === V4_NOTIFICATIONS.cuaPermissionObservation) {
-          const parsed = cuaPermissionObservationSchema.safeParse(message.params);
-          if (
-            parsed.success &&
-            !workspace.remoteSessionId &&
-            !(workspace.workspaceIdentity && isRemoteWorkspaceIdentity(workspace.workspaceIdentity))
-          ) {
-            cuaPermissionObservationEmitter.fire({
-              ...parsed.data,
-              workspacePath: workspace.workspacePath,
-              ...(workspace.workspaceIdentity
-                ? { workspaceIdentity: workspace.workspaceIdentity }
-                : {}),
-            });
-          } else if (!parsed.success) {
-            // 原因：权限观察会触发 renderer 副作用，未知字段必须 fail closed，不能宽松透传。
-            logger.warn(undefined, "丢弃无效 v4 CUA 权限观察", {
-              issues: parsed.error.issues.map((issue) => ({
-                code: issue.code,
-                message: issue.message,
-                path: issue.path.join("."),
-              })),
-              workspaceKey: resolveWorkspaceKey(workspace),
-            });
-          }
-          return;
-        }
-
         if (message.method === V4_NOTIFICATIONS.conversationFrame) {
           // 同一通知也载 sessions-index 帧，按 topic 前缀分流到列表 emitter
           // （否则会被 conversation schema 校验丢弃）。
@@ -3215,7 +3116,6 @@ export function createZCodeAgentService(
     }
     conversationTelemetryFactEmitters.clear();
     localTtftFactsEmitter.dispose();
-    cuaPermissionObservationEmitter.dispose();
     for (const emitter of workspaceConfigFrameEmitters.values()) {
       emitter.dispose();
     }
@@ -3235,7 +3135,6 @@ export function createZCodeAgentService(
     activeClientsByWorkspaceKey.clear();
     cancelAllWaitingWorkspaceStartups();
     interactionPreferenceSyncByWorkspaceKey.clear();
-    cuaOperationTurnTracker?.clearAll();
     clearV4SubscriptionRoutes();
     v4RouteRuntimeRestartDisposable.dispose();
     runtimeLifecycleDisposable.dispose();
@@ -3345,9 +3244,6 @@ export function createZCodeAgentService(
         processManager.onStorageStartupChanged((event) => {
           if (event.workspaceKey === workspaceKey) listener(event.snapshot);
         });
-    },
-    hasActiveCuaOperationTurn(): boolean {
-      return cuaOperationTurnTracker?.hasActiveTurn() ?? false;
     },
     async initialize(params: ZCodeAgentWorkspaceTarget): Promise<ZCodeAgentInitializeResult> {
       const workspaceKey = resolveWorkspaceKey(params);
@@ -5484,10 +5380,6 @@ export function createZCodeAgentService(
       return getConversationTelemetryFactEmitter(params).event;
     },
 
-    onDynamicCuaPermissionObservation() {
-      return cuaPermissionObservationEmitter.event;
-    },
-
     // ── sessions-index 通道（列表活性）：复用 conversationSubscribe RPC，
     // 按 topic 前缀由 CLI server 分派 ──
 
@@ -5626,7 +5518,6 @@ export function createZCodeAgentService(
       // 否则它会在 dispose 完成后把同一个 workspace 的 Agent 再次启动。
       cancelWaitingWorkspaceStartup(workspaceKey);
       clearV4SubscriptionRoutes(workspaceKey);
-      cuaOperationTurnTracker?.clearWorkspaceKey(workspaceKey);
       const active = activeClientsByWorkspaceKey.get(workspaceKey);
       if (active) {
         invalidateWorkspaceClient(workspaceKey, active.client);

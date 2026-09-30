@@ -1,8 +1,23 @@
 /* oxlint-disable eslint(max-lines) -- 迁移期需要在一个门面里集中维护旧 task projection 到 ZCode session 的协议适配。 */
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
+import { buildImportedClaudeTaskId } from "#src/session/claude-native/buildImportedClaudeTaskFile.js";
+import { claudeNativeSessionImportRepo } from "#src/session/claude-native/claudeNativeSessionImportRepo.js";
+import { importClaudeNativeSessions } from "#src/session/claude-native/claudeNativeSessionImportService.js";
+import {
+  readLegacyImportedClaudeHistory,
+  repairImportedClaudeSessionSnapshot,
+} from "#src/session/claude-native/importedClaudeHistoryRepair.js";
+import type {
+  SessionMessageDeliveryResult,
+  SessionMessageSendRequested,
+} from "#src/session/sessionMailbox.js";
+import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
+import type { ISettingService } from "#src/setting/setting.js";
+import {
+  AUTOMATION_MUTATION_TOOL_NAMES,
+  OFF_PEAK_MUTATION_TOOL_NAMES,
+} from "#src/zcode-agent/automationToolPolicy.js";
 import {
   Emitter,
   Event,
@@ -10,162 +25,146 @@ import {
   type NetworkObservation,
 } from "@zcode/rpc";
 import {
+  ZCODE_AGENT_PROVIDER,
+  appendZCodeStreamingToolInputDelta,
+  attachZCodeBackgroundTaskNotificationToRaw,
+  buildZCodeStreamingToolInputPreview,
   coalesceConsecutiveZCodeAssistants,
+  collectZCodeBackgroundTaskNotificationsByToolUseId,
   createSessionTraceId,
+  createZCodeToolProjectionMemory,
   decodeCustomModelValue,
   deriveZCodeTaskStatusFromSessionSnapshot,
   extractPlanStepsFromToolInput,
   extractPlanStepsFromToolOutput,
+  finalizeZCodeToolProjectionInput,
+  forgetZCodeToolProjectionMetadata,
   generateTraceId,
   getZCodeGoalActiveIterationCount,
   getZCodeGoalIterationByAssistantMessageId,
   getZCodeUserVisibleMessages,
   isMainAgentToolProjectionSource,
-  normalizeZCodeApiRetryStatus,
-  attachZCodeBackgroundTaskNotificationToRaw,
-  collectZCodeBackgroundTaskNotificationsByToolUseId,
-  mergeZCodeBackgroundTaskControlItems,
-  parseZCodeBackgroundTaskControlItems,
-  parseZCodeBackgroundTaskNotificationText,
-  parseModelPickerValue as parseSharedModelSelection,
-  resolveWorkspaceKey,
-  resolveZCodeVisibleSessionTitle,
-  textFromZCodeMessageParts,
-  ZCODE_AGENT_PROVIDER,
-  zcodeBackgroundTaskNotificationToolUpdateStatus,
-  appendZCodeStreamingToolInputDelta,
-  buildZCodeStreamingToolInputPreview,
-  createZCodeToolProjectionMemory,
-  finalizeZCodeToolProjectionInput,
-  forgetZCodeToolProjectionMetadata,
   isZCodeModelRetryRecoveryProgressPayload,
   markZCodeStreamingToolInputPreviewMaterialized,
+  mergeZCodeBackgroundTaskControlItems,
+  normalizeZCodeApiRetryStatus,
+  parseModelPickerValue as parseSharedModelSelection,
+  parseZCodeBackgroundTaskControlItems,
+  parseZCodeBackgroundTaskNotificationText,
+  resolveWorkspaceKey,
   resolveZCodeToolProjectionMetadata,
+  resolveZCodeVisibleSessionTitle,
+  shouldMaterializeZCodeStreamingToolInputPreview,
+  textFromZCodeMessageParts,
   zcodeApiRetryFromModelNetworkStatusPayload,
   zcodeApiRetryFromStreamRecoveryPayload,
+  zcodeBackgroundTaskNotificationToolUpdateStatus,
+  zcodeContextUsageBreakdownSchema,
+  zcodeSessionSettingsStateSchema,
   zcodeTaskNetworkDebugStatusFromPayload,
-  shouldMaterializeZCodeStreamingToolInputPreview,
+  type InputId,
+  type ModelSelection,
+  type TraceId,
+  type ZCodeAgentMcpServer,
   type ZCodeApiRetryStatus,
   type ZCodeAssistantMessageFeedback,
-  type ZCodeBackgroundTaskNotificationInfo,
-  type ZCodeBackgroundTaskControlItem,
-  type ZCodeBackgroundTurnAttribution,
   type ZCodeAutomationBotDeliveryTarget,
+  type ZCodeBackgroundTaskControlItem,
+  type ZCodeBackgroundTaskNotificationInfo,
+  type ZCodeBackgroundTurnAttribution,
   type ZCodeCancelTaskCommandResult,
   type ZCodeConfigOption,
+  type ZCodeContextCompactionTimelineMeta,
+  type ZCodeDeliveryKind,
   type ZCodeEnqueueTaskCommandResult,
   type ZCodeError,
   type ZCodeGoalVerificationTimelineMeta,
   type ZCodeImportSessionsResult,
   type ZCodeImportableSessionCandidate,
-  type ZCodeUsage,
+  type ZCodeMessagePart,
+  type ZCodeMessageWithParts,
+  type ZCodePermissionOption,
+  type ZCodePermissionRequest,
+  type ZCodePermissionRequestParams,
   type ZCodePersistedMessage,
   type ZCodePersistedMessagePart,
   type ZCodePersistedToolCall,
+  type ZCodePlanStep,
   type ZCodePromptAttachment,
   type ZCodeProvider,
+  type ZCodeSessionEvent,
   type ZCodeSessionFile,
+  type ZCodeSessionMode,
+  type ZCodeSessionSettingsState,
+  type ZCodeSessionStateSnapshot,
+  type ZCodeSlashCommand,
+  type ZCodeStateUpdatedNotification,
+  type ZCodeStreamEvent,
+  type ZCodeTaskClientMode,
+  type ZCodeTaskCreateResult,
   type ZCodeTaskGoal,
   type ZCodeTaskGoalStats,
-  type ZCodeTaskMode,
-  type ZCodePlanStep,
-  type ZCodeSlashCommand,
-  type ZCodeStreamEvent,
-  type ZCodeTaskCreateResult,
   type ZCodeTaskMeta,
-  type ZCodeTaskClientMode,
+  type ZCodeTaskMode,
   type ZCodeTaskRuntimeCommand,
   type ZCodeTaskSnapshot,
   type ZCodeTaskSnapshotBody,
   type ZCodeTaskSnapshotRefContent,
   type ZCodeTaskSnapshotToolCallsSlice,
   type ZCodeTaskTokenUsageResult,
-  type ZCodeTodoGroup,
-  type ZCodeTurnSteerCommandKind,
-  type ZCodeTurnSteerSource,
-  type ZCodeWorkspaceEvent,
-  type ZCodeWorkspaceTaskListChanged,
-  type InputId,
-  type TraceId,
-  zcodeContextUsageBreakdownSchema,
-  zcodeSessionSettingsStateSchema,
-  type ZCodeDeliveryKind,
-  type ZCodeMessagePart,
-  type ZCodeMessageWithParts,
-  type ModelSelection,
-  type ZCodePermissionOption,
-  type ZCodePermissionRequestParams,
-  type ZCodePermissionRequest,
-  type ZCodeSessionEvent,
-  type ZCodeSessionMode,
-  type ZCodeSessionSettingsState,
-  type ZCodeSessionStateSnapshot,
-  type ZCodeStateUpdatedNotification,
-  type ZCodeContextCompactionTimelineMeta,
   type ZCodeTimelineMeta,
   type ZCodeTimelineStatus,
   type ZCodeTimelineTrigger,
+  type ZCodeTodoGroup,
   type ZCodeToolProjectionMemory,
+  type ZCodeTurnSteerCommandKind,
+  type ZCodeTurnSteerSource,
+  type ZCodeUsage,
   type ZCodeUserInputRequestParams,
   type ZCodeUserInputResponse,
-  type ZCodeAgentMcpServer,
+  type ZCodeWorkspaceEvent,
+  type ZCodeWorkspaceTaskListChanged,
 } from "@zcode/shared";
+import { errorAttributionSchema, type CommandPayloadMap } from "@zcode/shared/zcode-protocol-v4";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type {
-  ZCodeTaskListQuery,
-  ZCodeTaskListResult,
-  ZCodeWorkspaceEventSubscriptionParams,
   IZCodeTaskService,
   ZCodeArchivedTaskDeletionResult,
+  ZCodeTaskListQuery,
+  ZCodeTaskListResult,
   ZCodeTaskReadyOutcome,
   ZCodeTaskTerminalOutcome,
+  ZCodeWorkspaceEventSubscriptionParams,
 } from "../session/zcodeTaskService.js";
-import { createServiceLogger } from "#src/logger/serviceLogger.js";
-import {
-  AUTOMATION_MUTATION_TOOL_NAMES,
-  OFF_PEAK_MUTATION_TOOL_NAMES,
-} from "#src/zcode-agent/automationToolPolicy.js";
-import type { ISettingService } from "#src/setting/setting.js";
-import type {
-  SessionMessageDeliveryResult,
-  SessionMessageSendRequested,
-} from "#src/session/sessionMailbox.js";
-import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
+import { readModelTrajectory } from "./modelTrajectory.js";
 import type {
   IZCodeAgentService,
   ZCodeAgentServiceEvent,
   ZCodeAgentWorkspaceTarget,
 } from "./zcodeAgent.js";
+import {
+  MODEL_CONFIG_ID,
+  MODE_CONFIG_ID,
+  THOUGHT_LEVEL_CONFIG_ID,
+  formatModelPickerValue,
+  formatTaskMetaModelSelectionFromSnapshot,
+  getZCodeAgentAvailableModes,
+  normalizeAvailableZCodeMode,
+  settingsToConfigOptions,
+} from "./zcodeConfigOptions.js";
 import type {
   ZCodeTaskIndexReadyEvent,
   ZCodeTaskIndexSyncer,
   ZCodeTaskIndexTerminalEvent,
 } from "./zcodeTaskIndexSyncer.js";
-import { readModelTrajectory } from "./modelTrajectory.js";
-import { errorAttributionSchema, type CommandPayloadMap } from "@zcode/shared/zcode-protocol-v4";
 import {
   assertV4CommandAckOk,
   createHostCommandEnvelope,
   sendHostCasCommandV4,
 } from "./zcodeV4HostCommand.js";
-import { claudeNativeSessionImportRepo } from "#src/session/claude-native/claudeNativeSessionImportRepo.js";
-import { importClaudeNativeSessions } from "#src/session/claude-native/claudeNativeSessionImportService.js";
-import { buildImportedClaudeTaskId } from "#src/session/claude-native/buildImportedClaudeTaskFile.js";
-import {
-  readLegacyImportedClaudeHistory,
-  repairImportedClaudeSessionSnapshot,
-} from "#src/session/claude-native/importedClaudeHistoryRepair.js";
-import {
-  MODEL_CONFIG_ID,
-  MODE_CONFIG_ID,
-  THOUGHT_LEVEL_CONFIG_ID,
-  formatTaskMetaModelSelectionFromSnapshot,
-  formatModelPickerValue,
-  getZCodeAgentAvailableModes,
-  normalizeAvailableZCodeMode,
-  settingsToConfigOptions,
-} from "./zcodeConfigOptions.js";
-import type { CuaProductMcpServerResolver } from "#src/cua-permission-broker/index.js";
-import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 
 interface TaskOverlay {
   archived?: boolean;
@@ -182,7 +181,6 @@ interface CreateZCodeTaskServiceAdapterOptions {
   // 否则 desktop-continuous 路径和 task adapter 路径的事件订阅会分裂成两份，UI 收不全。
   taskIndexSyncer: ZCodeTaskIndexSyncer;
   settingService?: Pick<ISettingService, "get">;
-  cuaProductMcpServerResolver?: CuaProductMcpServerResolver;
 }
 
 interface TaskTarget {
@@ -330,14 +328,10 @@ export function createZCodeTaskServiceAdapter(
     return {};
   }
 
-  async function resolveProductMcpServers(
+  function normalizeMcpServers(
     servers: ZCodeAgentMcpServer[] | undefined,
-  ): Promise<ZCodeAgentMcpServer[] | undefined> {
-    const configuredServers = (servers?.length ?? 0) > 0 ? servers : undefined;
-    if (!configuredServers || !options.cuaProductMcpServerResolver) {
-      return configuredServers;
-    }
-    return options.cuaProductMcpServerResolver.resolveMcpServers(configuredServers);
+  ): ZCodeAgentMcpServer[] | undefined {
+    return (servers?.length ?? 0) > 0 ? servers : undefined;
   }
 
   function workspaceKey(params: { workspacePath: string; workspaceIdentity?: string }): string {
@@ -1146,7 +1140,7 @@ export function createZCodeTaskServiceAdapter(
   ): Promise<ZCodeSessionStateSnapshot> {
     rememberTaskTarget(params);
     const thoughtLevel = params.thoughtLevel?.trim();
-    const mcpServers = await resolveProductMcpServers(params.mcpServers);
+    const mcpServers = normalizeMcpServers(params.mcpServers);
     return options.zcodeAgentService.resumeSession({
       workspacePath: params.workspacePath,
       workspaceIdentity: params.workspaceIdentity,
@@ -1253,7 +1247,7 @@ export function createZCodeTaskServiceAdapter(
       // 复用导入模块的严格来源校验，避免清理 ACP 时误删这条独立的数据迁移路径。
       const history = await readLegacyImportedClaudeHistory(params);
       if (!history) throw error;
-      const mcpServers = await resolveProductMcpServers(params.mcpServers);
+      const mcpServers = normalizeMcpServers(params.mcpServers);
       const restored = await options.zcodeAgentService.createSession({
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
@@ -1783,7 +1777,7 @@ export function createZCodeTaskServiceAdapter(
             }
           : undefined);
       const draftSessionId = params.draftSessionId?.trim();
-      const mcpServers = await resolveProductMcpServers(params.mcpServers);
+      const mcpServers = normalizeMcpServers(params.mcpServers);
       let snapshot: ZCodeSessionStateSnapshot | null = null;
       if (draftSessionId && !mcpServers) {
         try {

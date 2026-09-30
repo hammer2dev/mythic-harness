@@ -1,42 +1,40 @@
 /* eslint-disable max-lines -- desktop runtime/env 解析需要集中维护 main/host/remote assets 的启动边界，拆分会扩大远程连接回归面。 */
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve, win32 } from "node:path";
 import type { ConnectOptions } from "@zcode/server/remote";
-import { listSSHConfigAliasesFromLocalConfig } from "@zcode/services/node";
-import { DEV_HELPER_APP_NAME, HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import {
-  ZCODE_APP_VERSION_ENV,
+  getAppConfigDir,
+  getDataBaseDir,
+  listSSHConfigAliasesFromLocalConfig,
+  ZCODE_WINDOWS_APP_INSTALL_DIR_ENV,
+} from "@zcode/services/node";
+import {
+  buildZCodeToolEnvPassthroughEnv,
+  normalizeDynamicWorkflowMode,
+  pickProductEndpointEnv,
+  readProductEndpointEnv,
+  readZCodeAgentTelemetryEnv,
+  resolveRuntimeZCodeEndpointOrigin,
+  resolveZaiBusinessBaseUrl,
+  resolveZaiOAuthClientId,
+  resolveZaiOAuthOrigin,
+  sanitizeZCodeRuntimeEnv,
   ZCODE_AGENT_RUNTIME,
+  ZCODE_APP_VERSION_ENV,
   ZCODE_DYNAMIC_WORKFLOW_MODE_ENV,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
   ZCODE_RUNTIME_ENV_KEY,
   ZCODE_VERSION,
-  buildZCodeToolEnvPassthroughEnv,
-  resolveRuntimeZCodeEndpointOrigin,
-  readProductEndpointEnv,
-  pickProductEndpointEnv,
-  resolveZaiBusinessBaseUrl,
-  resolveZaiOAuthClientId,
-  resolveZaiOAuthOrigin,
-  normalizeDynamicWorkflowMode,
-  readZCodeAgentTelemetryEnv,
-  sanitizeZCodeRuntimeEnv,
   type ZCodeRuntimeEnv,
 } from "@zcode/shared";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve, win32 } from "node:path";
 import { resolvePlatformKeyForPackagedApp } from "../../scripts/target-platform.mjs";
-import {
-  getAppConfigDir,
-  getDataBaseDir,
-  ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV,
-  ZCODE_WINDOWS_APP_INSTALL_DIR_ENV,
-} from "@zcode/services/node";
+import { getElectronAppPath, isElectronAppPackaged } from "./desktopElectronApp.js";
 import {
   resolveRemoteCdnBaseUrls as resolveOrderedRemoteCdnBaseUrls,
   type ResolveRemoteCdnOptions,
 } from "./remoteCdn.js";
-import { getElectronAppPath, isElectronAppPackaged } from "./desktopElectronApp.js";
 
 const isLocalDevelopmentRuntime = !isElectronAppPackaged();
 export const desktopRuntimeEnv: ZCodeRuntimeEnv = isLocalDevelopmentRuntime
@@ -482,25 +480,6 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     ...readDefinedProcessEnv(),
   };
   const packagedDesktop = isElectronAppPackaged();
-  const bundledCuaHelperAppPath =
-    process.platform !== "darwin"
-      ? undefined
-      : packagedDesktop
-        ? join(process.resourcesPath, "cua-helper", HELPER_APP_NAME)
-        : // Truthy grammar must match the producer's isUnsignedHelperLocalDevRequested
-          // (1|true|on, case-insensitive). Accepting only the literal "1" silently
-          // ignored `true`/`on` set by scripts following the documented dev flow.
-          ["1", "true", "on"].includes(
-              rawInheritedEnv.ZCODE_CUA_HELPER_ALLOW_UNSIGNED_LOCAL?.trim().toLowerCase() ?? "",
-            )
-          ? rawInheritedEnv.ZCODE_CUA_BUNDLED_HELPER_APP_PATH?.trim() ||
-            join(
-              rawInheritedEnv.ZCODE_HOME?.trim() || join(homedir(), ".zcode"),
-              "computer-use",
-              "dev",
-              DEV_HELPER_APP_NAME,
-            )
-          : undefined;
   const windowsAppInstallDir = resolveWindowsAppInstallDirForDataBaseDirGuard();
   const agentTelemetryEnv = readZCodeAgentTelemetryEnv(rawInheritedEnv);
   // Desktop 身份由 host 从凭据仓库和本机状态读取后可信注入；外部环境只能配置 OTLP 连接，
@@ -519,12 +498,6 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     ...sanitizeZCodeRuntimeEnv(rawInheritedEnv),
     ...buildZCodeToolEnvPassthroughEnv(rawInheritedEnv),
   });
-  // A release app must never inherit the local unsigned-Helper escape hatch.
-  // Otherwise a developer shell/launchctl variable can make the signed app
-  // reject its verified bundled Helper and route onboarding to a stale dev app.
-  if (packagedDesktop) {
-    delete inheritedEnv.ZCODE_CUA_HELPER_ALLOW_UNSIGNED_LOCAL;
-  }
   const dynamicWorkflowModeHostEnv = resolveDynamicWorkflowModeHostEnv({
     inheritedValue: rawInheritedEnv[ZCODE_DYNAMIC_WORKFLOW_MODE_ENV],
     isPackaged: packagedDesktop,
@@ -545,19 +518,12 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     // 显式注入编译期产品身份，保证主进程与 host 的身份语义一致；地址独立解析。
     // inheritedEnv 从 .env 通用变量补齐 ZCode/ZAI 链接，未覆盖时统一使用线上默认值。
     ZCODE_ENV,
-    // Preview 与生产版共享任务、配置和凭据，但不同版本的 Helper 不能互相覆盖或触发降级保护。
-    // 只隔离 computer-use 下的运行组件，不改写 ZCODE_HOME / ZCODE_DATA_BASE_DIR 业务数据根。
-    ...(isPreviewPackagedRuntime ? { ZCODE_CUA_HELPER_INSTALL_VARIANT: "preview" } : {}),
-    // Dynamic Workflow 灰度的本地覆盖：Main 决策后写入，production 包为空对象（继承值已在上面删除）。
     ...dynamicWorkflowModeHostEnv,
     // 模型请求默认 header 由 agent 进程构造，过去只继承 shell env 导致桌面启动时拿不到 app 版本。
     // 这里从 main 进程显式下发，agent 子进程继承 host env 后即可稳定写入请求 header。
     [ZCODE_APP_VERSION_ENV]: ZCODE_VERSION,
     ...(dataBaseDir !== homedir() ? { ZCODE_DATA_BASE_DIR: dataBaseDir } : {}),
     ...(windowsAppInstallDir ? { [ZCODE_WINDOWS_APP_INSTALL_DIR_ENV]: windowsAppInstallDir } : {}),
-    ...(bundledCuaHelperAppPath
-      ? { [ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV]: bundledCuaHelperAppPath }
-      : {}),
     ...(resolvedGlmBinaryPath ? { GLM_BINARY_PATH: resolvedGlmBinaryPath } : {}),
     ...(resolvedLarkCliBinaryPath ? { ZCODE_LARK_CLI_BINARY: resolvedLarkCliBinaryPath } : {}),
   };
