@@ -57,11 +57,7 @@ import { SIDE_PANE_DEFAULT_EXPANDED_SIZE } from "@/app-shell/sidePaneLayout.js";
 import { useAnimatedResizablePanel } from "@/app-shell/useAnimatedResizablePanel.js";
 import { ensureTaskNavigationWorkspace } from "@/app-shell/taskNavigationWorkspace.js";
 
-import {
-  resolveWorkspaceShellPanelRadiusPx,
-  resolveWorkspaceShellResizeHandleInsetPx,
-  resolveWorkspaceShellWindowChromeClass,
-} from "@/app-shell/workspaceShellWindowChrome.js";
+import { resolveWorkspaceShellPanelRadiusPx } from "@/app-shell/workspaceShellWindowChrome.js";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable.js";
@@ -333,8 +329,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const baseServices = useBaseWorkspaceServices();
   const tabStoreApi = useTabStoreApi();
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
-  // Windows/Linux 也需要外层留白，避免独立面板贴住窗口边缘；桌面统一使用 4px 间距。
-  const hasDesktopPanelInset = isMacDesktop || isWindowsDesktop || isLinuxDesktop;
   const usesInlineWindowControls = Boolean(isWindowsDesktop || isLinuxDesktop);
   const workspaceShellRadiusOptions = {
     isMacDesktop,
@@ -343,10 +337,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     macOSMajorVersion: desktopWindowChromeState?.macOSMajorVersion,
   };
   const workspacePanelRadiusPx = resolveWorkspaceShellPanelRadiusPx(workspaceShellRadiusOptions);
-  const workspaceResizeHandleInsetPx = resolveWorkspaceShellResizeHandleInsetPx(
-    workspaceShellRadiusOptions,
-  );
-  const collapsedSidebarWidthPx = hasDesktopPanelInset ? 4 : 0;
+  const collapsedSidebarWidthPx = isMacDesktop || isWindowsDesktop || isLinuxDesktop ? 4 : 0;
   const [draftHeaderDropTargetController, setDraftHeaderDropTargetController] =
     useState<ConversationDropTargetController | null>(null);
   const fileTreeOpenRequestIdRef = useRef(0);
@@ -758,13 +749,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         }px`,
         "--workspace-sidebar-width": `${workspaceSidebarPanelWidthPx}px`,
         "--workspace-panel-radius": `${workspacePanelRadiusPx}px`,
-        "--workspace-resize-handle-inset": `${workspaceResizeHandleInsetPx}px`,
       }) as CSSProperties,
     [
       collapsedSidebarWidthPx,
       isSidebarPanelVisible,
       workspacePanelRadiusPx,
-      workspaceResizeHandleInsetPx,
       workspaceSidebarPanelWidthPx,
     ],
   );
@@ -1388,15 +1377,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       services={services}
       isDesktop={isDesktop}
       isWindowsDesktop={isWindowsDesktop}
-      frameClassName={resolveWorkspaceShellWindowChromeClass({
-        isMacDesktop,
-        isWindowsDesktop,
-        isLinuxDesktop,
-        macOSMajorVersion: desktopWindowChromeState?.macOSMajorVersion,
-        isWindowsMaximized: desktopWindowChromeState?.isMaximized ?? false,
-        supportsNativeRoundedCorners:
-          desktopWindowChromeState?.supportsNativeRoundedCorners ?? null,
-      })}
+      frameClassName="border-l border-border"
       showWindowControls={usesInlineWindowControls}
       isVisible={isSidePaneVisible}
       onCloseSidePane={handleToggleSidePane}
@@ -1595,10 +1576,12 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             onPointerMove={handleWorkspaceSidebarResizeMove}
             onPointerUp={(event) => finishWorkspaceSidebarResize(event)}
             className={cn(
-              "group/handle relative z-10 flex h-full w-1 shrink-0 touch-none cursor-ew-resize items-center justify-center bg-transparent outline-none [app-region:no-drag] focus:outline-none focus-visible:ring-0",
-              "after:pointer-events-none after:absolute after:rounded-full after:bg-foreground-subtlest/50 after:opacity-0 after:transition-opacity after:content-[''] after:inset-y-[var(--workspace-panel-radius)] after:w-0.5",
-              "hover:after:opacity-100 data-[separator=hover]:after:opacity-100 data-[separator=active]:after:opacity-100 focus-visible:after:opacity-100 [[data-workspace-sidebar-resizing=true]_&]:after:opacity-100",
-              hasDesktopPanelInset && "after:inset-y-[var(--workspace-resize-handle-inset)]",
+              // 原 4px 占位透出较亮的窗口底色，叠加面板左边框后呈现粗灰带；
+              // 可见边界只占 1px，before 保留不占布局宽度的透明 4px 拖拽热区。
+              "group/handle relative z-10 flex h-full w-px shrink-0 touch-none cursor-ew-resize items-center justify-center bg-transparent outline-none [app-region:no-drag] focus:outline-none focus-visible:ring-0",
+              "before:absolute before:inset-y-0 before:left-1/2 before:w-1 before:-translate-x-1/2 before:content-['']",
+              "after:pointer-events-none after:absolute after:rounded-full after:bg-border/50 after:transition-colors after:content-[''] after:inset-y-[var(--workspace-panel-radius)] after:w-px",
+              "hover:after:bg-foreground-subtlest/50 data-[separator=hover]:after:bg-foreground-subtlest/50 data-[separator=active]:after:bg-foreground-subtlest/50 focus-visible:after:bg-foreground-subtlest/50 [[data-workspace-sidebar-resizing=true]_&]:after:bg-foreground-subtlest/50",
             )}
           />
         ) : null}
@@ -1606,16 +1589,10 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         <div
           data-panel=""
           id="content"
-          className={cn(
-            "flex min-w-[320px] flex-1 flex-col",
-            hasDesktopPanelInset ? "p-1 pl-0 pt-0" : "p-0",
-          )}
+          className="flex min-w-[320px] flex-1 flex-col bg-background"
         >
-          {
-            hasDesktopPanelInset && (
-              <div className="h-1 w-full [app-region:drag]" />
-            ) /* 修复 macOS 顶部窗口控制按钮被 header 遮挡无法点击的问题 */
-          }
+          {/* macOS 原生窗控仍需要顶部安全区；底色跟随正文，不再显示装饰灰带。 */}
+          {isMacDesktop ? <div className="h-1 w-full shrink-0 [app-region:drag]" /> : null}
           <ResizablePanelGroup
             layoutId="workspace-body-layout"
             panelIds={WORKSPACE_BODY_PANEL_IDS}
@@ -1640,19 +1617,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                   <section
                     data-workspace-conversation-frame="true"
                     className={cn(
-                      "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background",
-                      isSidePaneVisible
-                        ? "rounded-[var(--workspace-panel-radius)] border border-border"
-                        : resolveWorkspaceShellWindowChromeClass({
-                            isMacDesktop,
-                            isWindowsDesktop,
-                            isLinuxDesktop,
-                            macOSMajorVersion: desktopWindowChromeState?.macOSMajorVersion,
-                            isWindowsMaximized: desktopWindowChromeState?.isMaximized ?? false,
-                            supportsNativeRoundedCorners:
-                              desktopWindowChromeState?.supportsNativeRoundedCorners ?? null,
-                          }),
-                      isTerminalVisible && "rounded-b-[var(--workspace-panel-radius)] border-b",
+                      // 外侧三边直接贴齐窗口；仅保留相邻面板之间及收起导航后的左侧边界。
+                      "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border-border bg-background",
+                      isSidePaneVisible && "border-r",
+                      isTerminalVisible && "border-b",
+                      !isSidebarVisible && "border-l",
                     )}
                   >
                     {shouldRenderWorkspaceHeader ? (
@@ -1873,18 +1842,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                 {workspaceMainView !== "automations" && workspaceMainView !== "plugin-store" ? (
                   <AnimatedTerminalPanel
                     frameClassName={cn(
-                      isSidePaneVisible
-                        ? "rounded-[var(--workspace-panel-radius)] border border-border"
-                        : resolveWorkspaceShellWindowChromeClass({
-                            isMacDesktop,
-                            isWindowsDesktop,
-                            isLinuxDesktop,
-                            macOSMajorVersion: desktopWindowChromeState?.macOSMajorVersion,
-                            isWindowsMaximized: desktopWindowChromeState?.isMaximized ?? false,
-                            supportsNativeRoundedCorners:
-                              desktopWindowChromeState?.supportsNativeRoundedCorners ?? null,
-                          }),
-                      "rounded-t-[var(--workspace-panel-radius)] border-t",
+                      "border-t border-border",
+                      isSidePaneVisible && "border-r",
+                      !isSidebarVisible && "border-l",
                     )}
                     services={services}
                     workspaceAbsPath={workspaceAbsPath}
