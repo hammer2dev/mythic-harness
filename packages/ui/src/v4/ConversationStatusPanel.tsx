@@ -39,6 +39,7 @@ import {
   TID_V4_BACKGROUND_WORK_CANCEL,
   TID_V4_BACKGROUND_WORK_ITEM,
   testId,
+  replaceRemoteWorkspaceIdentityPath,
 } from "@zcode/shared";
 import type {
   GitChangeSourceId,
@@ -383,6 +384,10 @@ function GitStatusSection({
   }
   const hasChanges = git.added + git.removed > 0;
   const canOpenReview = Boolean(onOpenGitReview && gitSummary.isRepository);
+  const repositoryPath = gitSummary.workspacePath;
+  const repositoryIdentity = workspaceIdentity
+    ? (replaceRemoteWorkspaceIdentityPath(workspaceIdentity, repositoryPath) ?? workspaceIdentity)
+    : undefined;
 
   return (
     <StatusSection
@@ -403,6 +408,14 @@ function GitStatusSection({
       }
     >
       <div className="space-y-0">
+        {repositoryPath !== workspacePath ? (
+          <p
+            className="truncate px-2 py-1 font-mono text-ui-sm text-foreground-subtle"
+            title={repositoryPath}
+          >
+            {repositoryPath}
+          </p>
+        ) : null}
         {/* V4 状态面板迁移时只保留了 Changes 的静态展示，
             没有继续透传旧版 Git review 回调，导致规范中的审阅入口不可点击。 */}
         <button
@@ -428,7 +441,8 @@ function GitStatusSection({
           </span>
         </button>
         <GitBranchSwitcher
-          workspacePath={workspacePath}
+          key={repositoryIdentity ?? repositoryPath}
+          workspacePath={repositoryPath}
           gitSummary={gitSummary}
           dirtyFileCount={git.dirtyFileCount}
           onRefreshGit={onRefreshGit}
@@ -440,8 +454,9 @@ function GitStatusSection({
           showFooterActions
         />
         <GitActionMenu
-          workspacePath={workspacePath}
-          workspaceIdentity={workspaceIdentity}
+          key={repositoryIdentity ?? repositoryPath}
+          workspacePath={repositoryPath}
+          workspaceIdentity={repositoryIdentity}
           gitSummary={gitSummary}
           activeTaskChangeSummary={activeTaskChangeSummary ?? null}
           onRefreshGit={onRefreshGit}

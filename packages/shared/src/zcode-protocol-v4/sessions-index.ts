@@ -27,6 +27,7 @@ export const pendingInteractionSummarySchema = z.object({
 export type PendingInteractionSummary = z.infer<typeof pendingInteractionSummarySchema>;
 
 export const sessionSummarySchema = z.object({
+  projectId: z.string().min(1).optional(),
   sessionId: z.string(),
   workspaceId: z.string(),
   // fork 树。

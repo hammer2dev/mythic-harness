@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select.js";
 import { type GitPaneFileChange, type GitPaneRepositoryState } from "@/hooks/useGitRepository.js";
 import { useServices } from "@/hooks/useServices.js";
+import type { ProjectGitSelection } from "@/hooks/useProjectGitSelection.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
 import { useWorkspaceOpenInEditorTarget } from "@/hooks/useWorkspaceOpenInEditorTarget.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -43,6 +44,7 @@ const GIT_PANE_CHANGE_ROW_OVERSCAN = 14;
 export function GitPane({
   workspacePath,
   gitState,
+  repositorySelection,
   isDesktop,
   selectedSourceId,
   fileChangeFindActiveIndex,
@@ -60,6 +62,7 @@ export function GitPane({
   workspaceIdentity?: string;
   workspaceRemoteSessionId?: string;
   gitState: GitPaneRepositoryState;
+  repositorySelection?: ProjectGitSelection;
   isDesktop?: boolean;
   selectedSourceId: GitChangeSourceId;
   fileChangeFindActiveIndex: number;
@@ -449,6 +452,31 @@ export function GitPane({
 
   return (
     <section data-testid={TID_GIT_PANE} className="flex h-full min-h-0 flex-col bg-background">
+      {repositorySelection && repositorySelection.folders.length > 1 ? (
+        <div className="px-3 pt-3">
+          <Select
+            value={repositorySelection.folder.id}
+            onValueChange={repositorySelection.selectFolder}
+          >
+            <SelectTrigger
+              className="w-full"
+              aria-label={intl.formatMessage({ id: "project.gitRepository" })}
+              data-testid="project-git-repository-select"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {repositorySelection.folders.map((folder) => (
+                <SelectItem key={folder.id} value={folder.id}>
+                  <span className="truncate font-mono" title={folder.workspacePath}>
+                    {folder.workspacePath}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-3 p-3">
         <Select value={currentSourceOption.id} onValueChange={handleSelectSource}>
           <SelectTrigger className="max-w-full" size="lg">

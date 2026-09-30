@@ -1,3 +1,4 @@
+import { zcodeProjectWorkspaceSchema } from "../project-workspace.js";
 import {
   databaseStartupErrorCodeSchema,
   databaseStartupErrorDetailsSchema,
@@ -1558,6 +1559,7 @@ export const zcodeSessionSubagentsResultSchema = z
 export type ZCodeSessionSubagentsResult = z.infer<typeof zcodeSessionSubagentsResultSchema>;
 export const zcodeSessionCreateParamsSchema = z
   .object({
+    projectWorkspace: zcodeProjectWorkspaceSchema.optional(),
     sessionId: nonEmptyString.optional(),
     workspace: zcodeWorkspaceRefSchema,
     parentSessionId: nonEmptyString.optional(),

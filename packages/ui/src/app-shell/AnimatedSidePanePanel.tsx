@@ -290,6 +290,7 @@ export function AnimatedSidePanePanel({
   activeTaskId,
   sidePaneOwnerId,
   gitState,
+  gitRepositorySelection,
   activeGitSourceId,
   panelRef,
   panelElementRef,
@@ -355,6 +356,7 @@ export function AnimatedSidePanePanel({
   activeTaskId: string | null;
   sidePaneOwnerId: string | null;
   gitState: ReturnType<typeof import("@/hooks/useGitRepository.js").useGitRepository>;
+  gitRepositorySelection: import("@/hooks/useProjectGitSelection.js").ProjectGitSelection;
   activeGitSourceId: GitChangeSourceId;
   panelRef: RefObject<PanelImperativeHandle | null>;
   panelElementRef: RefObject<HTMLDivElement | null>;
@@ -1202,10 +1204,12 @@ export function AnimatedSidePanePanel({
                           />
                         ) : tab.type === "git" ? (
                           <GitPane
-                            workspacePath={workspaceAbsPath}
-                            workspaceIdentity={workspaceIdentity}
+                            key={gitState.workspaceKey}
+                            workspacePath={gitRepositorySelection.folder.workspacePath}
+                            workspaceIdentity={gitRepositorySelection.folder.workspaceIdentity}
                             workspaceRemoteSessionId={workspaceRemoteSessionId}
                             gitState={gitState}
+                            repositorySelection={gitRepositorySelection}
                             isDesktop={isDesktop}
                             selectedSourceId={activeGitSourceId}
                             fileChangeFindActiveIndex={fileChangeFindActiveIndex}

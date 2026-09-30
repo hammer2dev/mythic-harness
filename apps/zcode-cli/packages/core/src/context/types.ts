@@ -2,6 +2,7 @@
 // Context Builder Types
 // ============================================================
 
+import type { ZCodeProjectWorkspace } from "@zcode/shared";
 import type {
   EnvInfo,
   Model,
@@ -108,6 +109,7 @@ export interface ContextBuilderConfig {
   currentDate?: string;
   userInstructions?: ResolvedUserInstructions;
   projectContext?: ProjectContext;
+  projectWorkspace?: ZCodeProjectWorkspace;
   memoryRoot?: string;
   memoryIndexContent?: string;
   skills?: SkillLoadOutcome;

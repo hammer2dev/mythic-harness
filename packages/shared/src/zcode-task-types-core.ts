@@ -286,6 +286,8 @@ export interface ZCodeTaskMeta {
   workspaceIdentity?: string;
   /** app-owned workspace 分类；缺省为 project，不参与 workspaceKey。 */
   workspacePurpose?: import("./workspacePurpose.js").WorkspacePurpose;
+  /** 稳定项目归属；任务执行目录仍由 workspacePath / workspaceIdentity 决定。 */
+  projectId?: string;
   createdAt: number;
   updatedAt: number;
   mode: ZCodeTaskMode;

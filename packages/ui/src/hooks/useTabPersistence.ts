@@ -12,6 +12,7 @@ import { readPersistedWorkspaceSessionEntries } from "@/lib/remoteWorkspaceHisto
 import { useTabStoreApi } from "../store/TabStoreProvider.js";
 import { isWorkspaceTab, type TabStoreState } from "../store/tabStore.js";
 import { logger } from "../logger.js";
+import { isWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 
 const DEBOUNCE_MS = 300;
 
@@ -89,14 +90,23 @@ function buildRestoredRecentProjectPaths(
 
 function buildDefaultPersistPatch(state: TabStoreState): Partial<AppSettings> {
   const workspaceTabs = state.tabs.filter(isWorkspaceTab).filter((tab) => !tab.remoteSessionId);
-  const activeIndex = state.activeWorkspacePath
-    ? workspaceTabs.findIndex((tab) => tab.workspacePath === state.activeWorkspacePath)
-    : 0;
+  const activeIndex = workspaceTabs.findIndex(
+    (tab) =>
+      tab.id === state.activeTabId ||
+      (state.activeTabId === "__settings__" &&
+        state.activeWorkspacePath !== null &&
+        isWorkspaceProjectScope(tab, {
+          workspacePath: state.activeWorkspacePath,
+          workspaceIdentity: state.activeWorkspaceIdentity ?? undefined,
+        })),
+  );
 
   return {
+    closedWorkspaceProjects: state.closedProjects,
     lastWorkspaceSession: workspaceTabs.map((tab) => ({
       kind: "local" as const,
       workspacePath: tab.workspacePath,
+      ...(tab.project ? { project: tab.project } : {}),
       ...(tab.workspacePurpose ? { workspacePurpose: tab.workspacePurpose } : {}),
     })),
     lastActiveTabIndex: Math.max(activeIndex, 0),
@@ -126,6 +136,7 @@ export function useTabPersistence({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldRestoreSession = Boolean(settingService && restoreSession);
   const initialRestoreFullyCompletedRef = useRef(!shouldRestoreSession);
+  const pendingProjectMigrationRef = useRef(false);
   const [restoreLifecycle, setRestoreLifecycle] = useState<TabPersistenceRestoreLifecycle>(() => ({
     settingService,
     restoreSession,
@@ -177,19 +188,24 @@ export function useTabPersistence({
     settingService
       .get()
       .then(async (settings) => {
+        pendingProjectMigrationRef.current = readPersistedWorkspaceSessionEntries(settings).some(
+          (entry) =>
+            !entry.project &&
+            (entry.kind === "remote" || entry.workspacePurpose !== "conversation"),
+        );
         let restoreResult: TabPersistenceRestoreResult | void = undefined;
         if (restorePersistedSession) {
           restoreResult = await restorePersistedSession(settings);
         } else {
+          store.getState().restoreClosedProjects(settings.closedWorkspaceProjects ?? []);
           const tabs = readPersistedWorkspaceSessionEntries(settings).flatMap((entry) =>
             entry.kind === "local"
               ? [
-                  entry.workspacePurpose
-                    ? {
-                        workspacePath: entry.workspacePath,
-                        workspacePurpose: entry.workspacePurpose,
-                      }
-                    : entry.workspacePath,
+                  {
+                    workspacePath: entry.workspacePath,
+                    workspacePurpose: entry.workspacePurpose,
+                    project: entry.project,
+                  },
                 ]
               : [],
           );
@@ -278,6 +294,14 @@ export function useTabPersistence({
   useEffect(() => {
     if (!settingService || !persistSession) return;
 
+    // 老项目的稳定 ID 必须在首次恢复完成后落盘，不能等用户操作，否则每次启动都会变化。
+    if (hasCompletedFullRestore && pendingProjectMigrationRef.current) {
+      pendingProjectMigrationRef.current = false;
+      settingService
+        .update((buildPersistPatch ?? buildDefaultPersistPatch)(store.getState()))
+        .catch((error) => logger.error("[useTabPersistence] 保存项目迁移失败:", error));
+    }
+
     const unsubscribe = store.subscribe((state) => {
       if (!initialRestoreFullyCompletedRef.current) {
         return;
@@ -300,7 +324,7 @@ export function useTabPersistence({
       unsubscribe();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [buildPersistPatch, persistSession, store, settingService]);
+  }, [buildPersistPatch, hasCompletedFullRestore, persistSession, store, settingService]);
 
   return { isRestoring, hasCompletedInitialRestore, hasCompletedFullRestore };
 }

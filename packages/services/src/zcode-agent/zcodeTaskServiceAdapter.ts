@@ -1282,6 +1282,7 @@ export function createZCodeTaskServiceAdapter(
     return applyOverlayToMeta(
       {
         taskId: snapshot.session.sessionId,
+        projectId: snapshot.session.projectId,
         traceId: snapshot.session.traceId ?? generateTraceId(snapshot.session.sessionId),
         title: deriveTitleFromSnapshot(snapshot),
         workspacePath: snapshot.session.workspace.workspacePath,

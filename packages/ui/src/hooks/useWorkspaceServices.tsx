@@ -1,4 +1,5 @@
 import type { IServiceAccessor } from "@zcode/services";
+import type { WorkspaceProjectDefinition } from "@zcode/shared";
 import { Event, ProxyChannel, type IChannel } from "@zcode/rpc";
 import { useMemo } from "react";
 import { useOptionalServices, useServices } from "@/hooks/useServices.js";
@@ -10,6 +11,7 @@ import { useResolvedRemoteWorkspaceSessionId } from "@/hooks/useResolvedRemoteWo
 import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
 import { REMOTE_WORKSPACE_DISCONNECTED_ERROR_CODE } from "@/lib/remoteWorkspaceServiceError.js";
+import { findWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 
 let disconnectedRemoteServices: IServiceAccessor | null = null;
 
@@ -18,6 +20,7 @@ interface WorkspaceServiceTargetTab {
   workspaceIdentity?: string | null;
   remoteSessionId?: string | null;
   remoteTarget?: unknown;
+  project?: WorkspaceProjectDefinition;
 }
 
 function createDisconnectedRemoteServices(): IServiceAccessor {
@@ -111,15 +114,22 @@ function resolveWorkspaceServiceIsRemoteTarget(params: {
     // workspacePath，导致 /mnt/... 被当成本地 workspace 走 base services 并在 Windows 上 spawn 本地 agent。
     // 这里用当前 tab 的远程元数据兜住这类 path-only 调用，避免远程目标误回落到本机 host。
     if (
-      params.activeTab?.workspacePath === params.workspacePath &&
+      params.activeTab &&
+      findWorkspaceProjectScope(
+        { ...params.activeTab, workspaceIdentity: params.activeTab.workspaceIdentity ?? undefined },
+        { workspacePath },
+      ) &&
       hasRemoteWorkspaceMetadata(params.activeTab)
     ) {
       return true;
     }
   }
 
-  const matchingTabs = (params.workspaceTabs ?? []).filter(
-    (tab) => tab.workspacePath === params.workspacePath,
+  const matchingTabs = (params.workspaceTabs ?? []).filter((tab) =>
+    findWorkspaceProjectScope(
+      { ...tab, workspaceIdentity: tab.workspaceIdentity ?? undefined },
+      { workspacePath },
+    ),
   );
   return matchingTabs.length === 1 && hasRemoteWorkspaceMetadata(matchingTabs[0]);
 }

@@ -142,6 +142,7 @@ export interface MessageProjectionAnchor {
 }
 
 export interface SessionInfo {
+  workspaceProjectId?: string;
   id: SessionId;
   projectID: ProjectId;
   workspaceID?: WorkspaceId;
@@ -172,6 +173,7 @@ export interface SessionInfo {
 }
 
 export interface CreateSessionInput {
+  workspaceProjectId?: string;
   id: SessionId;
   projectID: ProjectId;
   workspaceID?: WorkspaceId;
@@ -245,6 +247,7 @@ export interface ForkCommitBundle {
 }
 
 export interface UpdateSessionInput {
+  workspaceProjectId?: string;
   id: SessionId;
   directory?: string;
   path?: string | null;

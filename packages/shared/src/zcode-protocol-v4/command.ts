@@ -1,3 +1,4 @@
+import { zcodeProjectWorkspaceSchema } from "../project-workspace.js";
 import { localTtftContextSchema, localTtftClockSchema } from "../localTtft.js";
 // Command 层：信封 / ACK / 命令全集 payload。
 // conversation rewind 无独立命令（裁决：= editUserQuery 的 UI 入口）；
@@ -44,6 +45,7 @@ const createSessionRequestedConfigSchema = z.object({
 export const commandPayloadSchemas = {
   // firstInput 缺省 → phase=draft 空会话；携带 → 直接 turnHeader+userInput rows。
   createSession: z.object({
+    projectWorkspace: zcodeProjectWorkspaceSchema.optional(),
     workspaceId: z.string(),
     firstInput: z
       .object({
@@ -80,6 +82,7 @@ export const commandPayloadSchemas = {
   // clear→清空 queue 后 startNow，keep→保留 queue 立即 startNow。
   sendText: z
     .object({
+      projectWorkspace: zcodeProjectWorkspaceSchema.optional(),
       text: z.string(),
       attachments: z.array(attachmentRefSchema).optional(),
       // Desktop Cmd/Ctrl+Enter 只覆盖本次 busy input，不改 session followupMode。
@@ -133,6 +136,7 @@ export const commandPayloadSchemas = {
       }
     }),
   sendGoalCommand: z.object({
+    projectWorkspace: zcodeProjectWorkspaceSchema.optional(),
     text: z.string(),
     displayText: z.string().optional(),
     modelSelection: modelSelectionSchema.optional(),

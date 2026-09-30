@@ -18,7 +18,8 @@
 
 - UI 专用 sidebarSectionsStore 是分区定义、分区顺序、项目分区归属及分区折叠的唯一所有者，通过一个本地持久化入口写入。旧固定分区偏好迁入该模型，避免 React state/localStorage 双写。
 - tabStore 继续拥有已打开 workspace 与项目顺序，useTabPersistence 继续负责现有窗口会话恢复。分区只过滤投影现有项目，不复制项目列表或项目排序。
-- 项目归属 key 使用 workspaceIdentity?.trim() || workspacePath，不使用 tab.id、remoteSessionId 或远端路径单独作为身份。
+- 项目归属 key 使用稳定的 project.id。改名、切换主要文件夹或移除源文件夹不改变分区归属；tab.id 与 remoteSessionId 不承担项目身份。
+- 旧的 workspaceIdentity?.trim() || workspacePath 成员 key 按项目 legacyWorkspaceScopes 一次迁移到 project.id，并删除旧映射，避免移回默认分区后旧归属重新生效。运行时与文件操作的 workspace identity/path 语义保持原状。
 - 分区组件与菜单通过 UI store/actions 操作；task service、任务索引和 CLI runtime 不接收分区状态。
 - 取消 task group 的服务接口、adapter 方法、类型及生产调用；实际服务契约为 packages/services/src/session/zcodeTaskService.ts 中的 IZCodeTaskService。真实任务、草稿首发 admission、会话生命周期和自动化调度保持原所有者。
 

@@ -2,6 +2,7 @@ import { createOpenInEditorRemoteTarget } from "@zcode/shared";
 import { useMemo } from "react";
 import { useOptionalTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab, type WindowTabState, type WorkspaceTabState } from "@/store/tabStore.js";
+import { findWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 
 interface WorkspaceOpenInEditorScope {
   workspacePath?: string;
@@ -19,18 +20,19 @@ function resolveWorkspaceOpenInEditorTarget(
 
   const requestedIdentity = scope.workspaceIdentity?.trim() || undefined;
   const requestedRemoteSessionId = scope.workspaceRemoteSessionId?.trim() || undefined;
-  const workspaceKey = requestedIdentity || scope.workspacePath;
   const matches = tabs.filter((tab): tab is WorkspaceTabState => {
-    if (!isWorkspaceTab(tab) || tab.workspacePath !== scope.workspacePath) {
+    if (
+      !isWorkspaceTab(tab) ||
+      !findWorkspaceProjectScope(tab, {
+        workspacePath: scope.workspacePath!,
+        workspaceIdentity: requestedIdentity,
+      })
+    ) {
       return false;
     }
 
-    const tabWorkspaceKey = tab.workspaceIdentity?.trim() || tab.workspacePath;
     const tabRemoteSessionId = tab.remoteSessionId?.trim() || undefined;
-    return (
-      (!requestedIdentity || tabWorkspaceKey === workspaceKey) &&
-      (!requestedRemoteSessionId || tabRemoteSessionId === requestedRemoteSessionId)
-    );
+    return !requestedRemoteSessionId || tabRemoteSessionId === requestedRemoteSessionId;
   });
   // 远程文件动作以前只携带 Linux path，renderer 无法判断它属于哪个 SSH/WSL 目标；
   // identity/session 已提供时精确匹配，旧调用仅在工作区匹配唯一时提取既有脱敏目标。

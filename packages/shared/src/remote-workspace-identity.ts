@@ -111,3 +111,18 @@ export function parseRemoteWorkspaceIdentity(
 export function isRemoteWorkspaceIdentity(identity: string): boolean {
   return parseRemoteWorkspaceIdentity(identity) !== null;
 }
+
+/** 只比较远端环境，不把不同文件夹的身份混同为同一 workspace。 */
+export function getRemoteWorkspaceEnvironmentIdentity(identity: string): string | null {
+  const parsed = parseRemoteWorkspaceIdentity(identity);
+  return parsed ? identity.slice(0, -parsed.workspacePath.length) : null;
+}
+
+/** 为同一已附着远端环境中的另一目录生成身份，不要求客户端持有连接凭据。 */
+export function replaceRemoteWorkspaceIdentityPath(
+  identity: string,
+  workspacePath: string,
+): string | null {
+  const environment = getRemoteWorkspaceEnvironmentIdentity(identity);
+  return environment ? `${environment}${normalizeWorkspacePathForIdentity(workspacePath)}` : null;
+}

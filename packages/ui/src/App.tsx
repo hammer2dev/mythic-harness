@@ -8,11 +8,14 @@ import { useTaskQueryCacheStore } from "@/store/taskQueryCacheStore.js";
 import { useAppPanels } from "@/hooks/useAppPanels.js";
 import { useGitAutoRefresh } from "@/hooks/useGitAutoRefresh.js";
 import { useGitRepository } from "@/hooks/useGitRepository.js";
+import { useProjectGitSelection } from "@/hooks/useProjectGitSelection.js";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { useWorkspaceActiveTaskState } from "@/hooks/useWorkspaceActiveTaskState.js";
 import { useEnsureWorkspaceMcpLoaded } from "@/hooks/useEnsureWorkspaceMcpLoaded.js";
-import { useTabStore } from "@/store/TabStoreProvider.js";
+import { useTabStore, useTabStoreApi } from "@/store/TabStoreProvider.js";
+import { resolveProjectNavigationTarget } from "@/lib/projectNavigationTarget.js";
+import { isWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 import { isWorkspaceReadOnly, isWorkspaceTab } from "@/store/tabStore.js";
 import type { TaskChatMessage as TestChatMessage } from "@/lib/taskChatMessageTypes.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -150,7 +153,10 @@ export function App({
       if (
         !activeTab ||
         !isWorkspaceTab(activeTab) ||
-        activeTab.workspacePath !== workspaceAbsPath
+        !isWorkspaceProjectScope(activeTab, {
+          workspacePath: workspaceAbsPath,
+          workspaceIdentity: explicitWorkspaceIdentity,
+        })
       ) {
         return {
           workspaceIdentity: undefined,
@@ -160,7 +166,7 @@ export function App({
       }
 
       return {
-        workspaceIdentity: activeTab.workspaceIdentity,
+        workspaceIdentity: explicitWorkspaceIdentity ?? activeTab.workspaceIdentity,
         remoteSessionId: activeTab.remoteSessionId,
         remoteTarget: activeTab.remoteTarget,
       };
@@ -361,6 +367,7 @@ export function App({
     workspaceAbsPath,
   });
   const tabs = useTabStore((s) => s.tabs);
+  const tabStoreApi = useTabStoreApi();
   const addTab = useTabStore((s) => s.addTab);
   const activateTabByPath = useTabStore((s) => s.activateTabByPath);
 
@@ -404,8 +411,9 @@ export function App({
     setGitRefreshVersion((value) => value + 1);
   }, []);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
+  const gitRepositorySelection = useProjectGitSelection(workspaceAbsPath, workspaceIdentity);
   const gitState = useGitRepository({
-    workspacePath: workspaceAbsPath,
+    workspacePath: gitRepositorySelection.folder.workspacePath,
     activeTaskId,
     includeExtendedData: hasGitTab,
     // 关键逻辑：真实 Git 只在 workspace 变化、Git pane 打开、或用户显式点刷新时重拉。
@@ -413,11 +421,11 @@ export function App({
     refreshToken: gitRefreshVersion,
     remoteSessionId: workspaceRpcTarget.remoteSessionId ?? null,
     remoteTarget: workspaceRpcTarget.remoteTarget,
-    workspaceIdentity,
+    workspaceIdentity: gitRepositorySelection.folder.workspaceIdentity,
   });
   useGitAutoRefresh({
-    workspacePath: workspaceAbsPath,
-    workspaceIdentity,
+    workspacePath: gitRepositorySelection.folder.workspacePath,
+    workspaceIdentity: gitRepositorySelection.folder.workspaceIdentity,
     remoteSessionId: workspaceRpcTarget.remoteSessionId ?? null,
     gitSummary: gitState.summary,
     gitSummaryWorkspaceKey: gitState.workspaceKey,
@@ -691,10 +699,15 @@ export function App({
       createSource?: import("@zcode/shared").SessionCreateSource,
     ) => {
       const store = useZCodeSessionStore.getState();
-      const resolvedTargetWorkspaceIdentity =
-        targetWorkspaceIdentity ??
-        tabs.filter(isWorkspaceTab).find((tab) => tab.workspacePath === targetWorkspacePath)
-          ?.workspaceIdentity;
+      const projectTarget = resolveProjectNavigationTarget(tabStoreApi.getState(), {
+        workspacePath: targetWorkspacePath,
+        workspaceIdentity: targetWorkspaceIdentity,
+      });
+      const resolvedTargetWorkspaceIdentity = projectTarget
+        ? projectTarget.scope.workspaceIdentity
+        : (targetWorkspaceIdentity ??
+          tabs.filter(isWorkspaceTab).find((tab) => tab.workspacePath === targetWorkspacePath)
+            ?.workspaceIdentity);
       if (isWorkspaceReadOnly({ tabs }, targetWorkspacePath, resolvedTargetWorkspaceIdentity)) {
         return;
       }
@@ -720,7 +733,9 @@ export function App({
               ...(targetWorkspacePurpose ? { workspacePurpose: targetWorkspacePurpose } : {}),
             }
           : undefined;
-      if (targetWorkspacePurpose) {
+      if (projectTarget && !targetWorkspacePurpose) {
+        tabStoreApi.getState().activateProjectTask(projectTarget.tab.id, projectTarget.scope);
+      } else if (targetWorkspacePurpose) {
         // purpose 是分类元数据；即使 tab 已存在也要合并，避免首次从项目解绑时被默认成 project。
         addTab(targetWorkspacePath, targetTabOptions);
       } else if (
@@ -747,7 +762,7 @@ export function App({
         },
       );
     },
-    [activateTabByPath, addTab, tabs, workspaceShellZCodeState.selectedProvider],
+    [activateTabByPath, addTab, tabs, tabStoreApi, workspaceShellZCodeState.selectedProvider],
   );
 
   useWorkspaceShellLifecycle({
@@ -1150,6 +1165,7 @@ export function App({
         gitWorktreeChangeSummary={gitWorktreeChangeSummary}
         activeGitSourceId={activeGitSourceId}
         gitState={gitState}
+        gitRepositorySelection={gitRepositorySelection}
         browserNavigationRequest={browserNavigationRequest}
         browserRestoreUrls={browserRestoreUrls}
         taskNativeSessionLogFile={taskNativeSessionLogFile}

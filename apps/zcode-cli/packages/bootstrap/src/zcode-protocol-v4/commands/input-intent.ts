@@ -17,6 +17,7 @@ interface CanonicalCommandIntent {
   admittedDelivery?: TurnInputIntentMetadata["admittedDelivery"];
   fallbackReasonCode?: string;
   attachmentRefs?: readonly AttachmentRef[];
+  projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
   sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
   provenance?: TurnInputIntentMetadata["provenance"];
 }
@@ -32,6 +33,7 @@ export function inputIntentMetadata(
     modelSelection?: ModelSelection;
     mode?: SubmissionMode;
     planEnabled?: boolean;
+    projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
     sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
   },
 ): TurnInputIntentMetadata {
@@ -64,6 +66,9 @@ export function inputIntentMetadata(
           : "startNow"),
     ...(options.fallbackReasonCode ? { fallbackReasonCode: options.fallbackReasonCode } : {}),
     ...(options.attachmentRefs ? { attachmentRefs: [...options.attachmentRefs] } : {}),
+    ...(options.projectWorkspace
+      ? { projectWorkspace: structuredClone(options.projectWorkspace) }
+      : {}),
     ...(options.sharedContextRefs ? { sharedContextRefs: [...options.sharedContextRefs] } : {}),
   };
 }
@@ -92,6 +97,9 @@ export function inputIntentMetadataFromCanonical(
     admittedDelivery: canonical.admittedDelivery ?? "startNow",
     ...(canonical.fallbackReasonCode ? { fallbackReasonCode: canonical.fallbackReasonCode } : {}),
     ...(canonical.attachmentRefs ? { attachmentRefs: [...canonical.attachmentRefs] } : {}),
+    ...(canonical.projectWorkspace
+      ? { projectWorkspace: structuredClone(canonical.projectWorkspace) }
+      : {}),
     ...(canonical.sharedContextRefs ? { sharedContextRefs: [...canonical.sharedContextRefs] } : {}),
     ...(originalSourceCommandId
       ? {
@@ -128,6 +136,7 @@ export function inputIntentMetadataFromQueueItem(
       ? { fallbackReasonCode: item.delivery.fallbackReasonCode }
       : {}),
     attachmentRefs: item.attachments,
+    ...(item.projectWorkspace ? { projectWorkspace: structuredClone(item.projectWorkspace) } : {}),
     ...(item.sharedContextRefs ? { sharedContextRefs: [...item.sharedContextRefs] } : {}),
     // 提升只改变调度状态；重试／编辑原始输入的来源关联不能在此丢失。
     ...(item.provenance ? { provenance: { ...item.provenance } } : {}),

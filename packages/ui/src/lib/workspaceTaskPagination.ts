@@ -1,4 +1,5 @@
-import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
+import type { WorkspaceProjectDefinition } from "@zcode/shared";
+import { getWorkspaceProjectKey } from "@/lib/workspaceProject.js";
 
 export const WORKSPACE_TASK_PAGE_SIZE = 5;
 
@@ -7,7 +8,11 @@ export type WorkspaceTaskVisibleLimitByKey = Record<string, number>;
 export function resolveVisibleWorkspaceTaskKeys(params: {
   enabled: boolean;
   expandedWorkspacePaths: ReadonlySet<string>;
-  workspaces: ReadonlyArray<{ workspacePath: string; workspaceIdentity?: string }>;
+  workspaces: ReadonlyArray<{
+    workspacePath: string;
+    workspaceIdentity?: string;
+    project?: WorkspaceProjectDefinition;
+  }>;
 }): Set<string> {
   if (!params.enabled) {
     return new Set();
@@ -15,9 +20,7 @@ export function resolveVisibleWorkspaceTaskKeys(params: {
   return new Set(
     params.workspaces
       .filter((workspace) => params.expandedWorkspacePaths.has(workspace.workspacePath))
-      .map((workspace) =>
-        buildTaskWorkspaceKey(workspace.workspacePath, workspace.workspaceIdentity),
-      ),
+      .map(getWorkspaceProjectKey),
   );
 }
 

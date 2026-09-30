@@ -154,6 +154,7 @@ function buildForkedSessionInput(
   return {
     id: forkedSessionId,
     projectID: parentSession.projectID,
+    workspaceProjectId: parentSession.workspaceProjectId,
     workspaceID: parentSession.workspaceID,
     parentID: runtime.sessionId,
     traceID: runtime.rootTraceContext.traceId,

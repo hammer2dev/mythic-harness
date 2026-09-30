@@ -21,6 +21,7 @@ export const SortableWorkspaceSidebarItem = memo(function SortableWorkspaceSideb
   onSelectTask,
   onStartDraftInWorkspace,
   taskItems,
+  taskListTotal,
   taskListLoading,
   taskListHasMore,
   taskListHasUnread = false,
@@ -46,6 +47,7 @@ export const SortableWorkspaceSidebarItem = memo(function SortableWorkspaceSideb
   ) => void;
   onStartDraftInWorkspace: (targetWorkspacePath: string, targetWorkspaceIdentity?: string) => void;
   taskItems: ZCodeTaskMeta[];
+  taskListTotal: number;
   taskListLoading: boolean;
   taskListHasMore: boolean;
   taskListHasUnread?: boolean;
@@ -57,6 +59,7 @@ export const SortableWorkspaceSidebarItem = memo(function SortableWorkspaceSideb
   reconnectingRemoteWorkspaceLogsByWorkspaceKey: Record<string, RemoteConnectionLogEntry[]>;
   onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onOpenFileTree: (target: {
+    projectId?: string;
     workspacePath: string;
     workspaceName: string;
     workspaceIdentity?: string;
@@ -115,6 +118,7 @@ export const SortableWorkspaceSidebarItem = memo(function SortableWorkspaceSideb
       onSelectTask={onSelectTask}
       onStartDraftInWorkspace={onStartDraftInWorkspace}
       taskItems={taskItems}
+      taskListTotal={taskListTotal}
       taskListLoading={taskListLoading}
       taskListHasMore={taskListHasMore}
       taskListHasUnread={taskListHasUnread}

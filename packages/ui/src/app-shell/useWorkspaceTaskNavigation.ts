@@ -25,6 +25,7 @@ import { getRemoteWorkspaceSession } from "@/store/remoteWorkspaceSessionStore.j
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
 import { bumpTaskListMembershipVersion } from "@/v4/taskListMembershipVersion.js";
+import { resolveProjectNavigationTarget } from "@/lib/projectNavigationTarget.js";
 
 export interface AutomationsNavigationTarget {
   workspacePath: string;
@@ -93,12 +94,29 @@ export function useWorkspaceTaskNavigation({
       // 当同一窗口里存在相同路径的多个 remote tab 时，路径映射会命中旧 session，
       // 导致“点开这个任务”却把已读状态写到另一条远端连接上。
       // 这里先激活目标 tab，再从当前激活 tab 上读取更精确的 remoteSessionId。
-      activateTabByPath(
-        targetWorkspacePath,
-        targetWorkspaceIdentityHint
-          ? { workspaceIdentity: targetWorkspaceIdentityHint }
-          : undefined,
+      const cachedTargetTask =
+        useTaskQueryCacheStore.getState().taskMetaByEntityKey[
+          buildTaskEntityKey({
+            workspacePath: targetWorkspacePath,
+            workspaceIdentity: targetWorkspaceIdentityHint,
+            taskId,
+          })
+        ];
+      const projectTarget = resolveProjectNavigationTarget(
+        tabStoreApi.getState(),
+        { workspacePath: targetWorkspacePath, workspaceIdentity: targetWorkspaceIdentityHint },
+        cachedTargetTask?.projectId,
       );
+      if (projectTarget) {
+        tabStoreApi.getState().activateProjectTask(projectTarget.tab.id, projectTarget.scope);
+      } else {
+        activateTabByPath(
+          targetWorkspacePath,
+          targetWorkspaceIdentityHint
+            ? { workspaceIdentity: targetWorkspaceIdentityHint }
+            : undefined,
+        );
+      }
       const activeTab = tabStoreApi
         .getState()
         .tabs.find((tab) => tab.id === tabStoreApi.getState().activeTabId);
@@ -107,17 +125,19 @@ export function useWorkspaceTaskNavigation({
         targetWorkspaceIdentityHint,
       );
       const activeWorkspaceTabMatchesTarget = Boolean(
-        activeTab &&
-        isWorkspaceTab(activeTab) &&
-        buildTaskWorkspaceKey(activeTab.workspacePath, activeTab.workspaceIdentity) ===
-          targetWorkspaceKey,
+        projectTarget ||
+        (activeTab &&
+          isWorkspaceTab(activeTab) &&
+          buildTaskWorkspaceKey(activeTab.workspacePath, activeTab.workspaceIdentity) ===
+            targetWorkspaceKey),
       );
       const resolvedRemoteSessionId =
         activeTab && isWorkspaceTab(activeTab) && activeWorkspaceTabMatchesTarget
           ? activeTab.remoteSessionId
           : undefined;
-      const targetWorkspaceIdentity =
-        activeTab && isWorkspaceTab(activeTab) && activeWorkspaceTabMatchesTarget
+      const targetWorkspaceIdentity = projectTarget
+        ? projectTarget.scope.workspaceIdentity
+        : activeTab && isWorkspaceTab(activeTab) && activeWorkspaceTabMatchesTarget
           ? (activeTab.workspaceIdentity ?? targetWorkspaceIdentityHint)
           : targetWorkspaceIdentityHint;
       const targetTask = {

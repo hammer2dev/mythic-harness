@@ -276,6 +276,10 @@ export class ConversationTopicPublisher {
   }
 
   /** config 种子注入：直改投影初值，不产 delta / 不进事件日志。语义见 ProductProjection.seedConfig。 */
+  seedProjectId(projectId: string): void {
+    this.projection.seedProjectId(projectId);
+  }
+
   seedConfig(seed: SessionConfigSeed): void {
     this.projection.seedConfig(seed);
     this.wireSnapshotBytesUpperBound = this.measureWireSnapshotBytes(this.getWireSnapshot());

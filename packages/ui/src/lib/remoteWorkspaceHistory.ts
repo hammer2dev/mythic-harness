@@ -325,6 +325,7 @@ export function buildRemoteWorkspaceSessionMutation(params: {
   const nextEntry: RemoteWorkspaceSessionEntry = {
     kind: "remote",
     workspacePath: params.workspacePath,
+    ...(currentEntry?.project ? { project: currentEntry.project } : {}),
     // filesystem MCP 同步需要用“本机 workspace -> 远端 workspace”映射。
     // 远端历史之前只保存远端路径，已连接后的 Settings/Header 入口无法再恢复本机基准路径。
     ...(localWorkspacePath ? { localWorkspacePath } : {}),
@@ -408,7 +409,12 @@ export function buildPersistedWorkspaceSessionEntries(
 
     if (hasRemoteWorkspaceIdentity(tab)) {
       const workspaceKey = buildWorkspaceSessionKey(tab);
-      const remoteEntry = remoteSessionsByWorkspaceKey.get(workspaceKey);
+      // 更换主目录不更换远端环境，凭据快照仍可由此前任务目录的会话条目取得。
+      const remoteEntry =
+        remoteSessionsByWorkspaceKey.get(workspaceKey) ??
+        tab.project?.taskWorkspaceScopes
+          .map((scope) => remoteSessionsByWorkspaceKey.get(buildWorkspaceSessionKey(scope)))
+          .find(Boolean);
 
       // lastWorkspaceSession 现在是远端 workspace 的唯一持久化来源。
       // 如果这里因为 tab 断连就把 remote 项漏掉，下次启动会直接丢失“手动重连”的入口。
@@ -417,13 +423,20 @@ export function buildPersistedWorkspaceSessionEntries(
         return entries;
       }
 
-      entries.push(remoteEntry);
+      entries.push({
+        ...remoteEntry,
+        workspacePath: tab.workspacePath,
+        workspaceIdentity: tab.workspaceIdentity,
+        localWorkspacePath: tab.localWorkspacePath,
+        ...(tab.project ? { project: tab.project } : {}),
+      });
       return entries;
     }
 
     entries.push({
       kind: "local",
       workspacePath: tab.workspacePath,
+      ...(tab.project ? { project: tab.project } : {}),
       ...(tab.workspacePurpose ? { workspacePurpose: tab.workspacePurpose } : {}),
     });
     return entries;

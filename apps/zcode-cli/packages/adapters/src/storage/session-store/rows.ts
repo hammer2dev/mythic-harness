@@ -1,4 +1,5 @@
 export interface SessionRow {
+  workspace_project_id: string | null;
   id: string;
   project_id: string;
   workspace_id: string | null;

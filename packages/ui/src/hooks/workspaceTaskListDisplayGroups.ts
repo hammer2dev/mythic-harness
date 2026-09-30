@@ -1,4 +1,6 @@
-import type { ZCodeTaskMeta } from "@zcode/shared";
+import type { ZCodeTaskMeta, WorkspaceProjectDefinition } from "@zcode/shared";
+import { taskBelongsToProject } from "@/lib/projectTaskMembership.js";
+import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
 import type { CachedTaskListResult } from "@/lib/taskQueryCache.js";
 import {
   mergeWorkspaceTaskListItemsWithOptimistic,
@@ -9,6 +11,8 @@ import { countLiveWorkflowRuns } from "@/lib/workflowRunLine.js";
 import { getTaskListRowActivity } from "@/v4/taskListRowActivity.js";
 
 interface WorkspaceTaskListDisplayConfig {
+  project?: WorkspaceProjectDefinition;
+  scopes: Array<{ workspacePath: string; workspaceIdentity?: string }>;
   scope: {
     workspacePath: string;
     workspaceIdentity?: string;
@@ -19,6 +23,7 @@ interface WorkspaceTaskListDisplayConfig {
 }
 
 export interface WorkspaceTaskListGroup {
+  projectId?: string;
   workspacePath: string;
   workspaceIdentity?: string;
   items: ZCodeTaskMeta[];
@@ -73,11 +78,20 @@ export function buildWorkspaceTaskListDisplayGroups(params: {
       displayResult?.taskKeys
         .map((taskKey) => params.taskMetaByEntityKey[taskKey])
         .filter((task): task is ZCodeTaskMeta => Boolean(task)) ?? [];
-    const optimisticOverlay = params.optimisticTaskOverlayByWorkspaceKey.get(config.workspaceKey);
+    const optimisticOverlays = config.scopes.flatMap((scope) => {
+      const overlay = params.optimisticTaskOverlayByWorkspaceKey.get(
+        buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity),
+      );
+      return overlay ? [overlay] : [];
+    });
+    const optimisticTasks = optimisticOverlays
+      .flatMap((overlay) => overlay.tasks)
+      .filter((task) => !config.project || taskBelongsToProject(config.project, task));
     const items = mergeWorkspaceTaskListItemsWithOptimistic({
       items: cachedItems,
-      optimisticTasks: optimisticOverlay?.tasks ?? [],
-      activeTaskId: optimisticOverlay?.activeTaskId ?? null,
+      optimisticTasks,
+      activeTaskId:
+        optimisticOverlays.find((overlay) => overlay.activeTaskId)?.activeTaskId ?? null,
       sortBy: params.sortBy,
       visibleLimit: config.visibleLimit,
     });
@@ -93,6 +107,7 @@ export function buildWorkspaceTaskListDisplayGroups(params: {
       0,
     );
     const nextGroup = {
+      projectId: config.project?.id,
       workspacePath: config.scope.workspacePath,
       workspaceIdentity: config.scope.workspaceIdentity,
       items,

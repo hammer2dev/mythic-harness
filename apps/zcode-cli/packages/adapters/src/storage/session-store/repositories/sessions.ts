@@ -17,26 +17,23 @@ import { decodeSessionRow } from "../codecs.js";
 import { encodeJson } from "../json.js";
 import type { SessionRow } from "../rows.js";
 
-export function createSession(
-  db: DatabaseSync,
-  input: CreateSessionInput,
-): SessionInfo {
+export function createSession(db: DatabaseSync, input: CreateSessionInput): SessionInfo {
   const now = Date.now();
   const timeCreated = input.time?.created ?? now;
   const timeUpdated = input.time?.updated ?? timeCreated;
 
-  db
-    .prepare(
-      `
+  db.prepare(
+    `
       insert into session (
-        id, project_id, workspace_id, parent_id, trace_id, task_type, slug, directory, path,
+        id, workspace_project_id, project_id, workspace_id, parent_id, trace_id, task_type, slug, directory, path,
         title, title_source, title_message_id, version,
         share_url, summary_additions, summary_deletions, summary_files, summary_diffs,
         revert, permission, time_created, time_updated, time_title_updated,
         time_compacting, time_archived
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null, null, ?, ?, ?, ?, null, null)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null, null, ?, ?, ?, ?, null, null)
       on conflict(id) do update set
         project_id = excluded.project_id,
+        workspace_project_id = coalesce(session.workspace_project_id, excluded.workspace_project_id),
         workspace_id = excluded.workspace_id,
         parent_id = excluded.parent_id,
         trace_id = coalesce(session.trace_id, excluded.trace_id),
@@ -53,27 +50,27 @@ export function createSession(
         time_title_updated = excluded.time_title_updated,
         time_updated = excluded.time_updated
       `,
-    )
-    .run(
-      input.id,
-      input.projectID,
-      input.workspaceID ?? null,
-      input.parentID ?? null,
-      input.traceID ?? null,
-      input.taskType ?? "interactive",
-      input.slug,
-      input.directory,
-      input.path ?? null,
-      input.title,
-      input.titleSource ?? "first_input",
-      input.titleMessageID ?? null,
-      input.version,
-      input.shareURL ?? null,
-      encodeJson(input.permission),
-      timeCreated,
-      timeUpdated,
-      input.titleSource || input.titleMessageID ? timeUpdated : null,
-    );
+  ).run(
+    input.id,
+    input.workspaceProjectId ?? null,
+    input.projectID,
+    input.workspaceID ?? null,
+    input.parentID ?? null,
+    input.traceID ?? null,
+    input.taskType ?? "interactive",
+    input.slug,
+    input.directory,
+    input.path ?? null,
+    input.title,
+    input.titleSource ?? "first_input",
+    input.titleMessageID ?? null,
+    input.version,
+    input.shareURL ?? null,
+    encodeJson(input.permission),
+    timeCreated,
+    timeUpdated,
+    input.titleSource || input.titleMessageID ? timeUpdated : null,
+  );
 
   return mustGetSession(db, input.id);
 }
@@ -108,10 +105,10 @@ export async function updateSession(
   const titleChanged = input.title !== undefined && input.title !== current.title;
   const nextTitleSource = input.titleSource ?? current.titleSource ?? "first_input";
 
-  db
-    .prepare(
-      `
+  db.prepare(
+    `
       update session set
+        workspace_project_id = coalesce(workspace_project_id, ?),
         directory = ?,
         path = ?,
         title = ?,
@@ -131,38 +128,33 @@ export async function updateSession(
         time_updated = max(time_updated, ?)
       where id = ?
       `,
-    )
-    .run(
-      input.directory ?? current.directory,
-      input.path === undefined ? (current.path ?? null) : input.path,
-      input.title ?? current.title,
-      nextTitleSource,
-      input.titleMessageID === undefined
-        ? (current.titleMessageID ?? null)
-        : input.titleMessageID,
-      input.shareURL === undefined ? (current.shareURL ?? null) : input.shareURL,
-      summary === null ? null : (summary.additions ?? null),
-      summary === null ? null : (summary.deletions ?? null),
-      summary === null ? null : (summary.files ?? null),
-      summary === null ? null : encodeJson(summary.diffs),
-      input.revert === undefined ? encodeJson(current.revert) : encodeJson(input.revert),
-      input.permission === undefined ? encodeJson(current.permission) : encodeJson(input.permission),
-      titleChanged || input.titleSource !== undefined || input.titleMessageID !== undefined
-        ? now
-        : (current.time.titleUpdated ?? null),
-      input.timeCompacting === undefined ? (current.time.compacting ?? null) : input.timeCompacting,
-      input.timeArchived === undefined ? (current.time.archived ?? null) : input.timeArchived,
-      input.timeUpdated ?? now,
-      input.id,
-    );
+  ).run(
+    input.workspaceProjectId ?? null,
+    input.directory ?? current.directory,
+    input.path === undefined ? (current.path ?? null) : input.path,
+    input.title ?? current.title,
+    nextTitleSource,
+    input.titleMessageID === undefined ? (current.titleMessageID ?? null) : input.titleMessageID,
+    input.shareURL === undefined ? (current.shareURL ?? null) : input.shareURL,
+    summary === null ? null : (summary.additions ?? null),
+    summary === null ? null : (summary.deletions ?? null),
+    summary === null ? null : (summary.files ?? null),
+    summary === null ? null : encodeJson(summary.diffs),
+    input.revert === undefined ? encodeJson(current.revert) : encodeJson(input.revert),
+    input.permission === undefined ? encodeJson(current.permission) : encodeJson(input.permission),
+    titleChanged || input.titleSource !== undefined || input.titleMessageID !== undefined
+      ? now
+      : (current.time.titleUpdated ?? null),
+    input.timeCompacting === undefined ? (current.time.compacting ?? null) : input.timeCompacting,
+    input.timeArchived === undefined ? (current.time.archived ?? null) : input.timeArchived,
+    input.timeUpdated ?? now,
+    input.id,
+  );
 
   return mustGetSession(db, input.id);
 }
 
-export function getSession(
-  db: DatabaseSync,
-  sessionID: SessionId,
-): SessionInfo | null {
+export function getSession(db: DatabaseSync, sessionID: SessionId): SessionInfo | null {
   const row = db.prepare("select * from session where id = ?").get(sessionID) as
     | SessionRow
     | undefined;
@@ -337,9 +329,10 @@ export async function clearRevert(db: DatabaseSync, sessionID: SessionId): Promi
 }
 
 export function touchSession(db: DatabaseSync, sessionID: SessionId, timeUpdated: number): void {
-  db
-    .prepare("update session set time_updated = max(time_updated, ?) where id = ?")
-    .run(timeUpdated, sessionID);
+  db.prepare("update session set time_updated = max(time_updated, ?) where id = ?").run(
+    timeUpdated,
+    sessionID,
+  );
 }
 
 function normalizeSessionTaskTypes(taskTypes: readonly SessionTaskType[] | undefined): string[] {

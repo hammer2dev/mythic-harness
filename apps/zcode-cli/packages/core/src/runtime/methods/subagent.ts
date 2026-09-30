@@ -218,6 +218,10 @@ export function createDefaultSubagentPort(
           modelSelection: cloneModelSelection(childSelection),
           modelContextBudgetStrategy: this.config.modelContextBudgetStrategy,
           workingDirectory: request.workingDirectory,
+          workspaceProjectId: this.config.workspaceProjectId,
+          projectWorkspace: this.config.projectWorkspace
+            ? structuredClone(this.config.projectWorkspace)
+            : undefined,
           // 执行模型只由 child Active Model 投影进 Context；envInfo 不保存第二份模型事实。
           envInfo: childRuntimeEnvInfo,
           // Explore 子运行时之前没有继承主会话的流式配置，Protocol 桌面端虽已默认

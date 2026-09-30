@@ -189,6 +189,7 @@ export class ContextBuilder {
     // 5. Meta user context: workspace instructions/project memory first, date second.
     const requestUserContextSection = buildRequestUserContextSection({
       userInstructions: this.config.userInstructions,
+      projectWorkspace: this.config.projectWorkspace,
       memoryIndexContent: this.config.memoryIndexContent,
       memoryRoot: this.config.memoryRoot,
     });

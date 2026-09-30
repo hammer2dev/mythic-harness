@@ -33,7 +33,9 @@ import {
 } from "@/hooks/workspaceTaskListRefreshSignatures.js";
 import { shouldRefetchTaskListMembershipForWorkspaceEvent } from "@/lib/taskListRefreshPolicy.js";
 import { syncTaskUnreadFromStatusWorkspaceEvent } from "@/lib/taskStatusUnreadSync.js";
-import type { ZCodeTaskMeta } from "@zcode/shared";
+import type { ZCodeTaskMeta, WorkspaceProjectDefinition } from "@zcode/shared";
+import { taskBelongsToProject } from "@/lib/projectTaskMembership.js";
+import { getWorkspaceProjectKey, getWorkspaceProjectScopes } from "@/lib/workspaceProject.js";
 import { fetchTaskListMembershipSetsForEndpointsCached } from "@/lib/taskListMembershipSets.js";
 import { buildTaskListResult } from "@/v4/buildTaskListResultFromSessions.js";
 import {
@@ -47,6 +49,8 @@ import {
 import { resolveWorkspaceTaskVisibleLimit } from "@/lib/workspaceTaskPagination.js";
 
 interface WorkspaceTaskListQueryConfig {
+  project?: WorkspaceProjectDefinition;
+  scopes: Array<{ workspacePath: string; workspaceIdentity?: string }>;
   scope: {
     workspacePath: string;
     workspaceIdentity?: string;
@@ -100,7 +104,7 @@ function updateBlockingLoadingState(
 // remote shard 使用自己的 endpoint task service，返回与旧协议同形的 group map。
 async function buildWorkspaceGroupsFromSessions(params: {
   service: IServiceAccessor["zcodeTaskService"];
-  scopes: Array<{ workspacePath: string; workspaceIdentity?: string }>;
+  configs: WorkspaceTaskListQueryConfig[];
   sessions: ZCodeTaskMeta[];
   sortBy: "created" | "updated";
   /** 差量更新：membership 只随 membershipVersion 变化，按版本缓存避免每次内容帧都重拉。 */
@@ -117,17 +121,27 @@ async function buildWorkspaceGroupsFromSessions(params: {
     cronAutomationIdByTaskId,
   } = await fetchTaskListMembershipSetsForEndpointsCached({
     cacheKey: params.membershipCacheKey,
-    endpoints: [{ service: params.service, scopes: params.scopes }],
+    endpoints: [
+      { service: params.service, scopes: params.configs.flatMap((config) => config.scopes) },
+    ],
   });
   const map = new Map<string, WorkspaceTaskListGroupResult>();
-  for (const scope of params.scopes) {
-    const scopeKey = buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity);
-    const scopeSessions = params.sessions.filter(
-      (task) => buildTaskWorkspaceKey(task.workspacePath, task.workspaceIdentity) === scopeKey,
-    );
-    const scopeTaskIndexItems = taskIndexItems.filter(
-      (task) => buildTaskWorkspaceKey(task.workspacePath, task.workspaceIdentity) === scopeKey,
-    );
+  const projectIdByTaskKey = new Map(
+    params.sessions.map((task) => [buildTaskEntityKey(task), task.projectId]),
+  );
+  for (const config of params.configs) {
+    const { scope, workspaceKey: scopeKey, project } = config;
+    const belongs = (task: ZCodeTaskMeta) =>
+      project
+        ? taskBelongsToProject(project, task)
+        : buildTaskWorkspaceKey(task.workspacePath, task.workspaceIdentity) === scopeKey;
+    const scopeSessions = params.sessions.filter(belongs);
+    const scopeTaskIndexItems = taskIndexItems
+      .map((task) => {
+        const projectId = projectIdByTaskKey.get(buildTaskEntityKey(task)) ?? task.projectId;
+        return projectId && projectId !== task.projectId ? { ...task, projectId } : task;
+      })
+      .filter(belongs);
     // "workspace" 视图规则 = !pinned && !archived，与 "timeline" 同（matchesTaskMembership）。
     const result = buildTaskListResult({
       taskIndexItems: scopeTaskIndexItems,
@@ -184,9 +198,15 @@ function buildWorkspaceEventSubscriptionSignature(
 ): string {
   return shards
     .map((shard) => {
-      const workspaceKeys = [...new Set(shard.configs.map((config) => config.workspaceKey))].sort(
-        (left, right) => left.localeCompare(right),
-      );
+      const workspaceKeys = [
+        ...new Set(
+          shard.configs.flatMap((config) =>
+            config.scopes.map((scope) =>
+              buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity),
+            ),
+          ),
+        ),
+      ].sort((left, right) => left.localeCompare(right));
       return `${shard.shardKey}:${workspaceKeys.join("|")}`;
     })
     .join("||");
@@ -228,15 +248,17 @@ export function useWorkspaceTaskLists(params: {
   const groupCacheRef = useRef<Map<string, WorkspaceTaskListGroup>>(new Map());
   const taskListVersionSignature = useZCodeSessionStore((state) =>
     buildWorkspaceTaskListVersionSignature(
-      params.workspaceTabs.map((tab) => {
-        const workspaceKey = buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity);
-        const workspaceState = selectWorkspaceZCodeState(
-          state,
-          tab.workspacePath,
-          tab.workspaceIdentity,
-        );
-        return [workspaceKey, workspaceState.taskListVersion] as const;
-      }),
+      params.workspaceTabs.flatMap((projectTab) =>
+        getWorkspaceProjectScopes(projectTab).map((tab) => {
+          const workspaceKey = buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity);
+          const workspaceState = selectWorkspaceZCodeState(
+            state,
+            tab.workspacePath,
+            tab.workspaceIdentity,
+          );
+          return [workspaceKey, workspaceState.taskListVersion] as const;
+        }),
+      ),
     ),
   );
   const optimisticTaskOverlayByWorkspaceKey = useWorkspaceTaskOptimisticOverlayByWorkspaceKey(
@@ -292,21 +314,25 @@ export function useWorkspaceTaskLists(params: {
         };
         const resolvedRemoteSessionId = resolveWorkspaceRemoteSessionId(tab, serviceResolverState);
         const isRemoteWorkspace = isRemoteWorkspaceTarget(tab, resolvedRemoteSessionId);
-        const workspaceKey = buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity);
+        const workspaceKey = getWorkspaceProjectKey(tab);
+        const scopes = getWorkspaceProjectScopes(tab);
         const visibleLimit = resolveWorkspaceTaskVisibleLimit(
           params.visibleLimitByWorkspaceKey,
           workspaceKey,
           params.defaultVisibleLimit,
         );
         const descriptor = buildTaskListCacheDescriptor({
+          project: tab.project,
           kind: "workspace",
-          workspaceScopes: [scope],
+          workspaceScopes: scopes,
           sortBy: params.sortBy,
           search: "",
           expanded: false,
           visibleLimit,
         });
         return {
+          project: tab.project,
+          scopes,
           scope,
           workspaceKey,
           remoteSessionId: resolvedRemoteSessionId,
@@ -319,7 +345,7 @@ export function useWorkspaceTaskLists(params: {
           // 这里改成只使用当前 workspace 自己的版本，避免无关 workspace 被连带清空。
           queryKey:
             buildTaskListCacheKeyFromDescriptor(descriptor) +
-            `::version=${taskListVersionByWorkspaceKey.get(workspaceKey) ?? 0}`,
+            `::project=${tab.project?.id ?? ""}::version=${scopes.map((item) => taskListVersionByWorkspaceKey.get(buildTaskWorkspaceKey(item.workspacePath, item.workspaceIdentity)) ?? 0).join(",")}`,
         };
       }),
     [
@@ -383,14 +409,14 @@ export function useWorkspaceTaskLists(params: {
   const sessionsIndexScopes = useMemo(
     () =>
       endpointShards.flatMap((shard) =>
-        shard.configs.map((config) => ({
-          workspacePath: config.scope.workspacePath,
-          ...(config.scope.workspaceIdentity
-            ? { workspaceIdentity: config.scope.workspaceIdentity }
-            : {}),
-          ...(shard.shardKey === "__base__" ? {} : { endpointKey: shard.shardKey }),
-          agentService: shard.services.zcodeAgentService,
-        })),
+        shard.configs.flatMap((config) =>
+          config.scopes.map((scope) => ({
+            workspacePath: scope.workspacePath,
+            ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
+            ...(shard.shardKey === "__base__" ? {} : { endpointKey: shard.shardKey }),
+            agentService: shard.services.zcodeAgentService,
+          })),
+        ),
       ),
     [endpointShards],
   );
@@ -405,7 +431,13 @@ export function useWorkspaceTaskLists(params: {
       const cachedResult = resultsByQueryKey[config.queryKey];
       return cachedResult == null || cachedResult.stale;
     });
-    const activePending = pending.filter((config) => config.workspaceKey === activeWorkspaceKey);
+    const activePending = pending.filter((config) =>
+      config.scopes.some(
+        (scope) =>
+          buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity) ===
+          activeWorkspaceKey,
+      ),
+    );
     if (activePending.length > 0) {
       // 冷启动时若一次性查询所有历史 workspace，会和当前 workspace 的模型 readState 抢资源，
       // 导致输入框底部持续显示“管理模型/加载中”。这里先保证当前 workspace 的任务列表和模型状态完成，
@@ -417,16 +449,16 @@ export function useWorkspaceTaskLists(params: {
   const sessionsIndexRevision = useMemo(
     () =>
       pendingConfigs
-        .map((config) => {
-          const sourceKey = buildWorkspaceSessionsIndexSourceKey({
-            workspacePath: config.scope.workspacePath,
-            ...(config.scope.workspaceIdentity
-              ? { workspaceIdentity: config.scope.workspaceIdentity }
-              : {}),
-            ...(config.remoteSessionId ? { endpointKey: config.remoteSessionId } : {}),
-          });
-          return `${sourceKey}=${sourceRevisionByScopeKey[sourceKey] ?? "missing"}`;
-        })
+        .flatMap((config) =>
+          config.scopes.map((scope) => {
+            const sourceKey = buildWorkspaceSessionsIndexSourceKey({
+              workspacePath: scope.workspacePath,
+              ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
+              ...(config.remoteSessionId ? { endpointKey: config.remoteSessionId } : {}),
+            });
+            return `${sourceKey}=${sourceRevisionByScopeKey[sourceKey] ?? "missing"}`;
+          }),
+        )
         .sort()
         .join("|"),
     [pendingConfigs, sourceRevisionByScopeKey],
@@ -530,7 +562,7 @@ export function useWorkspaceTaskLists(params: {
             // 再用同 endpoint/workspace 的 sessions-index activity/detail enrich。
             const groupByWorkspaceKey = await buildWorkspaceGroupsFromSessions({
               service: shard.services.zcodeTaskService,
-              scopes: shardConfigs.map((config) => config.scope),
+              configs: shardConfigs,
               sessions: sessionsForRequest,
               sortBy: params.sortBy,
               membershipCacheKey: `${membershipVersion}::workspace::${shard.shardKey}::${shardConfigs
@@ -669,7 +701,15 @@ export function useWorkspaceTaskLists(params: {
     const disposables: Array<{ dispose(): void }> = [];
     for (const shard of subscribedEndpointShards) {
       const configByWorkspaceKey = new Map(
-        shard.configs.map((config) => [config.workspaceKey, config]),
+        shard.configs.flatMap((config) =>
+          config.scopes.map((scope) => {
+            const workspaceKey = buildTaskWorkspaceKey(
+              scope.workspacePath,
+              scope.workspaceIdentity,
+            );
+            return [workspaceKey, { scope, workspaceKey }] as const;
+          }),
+        ),
       );
 
       for (const config of configByWorkspaceKey.values()) {

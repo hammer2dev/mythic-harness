@@ -1,4 +1,5 @@
 import type { IServiceAccessor } from "@zcode/services";
+import type { WorkspaceProjectDefinition } from "@zcode/shared";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
 
 interface WorkspaceServiceTarget {
@@ -6,6 +7,7 @@ interface WorkspaceServiceTarget {
   workspaceIdentity?: string;
   remoteSessionId?: string;
   remoteTarget?: unknown;
+  project?: WorkspaceProjectDefinition;
 }
 
 export interface WorkspaceServiceResolverState<TServices = IServiceAccessor> {
@@ -91,6 +93,9 @@ export function buildWorkspaceServiceLookup(
     }
 
     lookup.set(buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity), resolved);
+    for (const scope of tab.project?.taskWorkspaceScopes ?? []) {
+      lookup.set(buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity), resolved);
+    }
   }
 
   return lookup;

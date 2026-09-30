@@ -2,6 +2,7 @@
 // Request User Context Section Builder
 // ============================================================
 
+import type { ZCodeProjectWorkspace } from "@zcode/shared";
 import { join } from "node:path";
 
 import { formatProjectMemoryIndexContent } from "../../memory/index-content.js";
@@ -14,6 +15,7 @@ import { estimateTokens } from "../utils.js";
 
 export function buildRequestUserContextSection(input: {
   userInstructions?: ResolvedUserInstructions;
+  projectWorkspace?: ZCodeProjectWorkspace;
   memoryIndexContent?: string;
   memoryRoot?: string;
 }): ContextSection | null {
@@ -36,10 +38,22 @@ export function buildRequestUserContextSection(input: {
 
 function buildRequestUserContextContent(input: {
   userInstructions?: ResolvedUserInstructions;
+  projectWorkspace?: ZCodeProjectWorkspace;
   memoryIndexContent?: string;
   memoryRoot?: string;
 }): string | null {
   const sections: string[] = [];
+  if (input.projectWorkspace) {
+    sections.push(
+      [
+        "# Project source folders",
+        "The user has associated these folders with the project. You may read and modify files in all of them, subject to the existing tool permissions.",
+        "The primary directory is the default for new sessions; it does not change the current session working directory. Use explicit paths when working in other folders.",
+        "Treat each folder as a separate repository when using Git. Folder instructions apply only within their declared directory scope. Read nested AGENTS.md instructions before editing those files.",
+        JSON.stringify(input.projectWorkspace, null, 2),
+      ].join("\n"),
+    );
+  }
 
   const instructionContent = input.userInstructions
     ? buildInstructionContent(input.userInstructions)
@@ -124,6 +138,11 @@ function buildInstructionSourceContent(source: ResolvedUserInstructionSource): s
 
   return [
     `Contents of ${source.filePath} (${formatInstructionSourceScope(source.scope)}):`,
+    ...(source.scopeDirectory
+      ? [
+          `Applies only within this directory and its descendants: ${JSON.stringify(source.scopeDirectory)}.`,
+        ]
+      : []),
     "",
     trimmedBody,
   ].join("\n");

@@ -1104,6 +1104,7 @@ export function createConversationV4Gateway(
     // 语义决策（draft persistence / firstInput 走原生 prompt turn）在原生 handler。
     createSessionRecord: async ({
       workspaceId,
+      projectWorkspace,
       mcpServers,
       offPeakToolEnabled,
       dynamicWorkflowEnabled,
@@ -1119,6 +1120,7 @@ export function createConversationV4Gateway(
       // 本地 workspacePath 处理。
       const created = await createSessionRecordForV4(context, {
         workspace: resolveWorkspaceRefFromId(workspaceId),
+        projectWorkspace,
         // 一律 deferred（draft 不进 sqlite）；提升时机归原生 prompt-turn。
         persistence: "deferred",
         // MCP 是 runtime 创建期配置；v4 createSession 必须与 legacy
@@ -1408,6 +1410,7 @@ export function createConversationV4Gateway(
       return stored.map((session) => ({
         sessionId: String(session.id),
         workspaceId,
+        projectId: session.workspaceProjectId,
         ...(session.parentID ? { parentSessionId: String(session.parentID) } : {}),
         title: session.title ?? "",
         titleSource: normalizeStoredTitleSource(session.titleSource),
@@ -1544,6 +1547,7 @@ export function createConversationV4Gateway(
       if (!record) return null;
       return {
         createdAt: record.createdAt,
+        projectId: record.app.runtime.getWorkspaceProjectId(),
         lastActivityAt: record.updatedAt,
         ...(record.parentSessionId ? { parentSessionId: String(record.parentSessionId) } : {}),
       };

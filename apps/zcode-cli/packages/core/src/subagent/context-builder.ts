@@ -23,6 +23,7 @@ export interface SubagentContextBuilderConfig {
   skillMetadataBudget?: number;
   skills?: ContextBuilderConfig["skills"];
   userInstructions?: ContextBuilderConfig["userInstructions"];
+  projectWorkspace?: ContextBuilderConfig["projectWorkspace"];
 }
 
 const EPHEMERAL_CACHE_CONTROL = { type: "ephemeral" as const };
@@ -141,6 +142,7 @@ function buildSubagentContextSections(config: SubagentContextBuilderConfig): Con
 
   const requestUserContextSection = buildRequestUserContextSection({
     userInstructions: config.userInstructions,
+    projectWorkspace: config.projectWorkspace,
   });
   if (requestUserContextSection) {
     sections.push(requestUserContextSection);

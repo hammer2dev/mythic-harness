@@ -31,6 +31,8 @@ export type UserInstructionSourceScope = "user" | "workspace";
 
 export interface ResolvedUserInstructionSource {
   scope: UserInstructionSourceScope;
+  /** Workspace instructions apply only to this directory and its descendants. */
+  scopeDirectory?: string;
   filePath: string;
   fileName: string;
   content: string;
@@ -61,6 +63,7 @@ export interface ProjectContext {
 
 export interface ContextSourceRequest {
   workingDirectory: string;
+  projectDirectories?: readonly string[];
   currentDate?: string;
   effectiveShellDisplayName?: string;
   envInfo?: EnvInfo;

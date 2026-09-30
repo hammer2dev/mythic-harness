@@ -234,6 +234,7 @@ export interface V4GatewayHost {
   getSessionWorkspaceId?(sessionId: string): string | null;
   /** sessions-index：会话的列表用元信息（createdAt/父会话/最后活动时刻）。 */
   getSessionIndexMeta?(sessionId: string): {
+    projectId?: string;
     createdAt: number;
     lastActivityAt: number;
     parentSessionId?: string;
@@ -1118,6 +1119,7 @@ export class ConversationV4Gateway {
     return {
       createdAt: meta?.createdAt ?? 0,
       lastActivityAt: meta?.lastActivityAt ?? this.now(),
+      ...(meta?.projectId ? { projectId: meta.projectId } : {}),
       ...(meta?.parentSessionId ? { parentSessionId: meta.parentSessionId } : {}),
     };
   }
@@ -2871,6 +2873,8 @@ export class ConversationV4Gateway {
    * 事件接线期间），hydration 处补一次兜住该窗口。
    */
   private seedPublisherConfig(sessionId: string, publisher: ConversationTopicPublisher): void {
+    const projectId = this.host.getSessionIndexMeta?.(sessionId)?.projectId;
+    if (projectId) publisher.seedProjectId(projectId);
     const getSeed = this.host.getSessionConfigSeed;
     if (!getSeed) return;
     try {

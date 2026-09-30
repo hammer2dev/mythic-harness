@@ -102,17 +102,37 @@ const remoteWorkspaceTargetSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+const workspaceProjectScopeSchema = z.object({
+  workspacePath: nonEmptyStringSchema,
+  workspaceIdentity: nonEmptyStringSchema.optional(),
+});
+
+const workspaceProjectDefinitionSchema = z
+  .object({
+    id: nonEmptyStringSchema,
+    name: nonEmptyStringSchema,
+    folders: z.array(workspaceProjectScopeSchema.extend({ id: nonEmptyStringSchema })).min(1),
+    primaryFolderId: nonEmptyStringSchema,
+    legacyWorkspaceScopes: z.array(workspaceProjectScopeSchema),
+    taskWorkspaceScopes: z.array(workspaceProjectScopeSchema).min(1),
+  })
+  .refine((project) => project.folders.some((folder) => folder.id === project.primaryFolderId), {
+    message: "项目主文件夹必须存在于源文件夹列表",
+  });
+
 const appWorkspaceSessionEntrySchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("local"),
     workspacePath: nonEmptyStringSchema,
     workspacePurpose: z.enum(["project", "conversation"]).default("project"),
+    project: workspaceProjectDefinitionSchema.optional(),
   }),
   z.object({
     kind: z.literal("remote"),
     workspacePath: nonEmptyStringSchema,
     localWorkspacePath: nonEmptyStringSchema.optional(),
     workspaceIdentity: nonEmptyStringSchema.optional(),
+    project: workspaceProjectDefinitionSchema.optional(),
     target: remoteWorkspaceTargetSchema,
     lastOpenedAt: z.number().int().nonnegative(),
     lastConnectionStatus: z.enum(["connected", "failed"]),
@@ -332,6 +352,7 @@ function migrateLegacyWorkspaceSession(value: unknown): unknown {
                 workspacePath: rawEntry.workspacePath,
                 workspacePurpose:
                   rawEntry.workspacePurpose === "conversation" ? "conversation" : "project",
+                ...(rawEntry.project ? { project: rawEntry.project } : {}),
               },
             ];
           }
@@ -462,6 +483,7 @@ const appSettingsObjectSchema = z.object({
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().default(false),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).default([]),
+  closedWorkspaceProjects: z.array(workspaceProjectDefinitionSchema).default([]),
   lastActiveTabIndex: z.number().int().nonnegative().default(0),
   lastActiveTaskByWorkspace: z.record(z.string(), z.string()).optional(),
   dataBaseDir: z.string().trim().min(1).optional(),
@@ -546,6 +568,7 @@ export const appSettingsPatchSchema = z.object({
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().optional(),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).optional(),
+  closedWorkspaceProjects: z.array(workspaceProjectDefinitionSchema).optional(),
   lastActiveTabIndex: z.number().int().nonnegative().optional(),
   lastActiveTaskByWorkspace: z.record(z.string(), z.string()).optional(),
   dataBaseDir: z.string().trim().min(1).optional(),

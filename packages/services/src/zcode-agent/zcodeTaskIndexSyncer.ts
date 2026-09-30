@@ -217,6 +217,7 @@ function buildBaselineMetaFromSummary(
   const status = taskStatusFromSummaryPhase(summary.phase);
   return {
     taskId: summary.sessionId,
+    projectId: summary.projectId,
     traceId: generateTraceId(summary.sessionId),
     title: summary.title,
     ...(summary.titleSource === "custom" ? { titleOverridden: true } : {}),
@@ -668,6 +669,23 @@ export function createZCodeTaskIndexSyncer(
       return;
     }
     const target = sessionTargetFrom(state.target, next.sessionId);
+    if (next.projectId && next.projectId !== previous?.projectId) {
+      // 预热会话在首条输入时绑定项目，必须同步索引归属，不能等终态才让列表认领。
+      void taskIndexRepo
+        .applyAgentPatch({
+          workspacePath: target.workspacePath,
+          workspaceIdentity: target.workspaceIdentity,
+          taskId: target.sessionId,
+          patch: { projectId: next.projectId },
+        })
+        .then((meta) => {
+          if (meta)
+            emitWorkspaceTaskListChanged(broadcastTargetFrom(target), meta, "task_status_changed");
+        })
+        .catch((error) =>
+          logger.warn(undefined, `同步项目归属失败 taskId=${target.sessionId}`, error),
+        );
+    }
     const becameVisibleTask = previous === undefined || previous.phase === "draft";
     // 终态迁移 = 基线里真实观察到非终态 → 终态。无基线的会话（冷恢复 hydration、
     // 断档降级后新出现的历史会话）不回放终态；活跃会话必先以 running/prewarming
@@ -1800,6 +1818,7 @@ function buildMetaFromSnapshot(
   const thoughtLevelOverride = options?.thoughtLevelOverride?.trim();
   const meta: ZCodeTaskMeta = {
     taskId: snapshot.session.sessionId,
+    projectId: snapshot.session.projectId,
     traceId: snapshot.session.traceId ?? generateTraceId(snapshot.session.sessionId),
     title: deriveTitleFromSnapshot(snapshot),
     workspacePath: snapshot.session.workspace.workspacePath,

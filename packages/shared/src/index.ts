@@ -44,6 +44,9 @@ export type {
   TabId,
   TabState,
   WorkspaceFileEntry,
+  WorkspaceProjectDefinition,
+  WorkspaceProjectFolder,
+  WorkspaceProjectScope,
   ZCodeInteractionBehavior,
 } from "./protocol.js";
 export type { RemoteAssetInstallMode } from "./remoteAssetInstallMode.js";
@@ -299,3 +302,4 @@ export * from "./localTtft.js";
 export * from "./pluginStoreOrder.js";
 export * from "./pluginStoreOrdering.js";
 export * from "./session-debug.js";
+export * from "./project-workspace.js";

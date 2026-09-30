@@ -52,6 +52,7 @@ export class NodeContextSourceAdapter implements ContextSourcePort {
           },
           diagnostics,
           this.env,
+          request.projectDirectories,
         )
       : undefined;
     const projectContext =
@@ -95,6 +96,7 @@ async function resolveUserInstructions(
   options: UserInstructionsOptions,
   diagnostics: ContextSourceDiagnostic[],
   env: NodeJS.ProcessEnv = process.env,
+  projectDirectories: readonly string[] = [],
 ): Promise<ResolvedUserInstructions | undefined> {
   const priorityFiles = options.priorityFiles ?? DEFAULT_PRIORITY_FILES;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
@@ -106,6 +108,12 @@ async function resolveUserInstructions(
     projectRoot,
     priorityFiles,
   );
+  const additionalInstructionFiles = await Promise.all(
+    projectDirectories.map(async (directory) => {
+      const root = await findProjectRoot(directory);
+      return findInstructionFile(directory, root, priorityFiles);
+    }),
+  );
   const candidates = dedupeInstructionFileCandidates([
     defaultUserInstructionFile
       ? { ...defaultUserInstructionFile, scope: "user" as const }
@@ -113,6 +121,9 @@ async function resolveUserInstructions(
     workspaceInstructionFile
       ? { ...workspaceInstructionFile, scope: "workspace" as const }
       : undefined,
+    ...additionalInstructionFiles.map((file) =>
+      file ? { ...file, scope: "workspace" as const } : undefined,
+    ),
   ]);
   const sources: ResolvedUserInstructionSource[] = [];
 
@@ -167,6 +178,7 @@ async function readInstructionSource(
     const content = await readFirstTextBytes(candidate.filePath, bytesToRead);
     return {
       scope: candidate.scope,
+      ...(candidate.scope === "workspace" ? { scopeDirectory: dirname(candidate.filePath) } : {}),
       filePath: candidate.filePath,
       fileName: candidate.fileName,
       content,

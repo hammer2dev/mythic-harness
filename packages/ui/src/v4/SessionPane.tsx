@@ -4,6 +4,8 @@ import type { SessionCreateSource } from "@zcode/shared";
 import { reportSessionCreate } from "@/lib/sessionCreateTelemetry.js";
 import { getLocalTtftObserver } from "@/v4/telemetry/localTtftObserver.js";
 /* oxlint-disable eslint(max-lines) -- SessionPane 是单 pane 竖切的命令编排收口（订阅/发送/停止/fork/edit/retry/queue/slash 全集），与旧 ChatView 同粒度；HEAD 已超限（693 行计数），拆散命令组会打散 dispatchCommand/snapshotRef 的闭包纪律。 */
+import type { ZCodeProjectWorkspace } from "@zcode/shared";
+import { useProjectWorkspaceSnapshot } from "@/hooks/useProjectWorkspaceSnapshot.js";
 import {
   useCallback,
   useEffect,
@@ -1111,6 +1113,7 @@ export function SessionPane({
   );
 
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
+  const readProjectWorkspace = useProjectWorkspaceSnapshot(workspacePath, workspaceIdentity);
   const workspaceConfigOptions = useZCodeSessionStore(
     (store) => store.getWorkspaceState(workspacePath, workspaceIdentity).configOptions,
   );
@@ -1375,6 +1378,18 @@ export function SessionPane({
       onEnvelopeCreated?: (envelope: CommandEnvelope) => void,
       sessionCreateSource?: SessionCreateSource,
     ): Promise<CommandAck> => {
+      if (
+        (type === "createSession" || type === "sendText" || type === "sendGoalCommand") &&
+        !Object.hasOwn(payload, "projectWorkspace")
+      ) {
+        payload = {
+          ...payload,
+          projectWorkspace: readProjectWorkspace(
+            snapshotRef.current?.meta.projectId,
+            sessionId === null,
+          ),
+        };
+      }
       const submission = submissionConfigFromCommand(type, payload);
       const acceptRecent = submission
         ? captureComposerRecentSubmission(workspacePath, submission, workspaceIdentity)
@@ -1548,6 +1563,7 @@ export function SessionPane({
       conversationTelemetry,
       lease,
       provider,
+      readProjectWorkspace,
       sendCommand,
       sessionId,
       workspaceIdentity,
@@ -2409,6 +2425,7 @@ export function SessionPane({
       expectedHeldQueueItemIds?: readonly string[],
       submission?: ComposerSubmissionConfig,
       onAccepted?: (messageId: string) => void,
+      projectWorkspace?: ZCodeProjectWorkspace,
     ): Promise<boolean | "confirmationRequired"> => {
       let type: CommandType | null = null;
       let payload: Record<string, unknown> = {};
@@ -2432,6 +2449,7 @@ export function SessionPane({
             text: command.objective,
             displayText: command.displayText,
             ...submission,
+            projectWorkspace,
             ...(heldQueueDisposition ? { heldQueueDisposition } : {}),
             ...(expectedHeldQueueItemIds ? { expectedHeldQueueItemIds } : {}),
           };
@@ -2488,9 +2506,21 @@ export function SessionPane({
       text: string,
       options: ConversationComposerSendOptions | undefined,
       createSourceAtSend: SessionCreateSource,
+      projectWorkspace: ZCodeProjectWorkspace | undefined,
     ) => {
       let onAcceptedSelection: (() => void) | undefined;
+      const dispatchProjectSlashCommand = (...args: Parameters<typeof dispatchSlashCommand>) => {
+        args[7] = projectWorkspace;
+        return dispatchSlashCommand(...args);
+      };
       const dispatchSubmissionCommand = async (...args: Parameters<typeof dispatchCommand>) => {
+        if (
+          args[0] === "createSession" ||
+          args[0] === "sendText" ||
+          args[0] === "sendGoalCommand"
+        ) {
+          args[1] = { ...args[1], projectWorkspace };
+        }
         const ack = await dispatchCommand(...args);
         // 在原 accepted 边界写回推荐选择，早于新 Session 的草稿转移；失败不改用户意图。
         if (ack.status === "accepted" && submissionConfigFromCommand(args[0], args[1]))
@@ -2594,7 +2624,7 @@ export function SessionPane({
       // slash 命令优先：已有 session 直接消费；draft 首发 /goal 先建空会话再发命令。
       // 携带附件或网页元素上下文时不消费为 v4 原生命令（compact/goal 等无附件语义），随 sendText 直发。
       if (sessionId && slashCommand) {
-        const consumed = await dispatchSlashCommand(
+        const consumed = await dispatchProjectSlashCommand(
           slashCommand,
           sessionId,
           snapshotRef.current?.revision,
@@ -2620,7 +2650,7 @@ export function SessionPane({
           draftSlashCommand.kind === "emptyGoal" ||
           draftSlashCommand.kind === "unsupportedGoal"
         ) {
-          await dispatchSlashCommand(
+          await dispatchProjectSlashCommand(
             draftSlashCommand,
             prewarmBindingRef.current?.sessionId ?? "__draft__",
             undefined,
@@ -2633,7 +2663,7 @@ export function SessionPane({
         const prewarm = prewarmBindingRef.current;
         if (prewarm?.beginPromotion()) {
           try {
-            const consumed = await dispatchSlashCommand(
+            const consumed = await dispatchProjectSlashCommand(
               draftSlashCommand,
               prewarm.sessionId,
               0,
@@ -2677,7 +2707,7 @@ export function SessionPane({
         }
         const newSessionId = createResult.sessionId;
         handleDraftSessionCreated(newSessionId, createSourceAtSend);
-        await dispatchSlashCommand(
+        await dispatchProjectSlashCommand(
           draftSlashCommand,
           newSessionId,
           0,
@@ -2868,11 +2898,20 @@ export function SessionPane({
         submission:
           options?.submission === undefined ? createSubmissionFromComposer() : options.submission,
       };
+      const projectWorkspace = readProjectWorkspace(
+        snapshotRef.current?.meta.projectId,
+        sessionId === null,
+      );
       // followupMode 仍通过 Session CAS 同步；模型和模式已封装进 Submission，不再
       // 依赖“配置命令先到、sendText 后到”的跨命令时序。
       return configCommandBarrier.enqueue(async () => {
         try {
-          return await dispatchSendTextAfterConfig(text, submissionOptions, createSource);
+          return await dispatchSendTextAfterConfig(
+            text,
+            submissionOptions,
+            createSource,
+            projectWorkspace,
+          );
         } catch (error) {
           if (sessionId === null && isProviderNotReadyError(error)) {
             // UI 预检查与 Host getClient 之间 registry 仍可能失效。竞态命中时收敛成
@@ -2888,6 +2927,7 @@ export function SessionPane({
       configCommandBarrier,
       createSubmissionFromComposer,
       dispatchSendTextAfterConfig,
+      readProjectWorkspace,
       markDraftProviderNotReady,
       sessionId,
       workspacePath,

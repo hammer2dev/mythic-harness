@@ -19,7 +19,13 @@ import { logger } from "@/logger.js";
 import { openFolderFromWorkspaceEntry } from "@/root/openWorkspaceFolderEntry.js";
 import { useConversationWorkspaceActions } from "@/root/useConversationWorkspaceActions.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import { isWorkspaceReadOnly, type TabStore, type TabStoreState } from "@/store/tabStore.js";
+import {
+  isWorkspaceReadOnly,
+  isWorkspaceTab,
+  type TabStore,
+  type TabStoreState,
+} from "@/store/tabStore.js";
+import { isWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 import type { RootProps } from "@/root/types.js";
 import {
   hadPersistedPaneLayoutAtModuleLoad,
@@ -174,7 +180,7 @@ export function useRootWorkspaceActions({
       // 跨项目发起已保存工作流时，新任务必须落在工作流归属项目，而非活动项目
       // request 显式带 targetWorkspace 时采用它，
       // 否则惰性回退到 workbench 焦点解析，无 target 时行为与旧版逐字节一致。
-      const newTaskTarget = resolveNewTaskTargetFromRequest(request, () =>
+      let newTaskTarget = resolveNewTaskTargetFromRequest(request, () =>
         resolveWorkbenchNewTaskTarget({
           activeWorkspacePath: currentActiveWorkspacePath,
           activeWorkspaceIdentity: currentActiveWorkspaceIdentity,
@@ -202,6 +208,23 @@ export function useRootWorkspaceActions({
         return;
       }
 
+      const requestedScope = {
+        ...newTaskTarget,
+        workspaceIdentity: newTaskTarget.workspaceIdentity ?? undefined,
+      };
+      const projectTab = state.tabs
+        .filter(isWorkspaceTab)
+        .find(
+          (tab) => tab.id === state.activeTabId && isWorkspaceProjectScope(tab, requestedScope),
+        );
+      // 项目主目录只决定新任务；历史任务的执行目录由其自身记录保持。
+      if (projectTab?.project && !(typeof request === "object" && request.targetWorkspace)) {
+        newTaskTarget = {
+          workspacePath: projectTab.workspacePath,
+          workspaceIdentity: projectTab.workspaceIdentity ?? null,
+        };
+      }
+
       // 仅禁用按钮无法覆盖桌面菜单和快捷键；启动期失效 workspace
       // 必须在动作边界再次校验，避免历史只读页被隐式切回可发送草稿态。
       if (
@@ -214,7 +237,12 @@ export function useRootWorkspaceActions({
         return;
       }
 
-      if (
+      if (projectTab) {
+        state.activateProjectTask(projectTab.id, {
+          ...newTaskTarget,
+          workspaceIdentity: newTaskTarget.workspaceIdentity ?? undefined,
+        });
+      } else if (
         !focusWorkspace(
           newTaskTarget.workspacePath,
           newTaskTarget.workspaceIdentity

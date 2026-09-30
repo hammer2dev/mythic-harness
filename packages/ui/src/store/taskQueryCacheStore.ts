@@ -138,6 +138,14 @@ function matchesTaskDescriptor(
   if (!descriptor.workspaceKeys.includes(workspaceKey)) {
     return false;
   }
+  if (
+    descriptor.projectId &&
+    (task.projectId
+      ? task.projectId !== descriptor.projectId
+      : !descriptor.legacyWorkspaceKeys?.includes(workspaceKey))
+  ) {
+    return false;
+  }
 
   return matchesTaskMembership(descriptor, membership) && matchesTaskSearch(descriptor, task);
 }

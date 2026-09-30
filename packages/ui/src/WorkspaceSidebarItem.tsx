@@ -22,6 +22,7 @@ import {
   LoaderCircle,
   RefreshCwIcon,
   MessageCirclePlus,
+  Settings2,
   XIcon,
 } from "lucide-react";
 import type { useSortable } from "@dnd-kit/sortable";
@@ -53,7 +54,8 @@ import {
 } from "@/lib/remoteWorkspaceHistory.js";
 import { TaskList } from "@/TaskList.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import type { WorkspaceTabState } from "@/store/tabStore.js";
+import { isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
+import { getWorkspaceProjectScopes } from "@/lib/workspaceProject.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import { ReconnectingRemoteWorkspaceLogTooltip } from "@/WorkspaceSidebar/ReconnectingRemoteWorkspaceLogTooltip.js";
 import { cn } from "@/components/lib/utils.js";
@@ -92,11 +94,15 @@ import { toast } from "@/components/ui/toast.js";
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu.js";
 import { ProjectSectionMenu } from "@/WorkspaceSidebar/ProjectSectionMenu.js";
 import { SidebarSectionDialog } from "@/WorkspaceSidebar/SidebarSectionDialog.js";
 import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
+import { useTabStore, useTabStoreApi } from "@/store/TabStoreProvider.js";
+import { ProjectDetailsCard } from "@/WorkspaceSidebar/ProjectDetailsCard.js";
+import { ProjectEditDialog } from "@/WorkspaceSidebar/ProjectEditDialog.js";
 
 export type SortableBindings = Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">;
 
@@ -145,6 +151,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   onSelectTask,
   onStartDraftInWorkspace,
   taskItems,
+  taskListTotal,
   taskListLoading,
   taskListHasMore,
   taskListHasUnread = false,
@@ -173,6 +180,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   ) => void;
   onStartDraftInWorkspace: (targetWorkspacePath: string, targetWorkspaceIdentity?: string) => void;
   taskItems: ZCodeTaskMeta[];
+  taskListTotal: number;
   taskListLoading: boolean;
   taskListHasMore: boolean;
   taskListHasUnread?: boolean;
@@ -184,6 +192,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   reconnectingRemoteWorkspaceLogsByWorkspaceKey: Record<string, RemoteConnectionLogEntry[]>;
   onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onOpenFileTree?: (target: {
+    projectId?: string;
     workspacePath: string;
     workspaceName: string;
     workspaceIdentity?: string;
@@ -195,8 +204,15 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   isDragging?: boolean;
 }) {
   const { intl } = useZCodeIntl();
+  const tabStoreApi = useTabStoreApi();
+  const activeWorkspacePath = useTabStore((state) => state.activeWorkspacePath);
+  const activeWorkspaceIdentity = useTabStore((state) => state.activeWorkspaceIdentity);
   const workspaceZCodeState = useZCodeSessionStore((state) =>
-    selectWorkspaceZCodeState(state, tab.workspacePath, tab.workspaceIdentity),
+    selectWorkspaceZCodeState(
+      state,
+      isActiveWorkspace ? (activeWorkspacePath ?? tab.workspacePath) : tab.workspacePath,
+      isActiveWorkspace ? (activeWorkspaceIdentity ?? undefined) : tab.workspaceIdentity,
+    ),
   );
   const activeTaskId = workspaceZCodeState.activeTaskId;
   const removeTaskState = useZCodeSessionStore((state) => state.removeTaskState);
@@ -218,8 +234,6 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   const zcodeTaskService = services.zcodeTaskService;
   const taskItemsRef = useRef(taskItems);
   taskItemsRef.current = taskItems;
-  const workspaceZCodeStateRef = useRef(workspaceZCodeState);
-  workspaceZCodeStateRef.current = workspaceZCodeState;
   const findCurrentTaskItem = useCallback((taskId: string) => {
     // 流式刷新会重建 taskItems 数组，任务操作回调如果直接依赖数组，
     // 即使任务语义没变也会换引用，继续击穿 TaskListItem 的 memo。
@@ -271,8 +285,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   const [workspaceRowFocusWithin, setWorkspaceRowFocusWithin] = useState(false);
   const [workspaceActionMenuOpen, setWorkspaceActionMenuOpen] = useState(false);
   const [createSectionDialogOpen, setCreateSectionDialogOpen] = useState(false);
+  const [editProjectDialogOpen, setEditProjectDialogOpen] = useState(false);
+  const updateProject = useTabStore((state) => state.updateProject);
+  const activateProjectTask = useTabStore((state) => state.activateProjectTask);
   const createSection = useSidebarSectionsStore((state) => state.createSection);
-  const sectionWorkspaceKey = tab.workspaceIdentity?.trim() || tab.workspacePath;
+  const sectionWorkspaceKey =
+    tab.project?.id ?? (tab.workspaceIdentity?.trim() || tab.workspacePath);
   const handleCreateSection = useCallback(() => setCreateSectionDialogOpen(true), []);
   const [isHoverNone] = useState(
     () =>
@@ -309,6 +327,10 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         if (!isExpanded) {
           // workspace 行表达“打开这个 workspace”，不是恢复它上次选中的 session。
           // 统一走上层草稿导航事务，让 workspace identity、group/pane 清理和 draft 聚焦一起收口。
+          activateProjectTask(tab.id, {
+            workspacePath: tab.workspacePath,
+            workspaceIdentity: tab.workspaceIdentity,
+          });
           onStartDraftInWorkspace(tab.workspacePath, tab.workspaceIdentity);
         }
       } else if (isExpanded) {
@@ -316,22 +338,29 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       }
     },
     [
+      activateProjectTask,
       isDisconnectedRemoteWorkspace,
       isExpanded,
       onStartDraftInWorkspace,
       tab.workspaceIdentity,
       tab.workspacePath,
+      tab.id,
       toggleWorkspaceExpanded,
     ],
   );
 
   const handleSelectTask = useCallback(
     (taskId: string) => {
-      // 性能优化：上层 handleSelectTask 已经会按 workspacePath 激活 tab。
-      // 这里重复 activate 会额外触发一轮 tab store 更新，把整列 workspace 行都带着重渲染一次。
-      onSelectTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+      const task = findCurrentTaskItem(taskId);
+      if (!task) return;
+      // 项目主目录可以变化；历史任务仍按自己的执行目录打开。
+      activateProjectTask(tab.id, {
+        workspacePath: task.workspacePath,
+        workspaceIdentity: task.workspaceIdentity,
+      });
+      onSelectTask(task.workspacePath, taskId, task.workspaceIdentity);
     },
-    [onSelectTask, tab.workspaceIdentity, tab.workspacePath],
+    [activateProjectTask, findCurrentTaskItem, onSelectTask, tab.id],
   );
 
   const handleActionMouseDown = useCallback((event: MouseEvent<HTMLElement>) => {
@@ -353,12 +382,25 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       if (readOnlyReason) {
         return;
       }
+      activateProjectTask(tab.id, tab);
       onStartDraftInWorkspace(tab.workspacePath, tab.workspaceIdentity);
     },
-    [onStartDraftInWorkspace, readOnlyReason, tab.workspaceIdentity, tab.workspacePath],
+    [activateProjectTask, onStartDraftInWorkspace, readOnlyReason, tab],
   );
 
   const handleRemoveWorkspace = useCallback(async () => {
+    const scopes = getWorkspaceProjectScopes(tab);
+    const retainedKeys = new Set(
+      tabStoreApi
+        .getState()
+        .tabs.filter(isWorkspaceTab)
+        .filter((item) => item.id !== tab.id)
+        .flatMap(getWorkspaceProjectScopes)
+        .map(buildWorkspaceSessionKey),
+    );
+    const releaseScopes = scopes.filter(
+      (scope) => !retainedKeys.has(buildWorkspaceSessionKey(scope)),
+    );
     const workspaceKey = tab.workspaceIdentity?.trim() || tab.workspacePath;
     logger.debug("[WorkspaceSidebarItem] 移除 workspace", {
       isExpanded,
@@ -366,10 +408,16 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     });
 
     if (
-      hasRunningWorkspaceChat({
-        workspaceState: workspaceZCodeStateRef.current,
-        taskItems: taskItemsRef.current,
-      })
+      releaseScopes.some((scope) =>
+        hasRunningWorkspaceChat({
+          workspaceState: selectWorkspaceZCodeState(
+            useZCodeSessionStore.getState(),
+            scope.workspacePath,
+            scope.workspaceIdentity,
+          ),
+          taskItems: taskItemsRef.current,
+        }),
+      )
     ) {
       const confirmed = await confirmDialog({
         title: intl.formatMessage({ id: "workspaceSidebar.removeRunningWorkspace.title" }),
@@ -387,21 +435,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     }
 
     closeTab(tab.id);
-    releaseWorkspaceRuntimeAfterProjectRemoval({
-      tab: {
-        workspacePath: tab.workspacePath,
-        workspaceIdentity: tab.workspaceIdentity,
-      },
-      zcodeTaskService,
-    });
+    for (const scope of releaseScopes) {
+      releaseWorkspaceRuntimeAfterProjectRemoval({ tab: scope, zcodeTaskService });
+    }
     // 移除 workspace 只是移除入口和连接历史，不代表用户要隐藏历史任务：
     // 这里只失效缓存，保留 sqlite 任务索引原状态，避免重连同一 SSH workspace 后任务像“丢了”。
-    invalidateTaskQueryCacheByScopes([
-      {
-        workspacePath: tab.workspacePath,
-        ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
-      },
-    ]);
+    invalidateTaskQueryCacheByScopes(scopes);
 
     if (!isRemoteWorkspace) {
       void scanWindowsReservedDeviceNameFiles(baseServices.fileService, tab.workspacePath)
@@ -434,6 +473,8 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     isExpanded,
     isRemoteWorkspace,
     tab.id,
+    tab.project,
+    tabStoreApi,
     tab.workspaceIdentity,
     tab.workspacePath,
     zcodeTaskService,
@@ -466,6 +507,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       }
 
       onOpenFileTree({
+        projectId: tab.project?.id,
         workspacePath: tab.workspacePath,
         workspaceName: tab.label,
         workspaceIdentity: tab.workspaceIdentity,
@@ -477,6 +519,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       onOpenFileTree,
       readOnlyReason,
       tab.label,
+      tab.project?.id,
       tab.remoteSessionId,
       tab.workspaceIdentity,
       tab.workspacePath,
@@ -491,10 +534,11 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         return null;
       }
       const previousTask = findCurrentTaskItem(taskId);
+      if (!previousTask) return null;
       logger.info("[WorkspaceSidebarItem] rename service call start", {
         taskId,
-        workspacePath: tab.workspacePath,
-        workspaceIdentity: tab.workspaceIdentity,
+        workspacePath: previousTask.workspacePath,
+        workspaceIdentity: previousTask.workspaceIdentity,
         previousTitleLength: previousTask?.title.length,
         nextTitleLength: title.length,
       });
@@ -502,27 +546,33 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       try {
         meta = await zcodeTaskService.renameTask({
           taskId,
-          workspacePath: tab.workspacePath,
+          workspacePath: previousTask.workspacePath,
           title,
-          ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
+          ...(previousTask.workspaceIdentity
+            ? { workspaceIdentity: previousTask.workspaceIdentity }
+            : {}),
         });
       } catch (error) {
         logger.error("[WorkspaceSidebarItem] rename service call failed", {
           taskId,
-          workspacePath: tab.workspacePath,
-          workspaceIdentity: tab.workspaceIdentity,
+          workspacePath: previousTask.workspacePath,
+          workspaceIdentity: previousTask.workspaceIdentity,
           message: error instanceof Error ? error.message : String(error),
         });
         throw error;
       }
       logger.info("[WorkspaceSidebarItem] rename service call resolved", {
         taskId,
-        workspacePath: tab.workspacePath,
-        workspaceIdentity: tab.workspaceIdentity,
+        workspacePath: previousTask.workspacePath,
+        workspaceIdentity: previousTask.workspaceIdentity,
         resolvedTitleLength: meta.title.length,
       });
-      upsertOptimisticTaskListItem(tab.workspacePath, meta, tab.workspaceIdentity);
-      if (tab.workspaceIdentity) {
+      upsertOptimisticTaskListItem(
+        previousTask.workspacePath,
+        meta,
+        previousTask.workspaceIdentity,
+      );
+      if (previousTask.workspaceIdentity) {
         useRemoteTimelineTaskStore.getState().upsertTask(meta);
       }
       applyTaskQueryCacheMutation({
@@ -533,19 +583,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       });
       logger.info("[WorkspaceSidebarItem] rename cache mutation applied", {
         taskId,
-        workspacePath: tab.workspacePath,
-        workspaceIdentity: tab.workspaceIdentity,
+        workspacePath: previousTask.workspacePath,
+        workspaceIdentity: previousTask.workspaceIdentity,
       });
       return meta;
     },
-    [
-      tab.workspaceIdentity,
-      tab.workspacePath,
-      findCurrentTaskItem,
-      readOnlyReason,
-      upsertOptimisticTaskListItem,
-      zcodeTaskService,
-    ],
+    [findCurrentTaskItem, readOnlyReason, upsertOptimisticTaskListItem, zcodeTaskService],
   );
 
   const handleSetTaskPinned = useCallback(
@@ -554,19 +597,20 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         return null;
       }
       const previousTask = findCurrentTaskItem(taskId);
+      if (!previousTask) return null;
       if (previousTask) {
         // workspace 内 pin 以前等远端/本地 RPC 返回后才更新全局 pinned 缓存，
         // pin 区会先消失再补回来。这里先乐观同步列表成员关系，失败时回滚。
-        if (tab.workspaceIdentity && pinned) {
+        if (previousTask.workspaceIdentity && pinned) {
           useRemotePinnedTaskStore.getState().upsertTask(previousTask);
           useRemoteTimelineTaskStore
             .getState()
-            .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+            .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
         }
-        if (tab.workspaceIdentity && !pinned) {
+        if (previousTask.workspaceIdentity && !pinned) {
           useRemotePinnedTaskStore
             .getState()
-            .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+            .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
           useRemoteTimelineTaskStore.getState().upsertTask(previousTask);
         }
         applyTaskQueryCacheMutation({
@@ -579,21 +623,27 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       try {
         const meta = await zcodeTaskService.setTaskPinned({
           taskId,
-          workspacePath: tab.workspacePath,
+          workspacePath: previousTask.workspacePath,
           pinned,
-          ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
+          ...(previousTask.workspaceIdentity
+            ? { workspaceIdentity: previousTask.workspaceIdentity }
+            : {}),
         });
-        removeOptimisticTaskListItem(tab.workspacePath, taskId, tab.workspaceIdentity);
-        if (tab.workspaceIdentity && pinned) {
+        removeOptimisticTaskListItem(
+          previousTask.workspacePath,
+          taskId,
+          previousTask.workspaceIdentity,
+        );
+        if (previousTask.workspaceIdentity && pinned) {
           useRemotePinnedTaskStore.getState().upsertTask(meta);
           useRemoteTimelineTaskStore
             .getState()
-            .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+            .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
         }
-        if (tab.workspaceIdentity && !pinned) {
+        if (previousTask.workspaceIdentity && !pinned) {
           useRemotePinnedTaskStore
             .getState()
-            .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+            .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
           useRemoteTimelineTaskStore.getState().upsertTask(meta);
         }
         applyTaskQueryCacheMutation({
@@ -605,17 +655,17 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         return meta;
       } catch (error) {
         if (previousTask) {
-          if (tab.workspaceIdentity && pinned) {
+          if (previousTask.workspaceIdentity && pinned) {
             useRemotePinnedTaskStore
               .getState()
-              .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+              .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
             useRemoteTimelineTaskStore.getState().upsertTask(previousTask);
           }
-          if (tab.workspaceIdentity && !pinned) {
+          if (previousTask.workspaceIdentity && !pinned) {
             useRemotePinnedTaskStore.getState().upsertTask(previousTask);
             useRemoteTimelineTaskStore
               .getState()
-              .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+              .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
           }
           applyTaskQueryCacheMutation({
             previousTask,
@@ -627,14 +677,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         throw error;
       }
     },
-    [
-      removeOptimisticTaskListItem,
-      readOnlyReason,
-      tab.workspaceIdentity,
-      tab.workspacePath,
-      findCurrentTaskItem,
-      zcodeTaskService,
-    ],
+    [removeOptimisticTaskListItem, readOnlyReason, findCurrentTaskItem, zcodeTaskService],
   );
 
   const handleArchiveTask = useCallback(
@@ -643,19 +686,22 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         return null;
       }
       const previousTask = findCurrentTaskItem(taskId);
+      if (!previousTask) return null;
       const meta = await zcodeTaskService.archiveTask({
         taskId,
-        workspacePath: tab.workspacePath,
-        ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
+        workspacePath: previousTask.workspacePath,
+        ...(previousTask.workspaceIdentity
+          ? { workspaceIdentity: previousTask.workspaceIdentity }
+          : {}),
       });
-      removeTaskState(tab.workspacePath, taskId, tab.workspaceIdentity);
-      if (tab.workspaceIdentity) {
+      removeTaskState(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
+      if (previousTask.workspaceIdentity) {
         useRemoteTimelineTaskStore
           .getState()
-          .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+          .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
         useRemotePinnedTaskStore
           .getState()
-          .removeTask(tab.workspacePath, taskId, tab.workspaceIdentity);
+          .removeTask(previousTask.workspacePath, taskId, previousTask.workspaceIdentity);
       }
       applyTaskQueryCacheMutation({
         previousTask: previousTask ?? meta,
@@ -665,14 +711,7 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
       });
       return meta;
     },
-    [
-      removeTaskState,
-      readOnlyReason,
-      tab.workspaceIdentity,
-      tab.workspacePath,
-      findCurrentTaskItem,
-      zcodeTaskService,
-    ],
+    [removeTaskState, readOnlyReason, findCurrentTaskItem, zcodeTaskService],
   );
 
   const handleSetTaskUnread = useCallback(
@@ -681,15 +720,27 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
         return null;
       }
       const previousTask = findCurrentTaskItem(taskId);
+      if (!previousTask) return null;
       const meta = await zcodeTaskService.setTaskUnread({
         taskId,
-        workspacePath: tab.workspacePath,
+        workspacePath: previousTask.workspacePath,
         unread,
-        ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
+        ...(previousTask.workspaceIdentity
+          ? { workspaceIdentity: previousTask.workspaceIdentity }
+          : {}),
       });
-      setTaskUnreadIndicator(tab.workspacePath, taskId, unread, tab.workspaceIdentity);
-      upsertOptimisticTaskListItem(tab.workspacePath, meta, tab.workspaceIdentity);
-      if (tab.workspaceIdentity) {
+      setTaskUnreadIndicator(
+        previousTask.workspacePath,
+        taskId,
+        unread,
+        previousTask.workspaceIdentity,
+      );
+      upsertOptimisticTaskListItem(
+        previousTask.workspacePath,
+        meta,
+        previousTask.workspaceIdentity,
+      );
+      if (previousTask.workspaceIdentity) {
         useRemoteTimelineTaskStore.getState().upsertTask(meta);
       }
       applyTaskQueryCacheMutation({
@@ -703,8 +754,6 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     [
       setTaskUnreadIndicator,
       readOnlyReason,
-      tab.workspaceIdentity,
-      tab.workspacePath,
       findCurrentTaskItem,
       upsertOptimisticTaskListItem,
       zcodeTaskService,
@@ -856,7 +905,27 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
                     {...(sortableBindings?.attributes ?? {})}
                     {...(sortableBindings?.listeners ?? {})}
                   >
-                    {sshWorkspaceTooltipDetails ? (
+                    {tab.project ? (
+                      <ProjectDetailsCard
+                        project={tab.project}
+                        taskCount={taskListTotal}
+                        loading={taskListLoading}
+                        connectionLabel={
+                          sshWorkspaceTooltipDetails
+                            ? [
+                                sshWorkspaceTooltipDetails.alias,
+                                sshWorkspaceTooltipDetails.hostLabel,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")
+                            : undefined
+                        }
+                        disabled={workspaceActionMenuOpen || editProjectDialogOpen || isDragging}
+                        onEdit={() => setEditProjectDialogOpen(true)}
+                      >
+                        {workspaceLabelContent}
+                      </ProjectDetailsCard>
+                    ) : sshWorkspaceTooltipDetails ? (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>{workspaceLabelContent}</TooltipTrigger>
@@ -935,6 +1004,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
                               </DropdownMenuTrigger>
                             </ControlHintTooltip>
                             <DropdownMenuContent align="end" onClick={handleActionMenuClick}>
+                              {tab.project ? (
+                                <DropdownMenuItem onSelect={() => setEditProjectDialogOpen(true)}>
+                                  <Settings2 className="size-4" />
+                                  {intl.formatMessage({ id: "project.edit" })}
+                                </DropdownMenuItem>
+                              ) : null}
                               <ProjectSectionMenu
                                 kind="dropdown"
                                 workspaceKey={sectionWorkspaceKey}
@@ -1134,6 +1209,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
                 </CollapsibleTrigger>
               </ContextMenuTrigger>
               <ContextMenuContent>
+                {tab.project ? (
+                  <ContextMenuItem onSelect={() => setEditProjectDialogOpen(true)}>
+                    <Settings2 className="size-4" />
+                    {intl.formatMessage({ id: "project.edit" })}
+                  </ContextMenuItem>
+                ) : null}
                 <ProjectSectionMenu
                   kind="context"
                   workspaceKey={sectionWorkspaceKey}
@@ -1171,6 +1252,15 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
           title={intl.formatMessage({ id: "sidebarSection.new" })}
           onClose={() => setCreateSectionDialogOpen(false)}
           onSubmit={(name) => createSection(name, sectionWorkspaceKey)}
+        />
+      ) : null}
+      {editProjectDialogOpen && tab.project ? (
+        <ProjectEditDialog
+          tab={tab}
+          project={tab.project}
+          onClose={() => setEditProjectDialogOpen(false)}
+          onSave={(project) => updateProject(tab.id, project)}
+          onRemove={handleRemoveWorkspace}
         />
       ) : null}
       <RemoteSyncDialogs

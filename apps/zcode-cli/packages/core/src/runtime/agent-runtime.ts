@@ -225,6 +225,10 @@ export class AgentRuntime {
   private sessionTitleGenerationAttempted = false;
   private agentTelemetry: RuntimeTelemetryFacade;
 
+  getWorkspaceProjectId(): string | undefined {
+    return this.config.workspaceProjectId;
+  }
+
   constructor(sessionId: SessionId, config: AgentRuntimeConfig, deps: AgentRuntimeDeps) {
     const runtime = this as unknown as AgentRuntimeInternal;
     this.sessionId = sessionId;

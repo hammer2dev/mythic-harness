@@ -75,6 +75,7 @@ import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
 import { ProjectSectionHeaderActions } from "@/WorkspaceSidebar/ProjectSectionHeaderActions.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
+import { getWorkspaceProjectKey } from "@/lib/workspaceProject.js";
 import {
   increaseWorkspaceTaskVisibleLimit,
   resolveVisibleWorkspaceTaskKeys,
@@ -129,6 +130,7 @@ type TaskSortBy = SidebarTaskSortBy;
 type SidebarTaskViewMode = "workspace" | "timeline" | "archived";
 
 interface SidebarFileTreeTarget {
+  projectId?: string;
   workspacePath: string;
   workspaceName: string;
   workspaceIdentity?: string;
@@ -318,6 +320,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const setTheme = useZCodeStore((state) => state.setTheme);
   const commandCenterShortcutLabel = useShortcutCommandLabel("openCommandCenter");
   const tabs = useTabStore((state) => state.tabs);
+  const activeTabId = useTabStore((state) => state.activeTabId);
   const activateTab = useTabStore((state) => state.activateTab);
   const closeTab = useTabStore((state) => state.closeTab);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
@@ -358,6 +361,19 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const projectSectionByWorkspaceKey = useSidebarSectionsStore(
     (state) => state.projectSectionByWorkspaceKey,
   );
+  const migrateProjectKey = useSidebarSectionsStore((state) => state.migrateProjectKey);
+  useEffect(() => {
+    for (const tab of projectWorkspaceTabs) {
+      if (tab.project) {
+        migrateProjectKey(
+          tab.project.id,
+          tab.project.legacyWorkspaceScopes.map((scope) =>
+            buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity),
+          ),
+        );
+      }
+    }
+  }, [migrateProjectKey, projectWorkspaceTabs]);
   const expandedBySectionId = useSidebarSectionsStore((state) => state.expandedBySectionId);
   const setSectionExpanded = useSidebarSectionsStore((state) => state.setSectionExpanded);
   const setProjectSectionsExpanded = useSidebarSectionsStore(
@@ -378,10 +394,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     const result = new Map<string, WorkspaceTabState[]>();
     for (const sectionId of sectionOrder) result.set(sectionId, []);
     for (const tab of projectWorkspaceTabs) {
-      const sectionId =
-        projectSectionByWorkspaceKey[
-          buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity)
-        ] ?? "projects";
+      const sectionId = projectSectionByWorkspaceKey[getWorkspaceProjectKey(tab)] ?? "projects";
       result.get(sectionId)?.push(tab);
     }
     return result;
@@ -391,9 +404,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       projectWorkspaceTabs.filter(
         (tab) =>
           expandedBySectionId[
-            projectSectionByWorkspaceKey[
-              buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity)
-            ] ?? "projects"
+            projectSectionByWorkspaceKey[getWorkspaceProjectKey(tab)] ?? "projects"
           ] !== false,
       ),
     [projectWorkspaceTabs, projectSectionByWorkspaceKey, expandedBySectionId],
@@ -463,7 +474,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     () =>
       new Map(
         workspaceTaskLists.groups.map((group) => [
-          buildTaskWorkspaceKey(group.workspacePath, group.workspaceIdentity),
+          group.projectId ?? buildTaskWorkspaceKey(group.workspacePath, group.workspaceIdentity),
           group,
         ]),
       ),
@@ -1007,10 +1018,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                       className="space-y-2 pb-4"
                                     >
                                       {sectionTabs.map((tab) => {
-                                        const workspaceKey = buildTaskWorkspaceKey(
-                                          tab.workspacePath,
-                                          tab.workspaceIdentity,
-                                        );
+                                        const workspaceKey = getWorkspaceProjectKey(tab);
                                         const taskGroup = workspaceTaskGroupByKey.get(workspaceKey);
                                         const taskLoading =
                                           workspaceTaskLists.loadingByWorkspaceKey[workspaceKey] ??
@@ -1020,7 +1028,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                           <SortableWorkspaceSidebarItem
                                             key={tab.id}
                                             tab={tab}
-                                            isActiveWorkspace={tab.workspacePath === workspacePath}
+                                            isActiveWorkspace={tab.id === activeTabId}
                                             isExpanded={resolveWorkspaceDragExpanded({
                                               activeDragId: activeWorkspaceDragId,
                                               expanded: expandedWorkspacePaths.has(
@@ -1037,6 +1045,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                               taskGroup?.items ?? EMPTY_WORKSPACE_TASK_ITEMS
                                             }
                                             taskListLoading={taskLoading}
+                                            taskListTotal={taskGroup?.total ?? 0}
                                             taskListHasMore={taskGroup?.hasMore ?? false}
                                             taskListHasUnread={taskGroup?.hasUnread ?? false}
                                             taskListLiveWorkflowCount={
@@ -1156,6 +1165,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
         >
           {fileTreeTarget ? (
             <WorkspaceFileTree
+              projectId={fileTreeTarget.projectId}
               workspacePath={fileTreeTarget.workspacePath}
               workspaceName={fileTreeTarget.workspaceName}
               workspaceIdentity={fileTreeTarget.workspaceIdentity}
@@ -1172,9 +1182,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 // 同时不切换当前 workspace，避免"Add to chat"丢给错误的 composer。
                 onOpenCodeViewer?.({
                   ...source,
-                  workspacePath: fileTreeTarget.workspacePath,
-                  workspaceIdentity: fileTreeTarget.workspaceIdentity,
-                  workspaceRemoteSessionId: fileTreeTarget.workspaceRemoteSessionId,
+                  workspacePath: source.workspacePath ?? fileTreeTarget.workspacePath,
+                  workspaceIdentity: source.workspaceIdentity ?? fileTreeTarget.workspaceIdentity,
+                  workspaceRemoteSessionId:
+                    source.workspaceRemoteSessionId ?? fileTreeTarget.workspaceRemoteSessionId,
                 });
               }}
             />

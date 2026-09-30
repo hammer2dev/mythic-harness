@@ -357,7 +357,7 @@ export const TaskList = memo(function TaskList({
     return (
       <MemoTaskItem
         key={task.taskId}
-        workspacePath={workspacePath}
+        workspacePath={task.workspacePath}
         remoteSessionId={remoteSessionId}
         task={task}
         isPinned={isPinned}
@@ -451,7 +451,7 @@ export const TaskList = memo(function TaskList({
               </ContextMenuTrigger>
               {contextMenuTask ? (
                 <TaskListItemContextMenuContent
-                  workspacePath={workspacePath}
+                  workspacePath={contextMenuTask.workspacePath}
                   remoteSessionId={remoteSessionId}
                   task={contextMenuTask}
                   isPinned={pinnedTaskIdSet.has(contextMenuTask.taskId)}

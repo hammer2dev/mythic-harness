@@ -5,6 +5,7 @@ import {
   resolveWorkspaceRemoteSessionId,
   type WorkspaceServiceResolverState,
 } from "@/lib/workspaceServiceResolver.js";
+import { findWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 
 function resolveRemoteWorkspaceSessionIdForTarget<TServices>(params: {
   workspacePath: string | null | undefined;
@@ -21,12 +22,18 @@ function resolveRemoteWorkspaceSessionIdForTarget<TServices>(params: {
   const workspaceIdentity = params.workspaceIdentity?.trim() || undefined;
   const matchingActiveTab =
     params.activeTab &&
-    (workspaceIdentity
-      ? params.activeTab.workspaceIdentity?.trim() === workspaceIdentity
-      : params.activeTab.workspacePath === params.workspacePath)
+    findWorkspaceProjectScope(params.activeTab, {
+      workspacePath: params.workspacePath,
+      workspaceIdentity,
+    })
       ? params.activeTab
       : null;
-  const activeTabWorkspaceIdentity = matchingActiveTab?.workspaceIdentity?.trim() || undefined;
+  const activeTabWorkspaceIdentity = matchingActiveTab
+    ? findWorkspaceProjectScope(matchingActiveTab, {
+        workspacePath: params.workspacePath,
+        workspaceIdentity,
+      })?.workspaceIdentity
+    : undefined;
   const explicitRemoteSessionId = [
     params.preferredRemoteSessionId,
     matchingActiveTab?.remoteSessionId,
@@ -57,20 +64,24 @@ export function useResolvedRemoteWorkspaceSessionId(
   remoteTarget?: unknown,
 ): string | null {
   const activeWorkspaceTab = useTabStore((state) => {
-    if (!workspacePath || !state.activeTabId) {
+    if (!workspacePath) {
       return null;
     }
 
-    const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
-    if (!activeTab || !isWorkspaceTab(activeTab)) {
-      return null;
-    }
-
-    if (workspaceIdentity) {
-      return activeTab.workspaceIdentity?.trim() === workspaceIdentity.trim() ? activeTab : null;
-    }
-
-    return activeTab.workspacePath === workspacePath ? activeTab : null;
+    const matches = state.tabs.filter(
+      (tab): tab is WorkspaceTabState =>
+        isWorkspaceTab(tab) &&
+        Boolean(
+          findWorkspaceProjectScope(tab, {
+            workspacePath,
+            workspaceIdentity: workspaceIdentity ?? undefined,
+          }),
+        ),
+    );
+    return (
+      matches.find((tab) => tab.id === state.activeTabId) ??
+      (matches.length === 1 ? matches[0]! : null)
+    );
   });
 
   return useRemoteWorkspaceSessionStore((state) =>

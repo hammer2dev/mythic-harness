@@ -305,6 +305,7 @@ export function mapSessionInfo(input: {
     mode: input.projection?.mode ?? input.app?.getMode?.() ?? "build",
     model: input.app ? optionalModelSelectionFromString(input.app.getModel()) : undefined,
     parentSessionId: input.session?.parentID ?? input.parentSessionId,
+    projectId: input.session?.workspaceProjectId,
     traceId: input.session?.traceID ?? input.app?.traceId,
     sessionId,
     sessionKind: (input.session?.taskType ?? input.taskType ?? "interactive") as ZCodeSessionKind,

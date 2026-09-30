@@ -134,6 +134,7 @@ export const zcodeSessionGoalVerificationTimelineSchema = z
   .strict();
 export const zcodeSessionInfoSchema = z
   .object({
+    projectId: nonEmptyString.optional(),
     sessionId: nonEmptyString,
     workspace: zcodeWorkspaceRefSchema,
     parentSessionId: nonEmptyString.optional(),

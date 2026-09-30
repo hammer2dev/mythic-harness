@@ -355,6 +355,66 @@ nodes:
     codeSeeds:
       - file: apps/zcode-cli/packages/core/src/runtime/methods/turn-model.ts
         symbol: applySubmissionExecutionState
+  - id: capability.multi-folder-projects
+    kind: capability
+    label: Projects with multiple source folders and one primary folder
+    aliases:
+      - multi-folder project
+      - source folders
+      - 多文件夹项目
+      - 项目空间
+      - 主文件夹
+    codeSeeds:
+      - file: packages/ui/src/lib/workspaceProject.ts
+        symbol: updateWorkspaceProjectDefinition
+      - file: packages/ui/src/lib/projectNavigationTarget.ts
+        symbol: resolveProjectNavigationTarget
+      - file: packages/ui/test/workspaceProjects.test.ts
+        symbol: test
+      - file: packages/ui/test/projectNavigation.test.ts
+        symbol: test
+      - file: packages/ui/test/projectTaskMembership.test.ts
+        symbol: test
+      - file: apps/zcode-cli/packages/core/src/runtime/methods/project-workspace.test.ts
+        symbol: test
+    invariants:
+      - Project IDs remain stable when the name, folders or primary folder changes; existing sessions keep their execution directory and project membership.
+      - All folders belong to the same execution environment; directory IO still uses workspacePath and remote routing preserves workspaceIdentity.
+      - Every submitted message captures current project folders; accepted and queued inputs retain their captured configuration.
+      - Test seeds identify representative validation entrypoints; execution results belong in the feature acceptance record.
+  - id: state.workspace-projects
+    kind: state-owner
+    label: Window project configuration and active project navigation
+    codeSeeds:
+      - file: packages/ui/src/store/tabStore.ts
+        symbol: createTabStore
+      - file: packages/ui/src/hooks/useTabPersistence.ts
+        symbol: useTabPersistence
+    invariants:
+      - tabStore owns project configuration; editing dialogs own unsaved drafts and Git root selection is UI-local.
+      - Sidebar sections reference stable project IDs, migrating prior workspace keys once.
+  - id: surface.multi-folder-project-editor
+    kind: ui-surface
+    label: Project details and source folder editor
+    codeSeeds:
+      - file: packages/ui/src/WorkspaceSidebar/ProjectDetailsCard.tsx
+        symbol: ProjectDetailsCard
+      - file: packages/ui/src/WorkspaceSidebar/ProjectEditDialog.tsx
+        symbol: ProjectEditDialog
+  - id: service.project-input-snapshot
+    kind: service
+    label: Current project configuration captured at message submission
+    codeSeeds:
+      - file: packages/ui/src/hooks/useProjectWorkspaceSnapshot.ts
+        symbol: useProjectWorkspaceSnapshot
+      - file: packages/shared/src/project-workspace.ts
+        symbol: zcodeProjectWorkspaceSchema
+  - id: service.runtime-project-context
+    kind: service
+    label: Admitted project context applied before the turn
+    codeSeeds:
+      - file: apps/zcode-cli/packages/core/src/runtime/methods/project-workspace.ts
+        symbol: applyTurnProjectWorkspace
   - id: capability.sidebar-project-sections
     kind: capability
     label: Client-local project sections in the sidebar
@@ -416,6 +476,30 @@ nodes:
       - PluginStoreBrowsePage owns segment/query/detail and no category selection state; PluginsSection owns management scope and editor state. Browse and management mount exclusively to avoid conflicting inventory initialization.
       - useAppPanels owns sidebar visibility; narrow and wide navigation share this state.
 edges:
+  - from: capability.multi-folder-projects
+    to: state.workspace-projects
+    type: owned-by
+    rank: must-inspect
+  - from: capability.multi-folder-projects
+    to: surface.multi-folder-project-editor
+    type: renders-in
+    rank: must-inspect
+  - from: capability.multi-folder-projects
+    to: service.project-input-snapshot
+    type: implemented-by
+    rank: must-inspect
+  - from: service.project-input-snapshot
+    to: service.runtime-project-context
+    type: submits-selection-to
+    rank: must-inspect
+  - from: capability.multi-folder-projects
+    to: boundary.workspace-key
+    type: isolated-by
+    rank: invariant-only
+  - from: capability.multi-folder-projects
+    to: capability.sidebar-project-sections
+    type: renders-in
+    rank: should-inspect
   - from: capability.workspace-two-level-navigation
     to: state.workspace-navigation
     type: owned-by
@@ -433,8 +517,8 @@ edges:
     type: persists-to
     rank: must-inspect
   - from: state.sidebar-project-sections
-    to: boundary.workspace-key
-    type: isolated-by
+    to: state.workspace-projects
+    type: reads-candidates-from
     rank: must-inspect
   - from: capability.model-selection
     to: surface.conversation-model-control

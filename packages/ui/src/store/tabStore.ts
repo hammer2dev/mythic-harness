@@ -12,6 +12,8 @@ import {
   type TabId,
   type TabState,
   type WorkspacePurpose,
+  type WorkspaceProjectDefinition,
+  type WorkspaceProjectScope,
 } from "@zcode/shared";
 import {
   persistWorkspaceExpandedPreference,
@@ -20,6 +22,12 @@ import {
   type WorkspaceExpansionState,
 } from "@/lib/workspaceExpansionPreference.js";
 import { isSameWorkspaceTab } from "@/store/tabWorkspaceIdentity.js";
+import {
+  createWorkspaceProject,
+  getWorkspaceProjectPrimaryFolder,
+  updateWorkspaceProjectDefinition,
+  type WorkspaceProjectUpdate,
+} from "@/lib/workspaceProject.js";
 
 export const SETTINGS_TAB_ID = "__settings__" satisfies TabId;
 
@@ -33,6 +41,7 @@ export interface SettingsTabState {
 
 export interface WorkspaceTabState extends TabState {
   kind: "workspace";
+  project?: WorkspaceProjectDefinition;
   /** 启动期一次性校验结果；不持久化，运行期间不重检。 */
   availability?: WorkspaceAvailability;
   remoteSessionId?: string;
@@ -44,6 +53,7 @@ export interface WorkspaceTabState extends TabState {
 }
 
 export interface WorkspaceTabOptions {
+  project?: WorkspaceProjectDefinition;
   availability?: WorkspaceAvailability;
   remoteSessionId?: string;
   remoteTarget?: RemoteTarget;
@@ -55,6 +65,7 @@ export interface WorkspaceTabOptions {
 
 export interface RestorableWorkspaceTab {
   workspacePath: string;
+  project?: WorkspaceProjectDefinition;
   availability?: WorkspaceAvailability;
   remoteSessionId?: string;
   remoteTarget?: RemoteTarget;
@@ -99,6 +110,8 @@ export function isSettingsTab(tab: WindowTabState): tab is SettingsTabState {
 export interface TabStoreState {
   /** 当前窗口所有打开的标签页（有序） */
   tabs: WindowTabState[];
+  closedProjects: WorkspaceProjectDefinition[];
+  restoreClosedProjects: (projects: WorkspaceProjectDefinition[]) => void;
   /** 当前激活的标签页 ID，null 表示无激活标签 */
   activeTabId: TabId | null;
   /** 当前或最近一次激活的 workspace 路径 */
@@ -115,6 +128,10 @@ export interface TabStoreState {
   closeTab: (tabId: TabId) => void;
   /** 激活指定标签页 */
   activateTab: (tabId: TabId) => void;
+  /** 保存项目配置；主文件夹只决定新会话的默认执行目录。 */
+  updateProject: (tabId: TabId, update: WorkspaceProjectUpdate) => void;
+  /** 打开项目的历史任务，保持项目归属并使用该任务创建时的执行目录。 */
+  activateProjectTask: (tabId: TabId, scope: WorkspaceProjectScope) => void;
   /** 拖拽排序：将 fromIndex 位置的 tab 移动到 toIndex */
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   /** 仅按 workspace 子序列重排，保留设置页等非 workspace tab 的位置槽位 */
@@ -150,15 +167,25 @@ function createWorkspaceTab(
   workspacePath: string,
   options?: WorkspaceTabOptions,
 ): WorkspaceTabState {
+  const project =
+    options?.workspacePurpose === "conversation"
+      ? undefined
+      : (options?.project ??
+        createWorkspaceProject(
+          { workspacePath, workspaceIdentity: options?.workspaceIdentity },
+          labelFromPath(workspacePath),
+        ));
+  const primary = project ? getWorkspaceProjectPrimaryFolder(project) : undefined;
   return {
     id: createUuid(),
     kind: "workspace",
-    workspacePath,
-    label: labelFromPath(workspacePath),
+    workspacePath: primary?.workspacePath ?? workspacePath,
+    label: project?.name ?? labelFromPath(workspacePath),
+    project,
     availability: options?.availability,
     remoteSessionId: options?.remoteSessionId,
     remoteTarget: options?.remoteTarget,
-    workspaceIdentity: options?.workspaceIdentity,
+    workspaceIdentity: primary?.workspaceIdentity ?? options?.workspaceIdentity,
     localWorkspacePath: options?.localWorkspacePath,
     workspacePurpose: options?.workspacePurpose,
   };
@@ -168,13 +195,22 @@ function mergeWorkspaceTabOptions(
   tab: WorkspaceTabState,
   options?: WorkspaceTabOptions,
 ): WorkspaceTabState {
+  const project =
+    (options?.workspacePurpose ?? tab.workspacePurpose) === "conversation"
+      ? undefined
+      : (options?.project ?? tab.project);
+  const primary = project ? getWorkspaceProjectPrimaryFolder(project) : undefined;
   return {
     ...tab,
+    project,
+    workspacePath: primary?.workspacePath ?? tab.workspacePath,
+    label: project?.name ?? tab.label,
     availability: options?.availability ?? tab.availability,
     remoteSessionId: options?.remoteSessionId ?? tab.remoteSessionId,
     remoteTarget: options?.remoteTarget ?? tab.remoteTarget,
     remoteHistoryId: options?.remoteHistoryId ?? tab.remoteHistoryId,
-    workspaceIdentity: options?.workspaceIdentity ?? tab.workspaceIdentity,
+    workspaceIdentity:
+      primary?.workspaceIdentity ?? options?.workspaceIdentity ?? tab.workspaceIdentity,
     localWorkspacePath: options?.localWorkspacePath ?? tab.localWorkspacePath,
     workspacePurpose: options?.workspacePurpose ?? tab.workspacePurpose,
   };
@@ -190,6 +226,21 @@ function normalizeRestorableWorkspaceTab(
   }
 
   return tab;
+}
+
+function findClosedProject(
+  projects: WorkspaceProjectDefinition[],
+  workspacePath: string,
+  options?: WorkspaceTabOptions,
+): WorkspaceProjectDefinition | undefined {
+  if (options?.workspacePurpose === "conversation") return undefined;
+  return projects.find((project) =>
+    project.taskWorkspaceScopes.some(
+      (scope) =>
+        (scope.workspaceIdentity?.trim() || scope.workspacePath) ===
+        (options?.workspaceIdentity?.trim() || workspacePath),
+    ),
+  );
 }
 
 function createSettingsTab(): SettingsTabState {
@@ -249,6 +300,15 @@ interface StorageLike {
 export function createTabStore(storage: StorageLike | null | undefined = undefined) {
   return create<TabStoreState>()((set, get) => ({
     tabs: [],
+    closedProjects: [],
+    restoreClosedProjects: (projects) => {
+      set((state) => ({
+        closedProjects: projects.filter(
+          (project) =>
+            !state.tabs.some((tab) => isWorkspaceTab(tab) && tab.project?.id === project.id),
+        ),
+      }));
+    },
     activeTabId: null,
     activeWorkspacePath: null,
     activeWorkspaceIdentity: null,
@@ -263,6 +323,7 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
           isWorkspaceTab(tab) && isSameWorkspaceTab(tab, workspacePath, options),
       );
       if (existing) {
+        const merged = mergeWorkspaceTabOptions(existing, options);
         persistWorkspaceExpandedPreference(existing.workspacePath, true, storage);
         set((state) => ({
           // 远程 workspace 手动重连成功后会再次走 addTab，
@@ -270,15 +331,13 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
           // 结果 UI 仍然读到“remoteSessionId 还没更新”的旧状态，
           // reconnect 按钮就会一直显示，像是还没连上。这里在复用 tab 时同步覆盖远程会话字段。
           tabs: state.tabs.map((tab) =>
-            tab.id !== existing.id || !isWorkspaceTab(tab)
-              ? tab
-              : mergeWorkspaceTabOptions(tab, options),
+            tab.id !== existing.id || !isWorkspaceTab(tab) ? tab : merged,
           ),
           activeTabId: existing.id,
-          activeWorkspacePath: existing.workspacePath,
+          activeWorkspacePath: merged.workspacePath,
           // Settings 页的插件管理要按“最近激活 workspace”的 identity 继续命中同一远端。
           // 之前这里只保存路径，切到 settings tab 后 identity 会丢失，导致同路径远端隔离失效。
-          activeWorkspaceIdentity: options?.workspaceIdentity ?? existing.workspaceIdentity ?? null,
+          activeWorkspaceIdentity: merged.workspaceIdentity ?? null,
           expandedWorkspacePaths: ensureWorkspaceExpanded(
             state.expandedWorkspacePaths,
             existing.workspacePath,
@@ -287,19 +346,24 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
         return existing.id;
       }
 
-      const tab = createWorkspaceTab(workspacePath, options);
-      persistWorkspaceExpandedPreference(workspacePath, true, storage);
+      const tab = createWorkspaceTab(workspacePath, {
+        ...options,
+        project:
+          options?.project ?? findClosedProject(get().closedProjects, workspacePath, options),
+      });
+      persistWorkspaceExpandedPreference(tab.workspacePath, true, storage);
       set((state) => ({
         // 左侧 workspace 列表现在支持手动排序，但新打开项目仍然默认追加到底部，
         // 连续开新项目时最新 workspace 总要滚到下面找，和侧栏“最新上下文优先”的浏览方式不一致。
         // 这里改成把新 workspace 插到最前面，让新打开的项目直接出现在列表顶部。
         tabs: [tab, ...state.tabs],
+        closedProjects: state.closedProjects.filter((project) => project.id !== tab.project?.id),
         activeTabId: tab.id,
-        activeWorkspacePath: workspacePath,
+        activeWorkspacePath: tab.workspacePath,
         activeWorkspaceIdentity: tab.workspaceIdentity ?? null,
         expandedWorkspacePaths: ensureWorkspaceExpanded(
           state.expandedWorkspacePaths,
-          workspacePath,
+          tab.workspacePath,
         ),
       }));
       return tab.id;
@@ -326,17 +390,22 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
         return existing.id;
       }
 
-      const tab = createWorkspaceTab(workspacePath, options);
-      persistWorkspaceExpandedPreference(workspacePath, true, storage);
+      const tab = createWorkspaceTab(workspacePath, {
+        ...options,
+        project:
+          options?.project ?? findClosedProject(get().closedProjects, workspacePath, options),
+      });
+      persistWorkspaceExpandedPreference(tab.workspacePath, true, storage);
       set((state) => ({
         // Claude 历史导入可能把任务写入一个“当前窗口从未打开过”的 workspace。
         // 任务区只遍历 workspace tabs；如果这里只 bump 任务列表版本而不补 tab，
         // 新任务虽然已经持久化成功，侧边栏里仍然没有对应分组可渲染。这里补一个仅确保可见的入口，
         // 既让目标 workspace 进入任务区数据源，又不打断用户当前正在看的 tab / settings 上下文。
         tabs: [tab, ...state.tabs],
+        closedProjects: state.closedProjects.filter((project) => project.id !== tab.project?.id),
         expandedWorkspacePaths: ensureWorkspaceExpanded(
           state.expandedWorkspacePaths,
-          workspacePath,
+          tab.workspacePath,
         ),
       }));
       return tab.id;
@@ -393,6 +462,15 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
 
       const nextState = {
         tabs: newTabs,
+        closedProjects:
+          closingTab && isWorkspaceTab(closingTab) && closingTab.project
+            ? [
+                closingTab.project,
+                ...stateBefore.closedProjects.filter(
+                  (project) => project.id !== closingTab.project!.id,
+                ),
+              ]
+            : stateBefore.closedProjects,
         activeTabId: newActiveTabId,
         activeWorkspacePath: fallbackWorkspacePath,
         activeWorkspaceIdentity: fallbackWorkspaceIdentity,
@@ -443,6 +521,61 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
       }
 
       set(nextState);
+    },
+
+    updateProject: (tabId, update) => {
+      set((state) => {
+        const tab = state.tabs.find(
+          (candidate): candidate is WorkspaceTabState =>
+            candidate.id === tabId && isWorkspaceTab(candidate),
+        );
+        if (!tab?.project) return state;
+        const project = updateWorkspaceProjectDefinition(tab.project, update, tab.remoteTarget);
+        const primary = getWorkspaceProjectPrimaryFolder(project);
+        const primaryChanged =
+          primary.workspacePath !== tab.workspacePath ||
+          primary.workspaceIdentity !== tab.workspaceIdentity;
+        const wasExpanded = state.expandedWorkspacePaths.has(tab.workspacePath);
+        const expandedWorkspacePaths = new Set(state.expandedWorkspacePaths);
+        expandedWorkspacePaths.delete(tab.workspacePath);
+        if (wasExpanded) expandedWorkspacePaths.add(primary.workspacePath);
+        persistWorkspaceExpandedPreference(primary.workspacePath, wasExpanded, storage);
+        // 主目录变化不改写当前已打开任务的 cwd，下一次新建任务从主目录进入。
+        return {
+          tabs: state.tabs.map((candidate) =>
+            candidate.id === tabId
+              ? {
+                  ...tab,
+                  project,
+                  label: project.name,
+                  workspacePath: primary.workspacePath,
+                  workspaceIdentity: primary.workspaceIdentity,
+                  availability: primaryChanged ? undefined : tab.availability,
+                  localWorkspacePath: primaryChanged ? undefined : tab.localWorkspacePath,
+                }
+              : candidate,
+          ),
+          expandedWorkspacePaths,
+        };
+      });
+    },
+
+    activateProjectTask: (tabId, scope) => {
+      const tab = get().tabs.find(
+        (candidate): candidate is WorkspaceTabState =>
+          candidate.id === tabId && isWorkspaceTab(candidate),
+      );
+      if (!tab) return;
+      persistWorkspaceExpandedPreference(tab.workspacePath, true, storage);
+      set((state) => ({
+        activeTabId: tab.id,
+        activeWorkspacePath: scope.workspacePath,
+        activeWorkspaceIdentity: scope.workspaceIdentity ?? null,
+        expandedWorkspacePaths: ensureWorkspaceExpanded(
+          state.expandedWorkspacePaths,
+          tab.workspacePath,
+        ),
+      }));
     },
 
     reorderTabs: (fromIndex: number, toIndex: number) => {
@@ -576,9 +709,11 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
       const tabs = tabsInput.map((tab) => {
         const normalized = normalizeRestorableWorkspaceTab(tab);
         return createWorkspaceTab(normalized.workspacePath, {
+          project: normalized.project,
           remoteSessionId: normalized.remoteSessionId,
           remoteTarget: normalized.remoteTarget,
           workspaceIdentity: normalized.workspaceIdentity,
+          localWorkspacePath: normalized.localWorkspacePath,
           workspacePurpose: normalized.workspacePurpose,
           availability: normalized.availability,
         });
@@ -591,6 +726,9 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
       const expansionState: WorkspaceExpansionState = readWorkspaceExpansionState(storage);
       set({
         tabs,
+        closedProjects: get().closedProjects.filter(
+          (project) => !tabs.some((tab) => tab.project?.id === project.id),
+        ),
         activeTabId: activeWorkspaceTab.id,
         activeWorkspacePath: activeWorkspaceTab.workspacePath,
         activeWorkspaceIdentity: activeWorkspaceTab.workspaceIdentity ?? null,
@@ -608,6 +746,7 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
         const completedTabs = tabsInput.map((tabInput) => {
           const normalized = normalizeRestorableWorkspaceTab(tabInput);
           const options: WorkspaceTabOptions = {
+            project: normalized.project,
             remoteSessionId: normalized.remoteSessionId,
             remoteTarget: normalized.remoteTarget,
             workspaceIdentity: normalized.workspaceIdentity,
@@ -623,7 +762,10 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
           );
           if (existing) {
             consumedTabIds.add(existing.id);
-            return mergeWorkspaceTabOptions(existing, options);
+            return mergeWorkspaceTabOptions(existing, {
+              ...options,
+              project: existing.project ?? options.project,
+            });
           }
           return createWorkspaceTab(normalized.workspacePath, options);
         });
@@ -639,6 +781,9 @@ export function createTabStore(storage: StorageLike | null | undefined = undefin
         // 补齐阶段只合并缺失 tab，明确保留当前焦点和 active workspace 投影。
         return {
           tabs,
+          closedProjects: state.closedProjects.filter(
+            (project) => !tabs.some((tab) => isWorkspaceTab(tab) && tab.project?.id === project.id),
+          ),
           activeTabId: state.activeTabId,
           activeWorkspacePath: state.activeWorkspacePath,
           activeWorkspaceIdentity: state.activeWorkspaceIdentity,

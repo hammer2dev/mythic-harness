@@ -8,6 +8,7 @@ import {
   resolveRemoteWorkspaceSessionIdentity,
 } from "@/lib/remoteWorkspaceHistory.js";
 import { logger } from "@/logger.js";
+import { isWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 import {
   isWorkspaceTab,
   type RestorableWorkspaceTab,
@@ -33,18 +34,37 @@ export function buildRemoteWorkspacePersistPatch(
   );
   const serializedRemoteWorkspaceKeys = new Set(
     serializedWorkspaceSessions.flatMap((entry) =>
-      entry.kind === "remote" ? [buildWorkspaceSessionKey(entry)] : [],
+      entry.kind === "remote"
+        ? [
+            buildWorkspaceSessionKey(entry),
+            ...(entry.project?.taskWorkspaceScopes.map(buildWorkspaceSessionKey) ?? []),
+          ]
+        : [],
     ),
   );
   const pendingRemoteSessions = remoteSessions.filter(
-    (entry) => !serializedRemoteWorkspaceKeys.has(buildWorkspaceSessionKey(entry)),
+    (entry) =>
+      !serializedRemoteWorkspaceKeys.has(buildWorkspaceSessionKey(entry)) &&
+      !state.closedProjects.some((project) =>
+        project.taskWorkspaceScopes.some(
+          (scope) => buildWorkspaceSessionKey(scope) === buildWorkspaceSessionKey(entry),
+        ),
+      ),
   );
   const workspaceTabs = state.tabs.filter((tab) => tab.kind === "workspace");
-  const activeIndex = state.activeWorkspacePath
-    ? workspaceTabs.findIndex((tab) => tab.workspacePath === state.activeWorkspacePath)
-    : 0;
+  const activeIndex = workspaceTabs.findIndex(
+    (tab) =>
+      tab.id === state.activeTabId ||
+      (state.activeTabId === "__settings__" &&
+        state.activeWorkspacePath !== null &&
+        isWorkspaceProjectScope(tab, {
+          workspacePath: state.activeWorkspacePath,
+          workspaceIdentity: state.activeWorkspaceIdentity ?? undefined,
+        })),
+  );
 
   return {
+    closedWorkspaceProjects: state.closedProjects,
     // SSH 入口被隐藏时会跳过远程 tab 恢复，tabs 里只剩本地项。
     // 如果这里只按当前 tabs 序列化，下一次写 setting.json 会把远程会话快照整体抹掉。
     // 这里把“当前已序列化项 + 未出现在 tabs 的远程快照”合并，确保入口恢复后仍可重连。
@@ -69,6 +89,7 @@ export function restorePersistedRemoteWorkspaceSessions({
   restoreMode?: "all" | "active-first";
 }): { deferredRestore?: () => void } | undefined {
   const persistedSessions = readPersistedWorkspaceSessionEntries(settings);
+  tabStoreApi.getState().restoreClosedProjects(settings.closedWorkspaceProjects ?? []);
 
   if (persistedSessions.length === 0 && !conversationWorkspacePath) {
     return;
@@ -125,11 +146,12 @@ export function restorePersistedRemoteWorkspaceSessions({
           ? "unavailable-local-directory"
           : undefined;
       restoredTabs.push(
-        workspacePurpose || availability
+        workspacePurpose || availability || persistedEntry.project
           ? {
               workspacePath: persistedEntry.workspacePath,
               workspacePurpose,
               availability,
+              project: persistedEntry.project,
             }
           : persistedEntry.workspacePath,
       );
@@ -168,8 +190,10 @@ export function restorePersistedRemoteWorkspaceSessions({
     // 用户关闭的远端 tab 也不会在下次启动被后台拉回。
     restoredTabs.push({
       workspacePath: persistedEntry.workspacePath,
+      project: persistedEntry.project,
       remoteTarget: persistedEntry.target,
       workspaceIdentity,
+      localWorkspacePath: persistedEntry.localWorkspacePath,
     });
     seenRemoteWorkspaceKeys.add(workspaceKey);
   }

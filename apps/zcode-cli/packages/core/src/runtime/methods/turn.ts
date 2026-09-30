@@ -1,3 +1,4 @@
+import { applyTurnProjectWorkspace } from "./project-workspace.js";
 import { beginLocalTurnPreparation, type LocalTtftDetail } from "@zcode/contracts";
 import { runtimeInputMetadata } from "../../agent/runtime-input-presentation.js";
 import {
@@ -213,6 +214,7 @@ export async function executeTurnCommand(
         throw coreError;
       }
       let phaseStartedAt = startTurnPhase("context_initialization");
+      await applyTurnProjectWorkspace(this, options?.intent?.projectWorkspace, turnTraceContext);
       if (this.contextInitialized) {
         // 每个后续 model step 都按该步骤实际持有的 Model 重新投影 Context；
         // Session Selection 只决定未来创建哪个 Model，不能充当执行事实。

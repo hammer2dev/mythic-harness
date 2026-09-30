@@ -317,6 +317,7 @@ export interface ConversationEditTarget {
     modelSelection?: TurnInputIntentMetadata["modelSelection"];
     mode?: TurnInputIntentMetadata["mode"];
     planEnabled?: boolean;
+    projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
     provenance?: CanonicalUserIntentFact["provenance"];
   };
 }
@@ -552,6 +553,10 @@ export class ProductProjection {
    * draft「无可见 delta」裁决不被破坏；事件触碰过的区块跳过（重放序
    * 在种子之后时日志值优先）。幂等：可在 ensurePublisher / hydration 后重复调用。
    */
+  seedProjectId(projectId: string): void {
+    this.snapshot = { ...this.snapshot, meta: { ...this.snapshot.meta, projectId } };
+  }
+
   seedConfig(seed: SessionConfigSeed): void {
     const config = { ...this.snapshot.config };
     let changed = false;
@@ -1905,7 +1910,7 @@ export class ProductProjection {
     return [
       {
         op: "state.updated",
-        patch: { meta: { title, titleSource: source } },
+        patch: { meta: { ...prev, title, titleSource: source } },
       },
     ];
   }
@@ -1930,6 +1935,11 @@ export class ProductProjection {
     // success；子 Agent 的真实终态随后只作为 model-only task-notification 开新轮。
     // V4 过去没有按 tool-use-id 消费这条权威事实，因此 429 后卡片会永久停在 completed。
     const deltas: ConversationDelta[] = this.applyBackgroundTaskNotification(fact);
+    if (fact.projectWorkspace && this.snapshot.meta.projectId !== fact.projectWorkspace.projectId) {
+      const meta = { ...this.snapshot.meta, projectId: fact.projectWorkspace.projectId };
+      this.snapshot = { ...this.snapshot, meta };
+      deltas.push({ op: "state.updated", patch: { meta } });
+    }
     const sharedContextRef = fact.sharedContextRefs?.[0];
     if (
       sharedContextRef &&
@@ -2070,6 +2080,7 @@ export class ProductProjection {
                 ...(fact.modelSelection ? { modelSelection: fact.modelSelection } : {}),
                 ...(fact.mode ? { mode: fact.mode } : {}),
                 ...(fact.planEnabled !== undefined ? { planEnabled: fact.planEnabled } : {}),
+                ...(fact.projectWorkspace ? { projectWorkspace: fact.projectWorkspace } : {}),
                 ...(fact.provenance ? { provenance: fact.provenance } : {}),
               },
             }
@@ -3377,6 +3388,7 @@ export class ProductProjection {
       mode: payload.intent?.mode ?? existing?.mode,
       planEnabled: payload.intent?.planEnabled ?? existing?.planEnabled,
       sharedContextRefs: payload.intent?.sharedContextRefs ?? existing?.sharedContextRefs,
+      projectWorkspace: payload.intent?.projectWorkspace ?? existing?.projectWorkspace,
       provenance: payload.intent?.provenance ?? existing?.provenance,
       delivery: {
         requested: requestedDelivery,
@@ -3509,6 +3521,7 @@ export class ProductProjection {
           ...(queueItem.modelSelection ? { modelSelection: queueItem.modelSelection } : {}),
           ...(queueItem.mode ? { mode: queueItem.mode } : {}),
           ...(queueItem.planEnabled !== undefined ? { planEnabled: queueItem.planEnabled } : {}),
+          ...(queueItem.projectWorkspace ? { projectWorkspace: queueItem.projectWorkspace } : {}),
           admissionSeq: queueItem.order.admissionSeq,
           admittedAt: queueItem.admittedAt,
           requestedDelivery: queueItem.delivery.requested,
@@ -3602,6 +3615,9 @@ export class ProductProjection {
                 ...(item.intent?.mode ? { mode: item.intent.mode } : {}),
                 ...(item.intent?.planEnabled !== undefined
                   ? { planEnabled: item.intent.planEnabled }
+                  : {}),
+                ...(item.intent?.projectWorkspace
+                  ? { projectWorkspace: item.intent.projectWorkspace }
                   : {}),
                 ...(item.intent?.provenance ? { provenance: item.intent.provenance } : {}),
               },

@@ -12,6 +12,7 @@ import {
 
 /** 派生一条 summary 需要的、快照之外的会话级元信息（来自 session-store record / 事件时刻）。 */
 export interface SessionSummaryDeriveExtra {
+  projectId?: string;
   workspaceId: string;
   createdAt: number;
   lastActivityAt: number;
@@ -76,6 +77,7 @@ function deriveSessionSummary(
   return {
     sessionId: snapshot.sessionId,
     workspaceId: extra.workspaceId,
+    projectId: extra.projectId,
     ...(extra.parentSessionId ? { parentSessionId: extra.parentSessionId } : {}),
     title: snapshot.meta.title,
     titleSource: snapshot.meta.titleSource,
@@ -105,6 +107,7 @@ function summariesEqual(a: SessionSummary, b: SessionSummary): boolean {
   return (
     a.sessionId === b.sessionId &&
     a.workspaceId === b.workspaceId &&
+    a.projectId === b.projectId &&
     a.parentSessionId === b.parentSessionId &&
     a.title === b.title &&
     a.titleSource === b.titleSource &&

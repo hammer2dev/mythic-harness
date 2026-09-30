@@ -1,9 +1,11 @@
-import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
+import type { WorkspaceProjectDefinition } from "@zcode/shared";
+import { isWorkspaceProjectScope } from "@/lib/workspaceProject.js";
 
 interface WorkspaceShellTargetTab {
   workspacePath: string;
   remoteSessionId?: string;
   workspaceIdentity?: string;
+  project?: WorkspaceProjectDefinition;
 }
 
 interface RootWorkspaceShellTarget {
@@ -30,9 +32,20 @@ export function resolveRootWorkspaceShellTarget({
   workspaceTabs: readonly WorkspaceShellTargetTab[];
 }): RootWorkspaceShellTarget {
   if (activeWorkspaceTab) {
+    // 项目主目录可以变化；已打开的历史任务继续使用自身 cwd 和远端身份。
+    const activeScope = activeWorkspacePath
+      ? {
+          workspacePath: activeWorkspacePath,
+          workspaceIdentity: activeWorkspaceIdentity ?? undefined,
+        }
+      : null;
+    const target =
+      activeScope && isWorkspaceProjectScope(activeWorkspaceTab, activeScope)
+        ? activeScope
+        : activeWorkspaceTab;
     return {
-      workspaceShellPath: activeWorkspaceTab.workspacePath,
-      workspaceIdentity: normalizeOptionalString(activeWorkspaceTab.workspaceIdentity),
+      workspaceShellPath: target.workspacePath,
+      workspaceIdentity: normalizeOptionalString(target.workspaceIdentity),
       workspaceRemoteSessionId: normalizeOptionalString(activeWorkspaceTab.remoteSessionId),
     };
   }
@@ -48,10 +61,8 @@ export function resolveRootWorkspaceShellTarget({
   const coveredWorkspaceTab =
     activeWorkspacePath === null
       ? undefined
-      : workspaceTabs.find(
-          (tab) =>
-            buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity) ===
-            buildTaskWorkspaceKey(activeWorkspacePath, workspaceIdentity),
+      : workspaceTabs.find((tab) =>
+          isWorkspaceProjectScope(tab, { workspacePath: activeWorkspacePath, workspaceIdentity }),
         );
 
   return {

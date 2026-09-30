@@ -6,6 +6,7 @@ import { compareZCodeTaskListItems } from "@/lib/taskListOrdering.js";
 import { mergeTaskWithOptimisticMeta } from "@/lib/zcodeTaskMetaMerge.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { mergeTaskListMembershipFields } from "@/v4/taskListRowActivity.js";
+import { getWorkspaceProjectScopes } from "@/lib/workspaceProject.js";
 
 export interface WorkspaceOptimisticTaskOverlay {
   activeTaskId: string | null;
@@ -64,11 +65,12 @@ export function useWorkspaceTaskOptimisticOverlayByWorkspaceKey(
 ): Map<string, WorkspaceOptimisticTaskOverlay> {
   const workspaceScopeSignature = JSON.stringify(
     workspaceTabs
-      .map((tab) => ({
-        workspacePath: tab.workspacePath,
-        workspaceIdentity: tab.workspaceIdentity,
-        workspaceKey: buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity),
-      }))
+      .flatMap((tab) =>
+        getWorkspaceProjectScopes(tab).map((scope) => ({
+          ...scope,
+          workspaceKey: buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity),
+        })),
+      )
       .sort((left, right) => left.workspaceKey.localeCompare(right.workspaceKey)),
   );
   const workspaceScopes = useMemo(

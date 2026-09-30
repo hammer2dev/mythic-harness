@@ -1174,6 +1174,7 @@ export const zcodeTaskMetaSchema = z.object({
   workspacePath: nonEmptyStringSchema,
   workspaceIdentity: nonEmptyStringSchema.optional(),
   workspacePurpose: z.enum(["project", "conversation"]).optional(),
+  projectId: nonEmptyStringSchema.optional(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
   mode: zcodeTaskModeSchema,

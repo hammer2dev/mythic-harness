@@ -171,6 +171,7 @@ export type InputRouting = z.infer<typeof inputRoutingSchema>;
 
 // ── meta（会话级元信息：标题）。renameSession/自动标题落此。──
 export const sessionMetaStateSchema = z.object({
+  projectId: z.string().min(1).optional(),
   title: z.string(),
   // default = 未命名；generated = 模型自动生成；custom = 用户显式重命名（不再被自动标题覆盖）。
   titleSource: z.enum(["default", "generated", "custom"]),

@@ -51,6 +51,7 @@ export function decodeSessionRow(row: SessionRow): SessionInfo {
   return {
     id: row.id as SessionId,
     projectID: row.project_id as ProjectId,
+    workspaceProjectId: row.workspace_project_id ?? undefined,
     workspaceID: row.workspace_id ? (row.workspace_id as WorkspaceId) : undefined,
     parentID: row.parent_id ? (row.parent_id as SessionId) : undefined,
     traceID: row.trace_id ? (row.trace_id as TraceId) : undefined,

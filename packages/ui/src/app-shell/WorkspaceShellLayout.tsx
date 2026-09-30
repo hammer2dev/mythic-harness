@@ -281,6 +281,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   gitWorktreeChangeSummary,
   activeGitSourceId,
   gitState,
+  gitRepositorySelection,
   browserNavigationRequest,
   browserRestoreUrls,
   taskNativeSessionLogFile,
@@ -1238,7 +1239,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         />
         {activeWorkspacePurpose === "project" ? (
           <GitBranchSwitcher
-            workspacePath={workspaceAbsPath}
+            key={gitState.workspaceKey}
+            workspacePath={gitRepositorySelection.folder.workspacePath}
             gitSummary={gitState.summary}
             dirtyFileCount={gitDirtyFileCount}
             onRefreshGit={handleRefreshGit}
@@ -1260,6 +1262,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       activeWorkspacePurpose,
       gitDirtyFileCount,
       gitState.summary,
+      gitState.workspaceKey,
+      gitRepositorySelection.folder.workspacePath,
       handleRefreshGit,
       handleSelectConversationWorkspace,
       handleStartDraftInWorkspaceInChat,
@@ -1413,9 +1417,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       }
       openFileTreeRequest({
         target: {
-          workspacePath: workspaceAbsPath,
+          workspacePath: gitRepositorySelection.folder.workspacePath,
           workspaceName: projectName,
-          workspaceIdentity,
+          workspaceIdentity: gitRepositorySelection.folder.workspaceIdentity,
           workspaceRemoteSessionId,
           revealPath: path,
         },
@@ -1424,8 +1428,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     [
       openFileTreeRequest,
       projectName,
-      workspaceAbsPath,
-      workspaceIdentity,
+      gitRepositorySelection.folder.workspacePath,
+      gitRepositorySelection.folder.workspaceIdentity,
       workspaceRemoteSessionId,
       workspaceReadOnlyReason,
     ],
@@ -1469,6 +1473,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       activeTaskId={activeTaskId}
       sidePaneOwnerId={sidePaneOwnerId}
       gitState={gitState}
+      gitRepositorySelection={gitRepositorySelection}
       activeGitSourceId={activeGitSourceId}
       panelRef={sidePanePanelRef}
       panelElementRef={sidePanePanelElementRef}

@@ -40,6 +40,7 @@ export async function ensureContextInitialized(
     ? await this.contextSourcePort.resolveContextSources(
         {
           workingDirectory: this.workingDirectory,
+          projectDirectories: this.config.projectWorkspace?.directories,
           currentDate: this.config.currentDate,
           effectiveShellDisplayName: shellDisplayName,
           envInfo: this.config.envInfo,
@@ -116,6 +117,7 @@ export function createContextBuilderFromSnapshot(
       skillMetadataBudget: this.config.skillMetadataBudget,
       skills: this.skillLoadOutcome,
       userInstructions: this.config.subagentContext.userInstructions,
+      projectWorkspace: this.config.projectWorkspace,
     });
   }
 
@@ -127,6 +129,7 @@ export function createContextBuilderFromSnapshot(
     currentDate: snapshot.currentDate,
     userInstructions: snapshot.userInstructions,
     projectContext: snapshot.projectContext,
+    projectWorkspace: this.config.projectWorkspace,
     memoryIndexContent: options.memoryIndexContent,
     memoryRoot,
     skills: this.skillLoadOutcome,

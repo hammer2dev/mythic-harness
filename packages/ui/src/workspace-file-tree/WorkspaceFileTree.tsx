@@ -2,6 +2,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import {
 import {
   ArrowLeft,
   Copy,
+  ChevronRight,
   Ellipsis,
   FolderOpen,
   GitCommitVertical,
@@ -97,6 +99,7 @@ export function WorkspaceFileTree({
   onClose,
   onOpenBrowserUrl,
   onOpenPreview,
+  embedded,
 }: WorkspaceFileTreeProps) {
   const { intl } = useZCodeIntl();
   const platform = usePlatform();
@@ -105,7 +108,11 @@ export function WorkspaceFileTree({
   const pendingActivePreviewRevealPathRef = useRef<string | null>(null);
   const pendingSearchDirectoryRevealPathRef = useRef<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [fileSearchQuery, setFileSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
+  const fileSearchQuery = embedded?.searchQuery ?? localSearchQuery;
+  const setFileSearchQuery = embedded?.onSearchQueryChange ?? setLocalSearchQuery;
+  const rootExpanded = !embedded || embedded.expanded || fileSearchQuery.trim().length > 0;
+  const [scrollMargin, setScrollMargin] = useState(0);
   const [showChangedOnly, setShowChangedOnly] = useState(false);
   const [showScrollBottomMask, setShowScrollBottomMask] = useState(false);
   const [hasScrollableFileTree, setHasScrollableFileTree] = useState(false);
@@ -189,15 +196,32 @@ export function WorkspaceFileTree({
     treeData.rows,
   ]);
   const rowVirtualizer = useVirtualizer({
-    count: visibleRows.length,
-    getScrollElement: () => scrollRef.current,
+    count: rootExpanded ? visibleRows.length : 0,
+    getScrollElement: () => embedded?.scrollRef.current ?? scrollRef.current,
     estimateSize: () => WORKSPACE_FILE_TREE_VIRTUAL_ROW_HEIGHT_PX,
     overscan: 12,
+    scrollMargin: embedded ? scrollMargin : 0,
   });
+
+  useLayoutEffect(() => {
+    const scroll = embedded?.scrollRef.current;
+    const list = listRef.current;
+    if (!scroll || !list) return;
+    const updateMargin = () => {
+      setScrollMargin(
+        list.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop,
+      );
+    };
+    updateMargin();
+    const observer = new ResizeObserver(updateMargin);
+    observer.observe(scroll.firstElementChild ?? scroll);
+    for (const root of scroll.firstElementChild?.children ?? []) observer.observe(root);
+    return () => observer.disconnect();
+  }, [embedded?.scrollRef, rootExpanded, visibleRows.length]);
 
   useEffect(() => {
     setSelectedPath(null);
-    setFileSearchQuery("");
+    setLocalSearchQuery("");
     setShowChangedOnly(false);
   }, [workspaceIdentity, workspacePath]);
 
@@ -523,7 +547,7 @@ export function WorkspaceFileTree({
         }
       })();
     },
-    [treeData, workspacePath],
+    [setFileSearchQuery, treeData, workspacePath],
   );
   const handleDirectoryAction = useCallback(
     (row: WorkspaceFileTreeRow) => {
@@ -551,9 +575,21 @@ export function WorkspaceFileTree({
         // 即使未来有其它入口直接调用预览，也要在父级兜底阻止打开。
         return;
       }
-      onOpenPreview?.(createCodeViewerSourceForWorkspaceFile(row.path));
+      onOpenPreview?.({
+        ...createCodeViewerSourceForWorkspaceFile(row.path),
+        workspacePath,
+        workspaceIdentity,
+        workspaceRemoteSessionId,
+      });
     },
-    [handleDirectoryAction, onOpenPreview, treeData.gitStatusByPath],
+    [
+      handleDirectoryAction,
+      onOpenPreview,
+      treeData.gitStatusByPath,
+      workspacePath,
+      workspaceIdentity,
+      workspaceRemoteSessionId,
+    ],
   );
   const handleRowKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => {
@@ -578,14 +614,18 @@ export function WorkspaceFileTree({
   );
 
   const hasActiveFileTreeFilter = fileSearchQuery.trim().length > 0 || showChangedOnly;
-  const virtualItems = rowVirtualizer.getVirtualItems();
+  const virtualItems = rowVirtualizer
+    .getVirtualItems()
+    .map((item) =>
+      embedded ? { ...item, start: item.start - scrollMargin, end: item.end - scrollMargin } : item,
+    );
   const scrollOffset = rowVirtualizer.scrollOffset ?? 0;
   const stickyFolderItems = useWorkspaceFileTreeStickyFolders({
     rows: visibleRows,
     virtualItems,
     scrollDirection: rowVirtualizer.scrollDirection,
     scrollOffset,
-    enabled: hasScrollableFileTree && !hasFileSearchQuery,
+    enabled: !embedded && hasScrollableFileTree && !hasFileSearchQuery,
   });
   const handleRevealStickyFolderRow = useCallback(
     (item: WorkspaceFileTreeStickyFolderItem) =>
@@ -605,63 +645,86 @@ export function WorkspaceFileTree({
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col text-foreground"
-      data-testid={TID_WORKSPACE_FILE_TREE_PANEL}
+      className={cn("flex flex-col text-foreground", !embedded && "h-full min-h-0")}
+      data-testid={embedded ? undefined : TID_WORKSPACE_FILE_TREE_PANEL}
     >
-      <div className="px-2 pb-3 pt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          className="w-full justify-start gap-2 rounded-xl px-2.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground"
-          onClick={onClose}
-        >
-          <ArrowLeft className="size-4 shrink-0" />
-          <span className="min-w-0 truncate">
-            {intl.formatMessage({ id: "workspaceFileTree.backToTasks" })}
-          </span>
-        </Button>
-      </div>
-      <div className="flex shrink-0 items-center px-2 pb-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-foreground-subtlest" />
-          <Input
-            type="text"
-            size="default"
-            value={fileSearchQuery}
-            className="h-7 bg-transparent pl-7 pr-7 focus-visible:bg-input-focused"
-            placeholder={intl.formatMessage({
-              id: "workspaceFileTree.searchPlaceholder",
-            })}
-            aria-label={intl.formatMessage({
-              id: "workspaceFileTree.searchLabel",
-            })}
-            onChange={(event) => setFileSearchQuery(event.currentTarget.value)}
-          />
-          {fileSearchQuery.length > 0 ? (
+      {!embedded ? (
+        <>
+          <div className="px-2 pb-3 pt-3">
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
-              className="absolute right-1 top-1/2 -translate-y-1/2 text-foreground-subtlest hover:bg-surface-hover hover:text-foreground"
-              aria-label={intl.formatMessage({
-                id: "workspaceFileTree.clearSearch",
-              })}
-              title={intl.formatMessage({
-                id: "workspaceFileTree.clearSearch",
-              })}
-              onClick={() => setFileSearchQuery("")}
+              size="lg"
+              className="w-full justify-start gap-2 rounded-xl px-2.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground"
+              onClick={onClose}
             >
-              <X className="size-3" />
+              <ArrowLeft className="size-4 shrink-0" />
+              <span className="min-w-0 truncate">
+                {intl.formatMessage({ id: "workspaceFileTree.backToTasks" })}
+              </span>
             </Button>
-          ) : null}
-        </div>
-      </div>
+          </div>
+          <div className="flex shrink-0 items-center px-2 pb-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-foreground-subtlest" />
+              <Input
+                type="text"
+                size="default"
+                value={fileSearchQuery}
+                className="h-7 bg-transparent pl-7 pr-7 focus-visible:bg-input-focused"
+                placeholder={intl.formatMessage({
+                  id: "workspaceFileTree.searchPlaceholder",
+                })}
+                aria-label={intl.formatMessage({
+                  id: "workspaceFileTree.searchLabel",
+                })}
+                onChange={(event) => setFileSearchQuery(event.currentTarget.value)}
+              />
+              {fileSearchQuery.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-foreground-subtlest hover:bg-surface-hover hover:text-foreground"
+                  aria-label={intl.formatMessage({
+                    id: "workspaceFileTree.clearSearch",
+                  })}
+                  title={intl.formatMessage({
+                    id: "workspaceFileTree.clearSearch",
+                  })}
+                  onClick={() => setFileSearchQuery("")}
+                >
+                  <X className="size-3" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : null}
       <div className="flex shrink-0 items-center px-2 pb-2">
         <div className="flex min-w-0 flex-1 items-center gap-1">
-          <h3 className="min-w-0 truncate py-1 pr-0.5 pl-2.5 text-ui-base font-medium text-foreground-subtlest">
-            {workspaceTitle}
-          </h3>
+          {embedded ? (
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 text-left text-ui-base font-medium hover:bg-surface-hover"
+              title={workspacePath}
+              aria-expanded={rootExpanded}
+              onClick={embedded.onToggleExpanded}
+            >
+              <ChevronRight
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform",
+                  rootExpanded && "rotate-90",
+                )}
+              />
+              <FolderOpen className="size-3.5 shrink-0 text-foreground-subtle" />
+              <span className="truncate">{workspaceTitle}</span>
+            </button>
+          ) : (
+            <h3 className="min-w-0 truncate py-1 pr-0.5 pl-2.5 text-ui-base font-medium text-foreground-subtlest">
+              {workspaceTitle}
+            </h3>
+          )}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -733,61 +796,64 @@ export function WorkspaceFileTree({
           </Button>
         </ControlHintTooltip>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div
-          ref={scrollRef}
-          className="h-full min-h-0 overflow-auto px-1 px-2"
-          style={scrollContainerStyle}
-        >
-          <WorkspaceFileTreeStickyFolders
-            items={stickyFolderItems}
-            selectedPath={selectedPath}
-            gitStatusByPath={treeData.gitStatusByPath}
-            ignoredPathSet={treeData.ignoredPathSet}
-            gitStatusLabelByStatus={gitStatusLabelByStatus}
-            contextMenuLabels={fileContextMenuLabels}
-            editorState={editorState}
-            workspacePath={workspacePath}
-            workspaceIdentity={workspaceIdentity}
-            onSelect={setSelectedPath}
-            onToggleDirectory={handleToggleDirectory}
-            onRevealRow={handleRevealStickyFolderRow}
-            onOpenPreview={handleOpenPreview}
-            onOpenBrowserUrl={onOpenBrowserUrl}
-            onKeyDown={handleRowKeyDown}
-          />
-          <WorkspaceFileTreeList
-            rootError={hasFileSearchQuery ? searchIndexError : blockingRootError}
-            showInitialLoading={
-              showInitialLoading || (hasFileSearchQuery && searchIndexLoading && !searchIndexLoaded)
-            }
-            rows={visibleRows}
-            virtualItems={virtualItems}
-            listRef={handleListRef}
-            stickyFolderCount={stickyFolderItems.length}
-            totalSize={rowVirtualizer.getTotalSize()}
-            emptyTitle={intl.formatMessage({
-              id: hasActiveFileTreeFilter
-                ? "workspaceFileTree.noResults"
-                : "workspaceFileTree.empty",
-            })}
-            workspaceTitle={workspaceTitle}
-            workspacePath={workspacePath}
-            workspaceIdentity={workspaceIdentity}
-            selectedPath={selectedPath}
-            gitStatusByPath={treeData.gitStatusByPath}
-            ignoredPathSet={treeData.ignoredPathSet}
-            gitStatusLabelByStatus={gitStatusLabelByStatus}
-            contextMenuLabels={fileContextMenuLabels}
-            editorState={editorState}
-            onSelect={setSelectedPath}
-            onToggleDirectory={handleDirectoryAction}
-            onOpenPreview={handleOpenPreview}
-            onOpenBrowserUrl={onOpenBrowserUrl}
-            onKeyDown={handleRowKeyDown}
-          />
+      {rootExpanded ? (
+        <div className={cn("flex flex-col", !embedded && "min-h-0 flex-1")}>
+          <div
+            ref={scrollRef}
+            className={cn("px-2", !embedded && "h-full min-h-0 overflow-auto")}
+            style={embedded ? undefined : scrollContainerStyle}
+          >
+            <WorkspaceFileTreeStickyFolders
+              items={stickyFolderItems}
+              selectedPath={selectedPath}
+              gitStatusByPath={treeData.gitStatusByPath}
+              ignoredPathSet={treeData.ignoredPathSet}
+              gitStatusLabelByStatus={gitStatusLabelByStatus}
+              contextMenuLabels={fileContextMenuLabels}
+              editorState={editorState}
+              workspacePath={workspacePath}
+              workspaceIdentity={workspaceIdentity}
+              onSelect={setSelectedPath}
+              onToggleDirectory={handleToggleDirectory}
+              onRevealRow={handleRevealStickyFolderRow}
+              onOpenPreview={handleOpenPreview}
+              onOpenBrowserUrl={onOpenBrowserUrl}
+              onKeyDown={handleRowKeyDown}
+            />
+            <WorkspaceFileTreeList
+              rootError={hasFileSearchQuery ? searchIndexError : blockingRootError}
+              showInitialLoading={
+                showInitialLoading ||
+                (hasFileSearchQuery && searchIndexLoading && !searchIndexLoaded)
+              }
+              rows={visibleRows}
+              virtualItems={virtualItems}
+              listRef={handleListRef}
+              stickyFolderCount={stickyFolderItems.length}
+              totalSize={rowVirtualizer.getTotalSize()}
+              emptyTitle={intl.formatMessage({
+                id: hasActiveFileTreeFilter
+                  ? "workspaceFileTree.noResults"
+                  : "workspaceFileTree.empty",
+              })}
+              workspaceTitle={workspaceTitle}
+              workspacePath={workspacePath}
+              workspaceIdentity={workspaceIdentity}
+              selectedPath={selectedPath}
+              gitStatusByPath={treeData.gitStatusByPath}
+              ignoredPathSet={treeData.ignoredPathSet}
+              gitStatusLabelByStatus={gitStatusLabelByStatus}
+              contextMenuLabels={fileContextMenuLabels}
+              editorState={editorState}
+              onSelect={setSelectedPath}
+              onToggleDirectory={handleDirectoryAction}
+              onOpenPreview={handleOpenPreview}
+              onOpenBrowserUrl={onOpenBrowserUrl}
+              onKeyDown={handleRowKeyDown}
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

@@ -12,6 +12,7 @@ interface SidebarSectionsState extends SidebarSectionPreferences {
   renameSection: (id: string, name: string) => void;
   removeSection: (id: string) => void;
   moveProject: (workspaceKey: string, sectionId: string) => void;
+  migrateProjectKey: (projectId: string, legacyWorkspaceKeys: readonly string[]) => void;
   setSectionExpanded: (id: string, expanded: boolean) => void;
   setProjectSectionsExpanded: (expanded: boolean) => void;
   reorderSections: (activeId: string, overId: string) => void;
@@ -92,6 +93,16 @@ export function createSidebarSectionsStore(
           projectSectionByWorkspaceKey,
           expandedBySectionId: { ...get().expandedBySectionId, [sectionId]: true },
         });
+      },
+      migrateProjectKey(projectId, legacyWorkspaceKeys) {
+        const current = get().projectSectionByWorkspaceKey;
+        const legacyKeys = legacyWorkspaceKeys.filter((key) => key !== projectId && key in current);
+        if (legacyKeys.length === 0) return;
+        const projectSectionByWorkspaceKey = { ...current };
+        const sectionId = current[projectId] ?? current[legacyKeys[0]!];
+        for (const key of legacyKeys) delete projectSectionByWorkspaceKey[key];
+        if (sectionId) projectSectionByWorkspaceKey[projectId] = sectionId;
+        commit({ projectSectionByWorkspaceKey });
       },
       setSectionExpanded(id, expanded) {
         commit({ expandedBySectionId: { ...get().expandedBySectionId, [id]: expanded } });

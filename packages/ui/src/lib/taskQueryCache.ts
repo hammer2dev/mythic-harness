@@ -3,7 +3,7 @@ import type {
   ZCodeTaskListSortBy,
   ZCodeTaskListWorkspaceScope,
 } from "@zcode/services";
-import type { ZCodeTaskMeta } from "@zcode/shared";
+import type { ZCodeTaskMeta, WorkspaceProjectDefinition } from "@zcode/shared";
 import { resolveWorkspaceStateKey } from "@/store/zcodeSessionStoreSelectors.js";
 
 export type TaskEntityKey = string;
@@ -11,6 +11,8 @@ export type TaskListCacheKey = string;
 export type TaskListQueryKind = ZCodeTaskListKind | "workspace";
 
 export interface TaskListCacheDescriptor {
+  projectId?: string;
+  legacyWorkspaceKeys?: string[];
   kind: TaskListQueryKind;
   sortBy: ZCodeTaskListSortBy;
   search: string;
@@ -70,6 +72,7 @@ function normalizeTaskListSearch(search?: string): string {
 }
 
 export function buildTaskListCacheDescriptor(params: {
+  project?: WorkspaceProjectDefinition;
   kind: TaskListQueryKind;
   workspaceScopes: ZCodeTaskListWorkspaceScope[];
   sortBy: ZCodeTaskListSortBy;
@@ -83,6 +86,14 @@ export function buildTaskListCacheDescriptor(params: {
   );
 
   return {
+    ...(params.project
+      ? {
+          projectId: params.project.id,
+          legacyWorkspaceKeys: params.project.legacyWorkspaceScopes.map((scope) =>
+            buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity),
+          ),
+        }
+      : {}),
     kind: params.kind,
     sortBy: params.sortBy,
     search: normalizeTaskListSearch(params.search),
@@ -106,5 +117,6 @@ export function buildTaskListCacheKeyFromDescriptor(
     `limit=${descriptor.visibleLimit ?? "all"}`,
     `search=${descriptor.search}`,
     `workspaces=${workspaceSegment}`,
+    ...(descriptor.projectId ? [`project=${descriptor.projectId}`] : []),
   ].join("::");
 }

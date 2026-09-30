@@ -77,6 +77,7 @@ interface TaskIndexWriteRecord {
 }
 
 interface TaskIndexStatePatch {
+  projectId?: string;
   pinned?: boolean;
   archived?: boolean;
   deleted?: boolean;
@@ -866,7 +867,10 @@ export class TaskIndexRepo {
     workspacePath: string;
     workspaceIdentity?: string;
     taskId: string;
-    patch: Pick<TaskIndexStatePatch, "title" | "status" | "lastError" | "target" | "updatedAt">;
+    patch: Pick<
+      TaskIndexStatePatch,
+      "projectId" | "title" | "status" | "lastError" | "target" | "updatedAt"
+    >;
   }): Promise<ZCodeTaskMeta | null> {
     await this.ensureReady();
     return this.enqueueWrite(params, () => {
@@ -878,6 +882,7 @@ export class TaskIndexRepo {
       const canAcceptAgentTitle = row.title_overridden !== 1;
       const nextMeta: ZCodeTaskMeta = {
         ...current,
+        projectId: current.projectId ?? params.patch.projectId,
         title: canAcceptAgentTitle && params.patch.title ? params.patch.title : current.title,
         titleOverridden: row.title_overridden === 1,
         updatedAt: params.patch.updatedAt ?? current.updatedAt,

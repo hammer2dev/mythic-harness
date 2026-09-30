@@ -114,6 +114,28 @@ export const DEFAULT_LOCALE: Locale = "zh-CN";
 /** 标签页唯一标识 */
 export type TabId = string;
 
+/** 执行目录身份；项目 ID 独立于该身份，不替代真实工作目录。 */
+export interface WorkspaceProjectScope {
+  workspacePath: string;
+  workspaceIdentity?: string;
+}
+
+export interface WorkspaceProjectFolder extends WorkspaceProjectScope {
+  id: string;
+}
+
+/** 项目配置由窗口 tabStore 唯一持有，窗口会话持久化保存其快照。 */
+export interface WorkspaceProjectDefinition {
+  id: string;
+  name: string;
+  folders: WorkspaceProjectFolder[];
+  primaryFolderId: string;
+  /** 迁移前的单根目录，仅用于认领尚未写入 projectId 的历史任务。 */
+  legacyWorkspaceScopes: WorkspaceProjectScope[];
+  /** 历次任务主目录；从项目移除目录后仍可查询其历史任务。 */
+  taskWorkspaceScopes: WorkspaceProjectScope[];
+}
+
 /** 单个标签页的状态 */
 export interface TabState {
   id: TabId;
@@ -168,6 +190,7 @@ export interface RemoteWorkspaceSessionSnapshot {
   localWorkspacePath?: string;
   /** 远程 workspace 的稳定身份键（authority + canonicalPath）。 */
   workspaceIdentity?: string;
+  project?: WorkspaceProjectDefinition;
   /** 远程连接目标的可恢复快照 */
   target: RemoteTargetSnapshot;
   /** 最近一次成功打开该 workspace 的时间戳 */
@@ -181,6 +204,7 @@ export interface RemoteWorkspaceSessionSnapshot {
 export interface LocalWorkspaceSessionEntry {
   kind: "local";
   workspacePath: string;
+  project?: WorkspaceProjectDefinition;
   /** 项目展示分类；旧数据缺省为 project，conversation 仍使用真实 workspacePath 作为 cwd/key。 */
   workspacePurpose?: WorkspacePurpose;
 }
@@ -336,6 +360,8 @@ export interface AppSettings {
   proactiveSuggestionsEnabled?: boolean;
   /** 上次关闭时的完整 workspace 会话（含本地与远端 workspace） */
   lastWorkspaceSession?: PersistedWorkspaceSessionEntry[];
+  /** 已移除项目的可恢复配置；不包含连接凭据，也不删除历史任务。 */
+  closedWorkspaceProjects?: WorkspaceProjectDefinition[];
   /** 上次关闭时激活的 tab 索引 */
   lastActiveTabIndex?: number;
   /** 每个 workspace 的最后活跃 taskId，下次打开自动恢复 */

@@ -1,3 +1,4 @@
+import { latestProjectWorkspace } from "./project-workspace.js";
 import { restorePermissionGrantMarker } from "../helpers/permission-grant-resume.js";
 import { executionStateSchema, resolveExecutionState } from "@zcode/shared";
 import { SESSION_ENTRY_EXECUTION_STATE } from "@zcode/contracts";
@@ -88,6 +89,8 @@ export async function resumeFromStore(
     },
   });
 
+  this.config.workspaceProjectId = session.workspaceProjectId;
+
   const messages =
     options?.persistedMessages ??
     (await this.sessionStore.messages({
@@ -111,6 +114,14 @@ export async function resumeFromStore(
       sessionId: this.sessionId,
     });
   }
+  this.config.projectWorkspace = latestProjectWorkspace(
+    activeSessionMessages(messages, {
+      branchCutAfterMessageId,
+      rewindCreatedMessageId,
+      rewindKeptMessageIds,
+      rewindTargetMessageId,
+    }),
+  );
   const persistedEnvInfo = extractPersistedEnvInfo(messages);
   if (persistedEnvInfo) {
     this.config.envInfo = persistedEnvInfo;

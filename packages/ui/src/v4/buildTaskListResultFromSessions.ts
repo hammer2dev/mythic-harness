@@ -60,6 +60,7 @@ function mergeTaskIndexRowWithSession(
       : undefined;
   const merged: ZCodeTaskMeta = {
     ...taskIndexTask,
+    projectId: sessionTask.projectId ?? taskIndexTask.projectId,
     title: sessionTitleWins ? sessionTask.title : taskIndexTask.title,
     titleOverridden,
     // session activity 是创建/活动时间与终态的实时权威；task row 只在 summary 缺失时兜底。

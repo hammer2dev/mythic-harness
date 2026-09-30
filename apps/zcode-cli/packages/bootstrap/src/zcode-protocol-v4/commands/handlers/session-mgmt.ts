@@ -49,6 +49,7 @@ async function createSession(
   }
   const { sessionId } = await host.createSessionRecord({
     workspaceId: payload.workspaceId,
+    projectWorkspace: payload.projectWorkspace,
     mcpServers: payload.mcpServers,
     offPeakToolEnabled: payload.offPeakToolEnabled,
     dynamicWorkflowEnabled: payload.dynamicWorkflowEnabled,
@@ -87,6 +88,7 @@ async function createSession(
         payload.firstInput.attachments,
       );
       const intent = inputIntentMetadata(envelope, {
+        projectWorkspace: payload.projectWorkspace,
         text: payload.firstInput.text,
         requestedDelivery: "startNow",
         attachmentRefs: payload.firstInput.attachments,

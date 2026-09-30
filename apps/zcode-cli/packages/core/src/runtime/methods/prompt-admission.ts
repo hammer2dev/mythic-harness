@@ -1,3 +1,4 @@
+import { bindWorkspaceProject, usesCurrentProjectWorkspace } from "./project-workspace.js";
 import { createChildTraceContext, createQueryId, createTurnId } from "../deps.js";
 import type { QueryId, TurnInputIntentMetadata } from "../deps.js";
 import type { PromptRuntimeCommand } from "../command-queue.js";
@@ -23,6 +24,8 @@ export async function admitPrompt(
   attachments?: Parameters<AgentRuntimeInternal["executeTurn"]>[1],
   options?: PromptAdmissionOptions,
 ): Promise<PromptAdmissionReceipt> {
+  await bindWorkspaceProject(this, options?.intent?.projectWorkspace);
+  const sameProjectWorkspace = usesCurrentProjectWorkspace(this, options?.intent?.projectWorkspace);
   const promotionLeaseOnly =
     options?.requireIdle === true &&
     this.foregroundPromotionLease !== undefined &&
@@ -42,7 +45,9 @@ export async function admitPrompt(
     }
 
     const activeTurn = this.activeTurn;
+    // 修改目录后不能把新配置 guide 到运行中的旧轮次，改为下一轮消费固定快照。
     const canSteer =
+      sameProjectWorkspace &&
       attachments === undefined &&
       activeTurn?.steerable === true &&
       (options?.queueDelivery === "guide" ||
@@ -67,7 +72,9 @@ export async function admitPrompt(
     }
 
     const delivery =
-      options?.queueDelivery === "guide" && attachments === undefined ? "guide" : "queue";
+      sameProjectWorkspace && options?.queueDelivery === "guide" && attachments === undefined
+        ? "guide"
+        : "queue";
     return await this.enqueueDeferredInput({
       attachments,
       commandKind: options?.commandKind,

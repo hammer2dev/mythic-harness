@@ -3336,6 +3336,12 @@ async function createRecord(
       // automation 执行会话显式关闭二次命名，避免回答内容覆盖原始用户 query 标题。
       titleGeneration: params.titleGenerationEnabled === false ? { enabled: false } : {},
       workingDirectory: workspace.workspacePath,
+      ...("projectWorkspace" in params && params.projectWorkspace
+        ? {
+            workspaceProjectId: params.projectWorkspace.projectId,
+            projectWorkspace: params.projectWorkspace,
+          }
+        : {}),
       // 身份隔离与路径执行分开：core 只把 identity 写入 session.workspace_id，
       // workingDirectory 仍是远端机器上的实际路径；本地 workspace 保持 undefined。
       workspaceIdentity: workspace.workspaceIdentity as WorkspaceId | undefined,

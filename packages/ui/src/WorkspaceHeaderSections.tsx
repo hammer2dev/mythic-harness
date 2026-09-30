@@ -443,6 +443,11 @@ export function WorkspaceHeaderTitleSection({
                   <GitBranch className="size-4 shrink-0" />
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                     {workspaceBranchLabel}
+                    {gitSummary.workspacePath !== workspaceAbsPath ? (
+                      <span className="mt-1 block break-all font-mono text-ui-sm text-foreground-subtle">
+                        {gitSummary.workspacePath}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
               ) : null}
