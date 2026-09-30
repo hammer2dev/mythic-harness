@@ -1,4 +1,5 @@
 import { CalendarDays } from "lucide-react";
+import appLogoUrl from "@/assets/app-logo.png";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -12,8 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox.js";
 import { Progress } from "@/components/ui/progress.js";
 import type { IntlInstance } from "@/i18n/IntlProvider.js";
 import type { UpdateStatusDialogPhase } from "@/updateStatusModel.js";
-
-const macosDockIconUrl = new URL("../../../public/icon_512@2x.png", import.meta.url).href;
 
 type LocalizedUpdateReleaseNotes = {
   markdown: string;
@@ -105,7 +104,7 @@ export function UpdateStatusDialog({
       <DialogHeader className="gap-0">
         <div className="flex min-w-0 items-center gap-3 [app-region:no-drag]">
           <img
-            src={macosDockIconUrl}
+            src={appLogoUrl}
             alt=""
             aria-hidden="true"
             className="pointer-events-none -ml-[5px] size-12 shrink-0 select-none shadow-none drop-shadow-none"
