@@ -193,7 +193,7 @@ export function useWorkspaceSessionsIndexItems(
     metas.sort((a, b) => compareZCodeTaskListItems(a, b, "updated"));
     // 每个 tick 都全量重建 metas，即使内容完全没变（例如冷恢复把 seed 换成
     // live 投影只改了列表不消费的 preview 字段），下游也会把"全新数组引用"当成新数据：
-    // grouped 视图整树 refresh、workspace 行缓存被 invalidate、各列表 republish——
+    // workspace 行缓存被 invalidate、各列表 republish——
     // 表现为"打开一个历史任务，左侧列表整个重新加载"。这里做逐条引用稳定化：
     // 内容等价复用旧对象；整表等价复用旧数组，让依赖数组身份的 effect 全部短路。
     const items = stabilizeTaskListItems(previousItemsRef.current, metas);

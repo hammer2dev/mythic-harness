@@ -232,8 +232,6 @@ export function useRootWorkspaceActions({
 
       setWorkspaceActionError(null);
       const provider = typeof request === "string" ? request : request?.provider;
-      const groupedDraftPlacement =
-        typeof request === "string" ? undefined : request?.groupedDraftPlacement;
       const rawInitialPrompt = typeof request === "string" ? undefined : request?.initialPrompt;
       // Skill mention 后的尾空格决定光标落在 chip 之后；直接 trim 后再保存
       // 会把结构化 mention 的可编辑间隔吞掉。这里只用 trim 判空，非空草稿保留调用方原文。
@@ -252,7 +250,6 @@ export function useRootWorkspaceActions({
           provider,
           newTaskTarget.workspaceIdentity ?? undefined,
           {
-            groupedDraftPlacement,
             createSource: typeof request === "string" ? undefined : request?.createSource,
           },
         );

@@ -58,7 +58,7 @@ function getTaskInteractionBadgePresentation(
   return { kind: "userInput", countdownProgress: progress, canSnooze: true };
 }
 
-/** 普通、timeline、grouped task row 共用的阻塞交互胶囊。 */
+/** 项目与时间列表任务行共用的阻塞交互胶囊。 */
 export function TaskInteractionBadge({
   interaction,
   legacyPending = false,

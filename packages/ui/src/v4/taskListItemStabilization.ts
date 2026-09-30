@@ -2,7 +2,7 @@
 //
 // sessions-index / Controller tasks-index 每个内容帧都会全量重建 ZCodeTaskMeta[]，
 // 即使内容完全没变（例如只改了列表不消费的 activity 时间戳）。下游把「全新数组引用」当成新数据：
-// grouped 视图整树 refresh、虚拟器重测量、workspace 行缓存被 invalidate——表现为
+// 列表整树 refresh、虚拟器重测量、workspace 行缓存被 invalidate——表现为
 // 「右侧输出 tool 结果时左侧列表整个重新加载」。这里做逐条引用稳定化：内容等价复用旧对象；
 // 整表等价复用旧数组，让依赖数组/元素身份的 memo 与 effect 全部短路。
 import type { ZCodeTaskMeta } from "@zcode/shared";

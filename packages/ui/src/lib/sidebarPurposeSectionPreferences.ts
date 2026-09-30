@@ -1,128 +1,99 @@
-interface StorageLike {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
+import type { BrowserStorageLike } from "./browserEnvironment.js";
+import { logger } from "../logger.js";
+
+export interface SidebarSection {
+  id: string;
+  name: string;
+}
+export interface SidebarSectionPreferences {
+  sections: SidebarSection[];
+  sectionOrder: string[];
+  projectSectionByWorkspaceKey: Record<string, string>;
+  expandedBySectionId: Record<string, boolean>;
 }
 
-interface SidebarPurposeSectionPreferences {
-  projectsExpanded: boolean;
-  conversationsExpanded: boolean;
-  sectionOrder: SidebarPurposeSectionId[];
-}
+const STORAGE_KEY = "zcode-sidebar-project-sections";
+const LEGACY_STORAGE_KEY = "zcode-sidebar-purpose-section-preferences";
+const BUILTIN_IDS = ["projects", "conversations"];
 
-const SIDEBAR_PURPOSE_SECTION_IDS = ["projects", "conversations"] as const;
-
-type SidebarPurposeSectionId = (typeof SIDEBAR_PURPOSE_SECTION_IDS)[number];
-
-const SIDEBAR_PURPOSE_SECTION_PREFERENCES_STORAGE_KEY = "zcode-sidebar-purpose-section-preferences";
-
-const DEFAULT_SIDEBAR_PURPOSE_SECTION_PREFERENCES: SidebarPurposeSectionPreferences = {
-  projectsExpanded: true,
-  conversationsExpanded: true,
-  sectionOrder: [...SIDEBAR_PURPOSE_SECTION_IDS],
-};
-
-function getBrowserStorage(): StorageLike | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function getDefaultPreferences(): SidebarPurposeSectionPreferences {
+function defaultPreferences(): SidebarSectionPreferences {
   return {
-    ...DEFAULT_SIDEBAR_PURPOSE_SECTION_PREFERENCES,
-    sectionOrder: [...DEFAULT_SIDEBAR_PURPOSE_SECTION_PREFERENCES.sectionOrder],
+    sections: [],
+    sectionOrder: [...BUILTIN_IDS],
+    projectSectionByWorkspaceKey: {},
+    expandedBySectionId: {},
   };
 }
 
-function normalizeSectionOrder(value: unknown): SidebarPurposeSectionId[] {
-  if (!Array.isArray(value) || value.length !== SIDEBAR_PURPOSE_SECTION_IDS.length) {
-    return [...SIDEBAR_PURPOSE_SECTION_IDS];
-  }
-
-  const sectionIds = new Set(value);
-  if (
-    sectionIds.size !== SIDEBAR_PURPOSE_SECTION_IDS.length ||
-    SIDEBAR_PURPOSE_SECTION_IDS.some((sectionId) => !sectionIds.has(sectionId))
-  ) {
-    return [...SIDEBAR_PURPOSE_SECTION_IDS];
-  }
-
-  return value as SidebarPurposeSectionId[];
-}
-
-export function reorderSidebarPurposeSections(
-  sectionOrder: readonly SidebarPurposeSectionId[],
-  activeSectionId: string,
-  overSectionId: string,
-): SidebarPurposeSectionId[] {
-  const currentOrder = normalizeSectionOrder(sectionOrder);
-  const activeIndex = currentOrder.indexOf(activeSectionId as SidebarPurposeSectionId);
-  const overIndex = currentOrder.indexOf(overSectionId as SidebarPurposeSectionId);
-  if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
-    return currentOrder;
-  }
-
-  const nextOrder = [...currentOrder];
-  const activeSection = nextOrder[activeIndex];
-  if (!activeSection) {
-    return currentOrder;
-  }
-  nextOrder.splice(activeIndex, 1);
-  nextOrder.splice(overIndex, 0, activeSection);
-  return nextOrder;
-}
-
-export function readSidebarPurposeSectionPreferences(
-  storage: StorageLike | null = getBrowserStorage(),
-): SidebarPurposeSectionPreferences {
+export function readSidebarSectionPreferences(
+  storage: BrowserStorageLike | null,
+): SidebarSectionPreferences {
   try {
-    const rawValue = storage?.getItem(SIDEBAR_PURPOSE_SECTION_PREFERENCES_STORAGE_KEY);
-    if (!rawValue) {
-      return getDefaultPreferences();
+    const raw = storage?.getItem(STORAGE_KEY);
+    if (!raw) {
+      const legacyRaw = storage?.getItem(LEGACY_STORAGE_KEY);
+      if (!legacyRaw) return defaultPreferences();
+      const legacy = JSON.parse(legacyRaw);
+      return {
+        ...defaultPreferences(),
+        sectionOrder:
+          Array.isArray(legacy.sectionOrder) && legacy.sectionOrder[0] === "conversations"
+            ? ["conversations", "projects"]
+            : [...BUILTIN_IDS],
+        expandedBySectionId: {
+          projects: legacy.projectsExpanded !== false,
+          conversations: legacy.conversationsExpanded !== false,
+        },
+      };
     }
-
-    const parsed: unknown = JSON.parse(rawValue);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return getDefaultPreferences();
-    }
-
-    const value = parsed as Partial<SidebarPurposeSectionPreferences>;
+    const saved = JSON.parse(raw);
+    if (saved.version !== 1 || !Array.isArray(saved.sections)) return defaultPreferences();
+    const ids = new Set(BUILTIN_IDS);
+    const sections = saved.sections.filter((section: SidebarSection) => {
+      if (!section || typeof section.id !== "string" || typeof section.name !== "string")
+        return false;
+      if (!section.name.trim() || ids.has(section.id)) return false;
+      ids.add(section.id);
+      return true;
+    }) as SidebarSection[];
+    const sectionOrder = [
+      ...new Set<string>(
+        (Array.isArray(saved.sectionOrder) ? saved.sectionOrder : []).filter((id: string) =>
+          ids.has(id),
+        ),
+      ),
+    ];
+    for (const id of ids) if (!sectionOrder.includes(id)) sectionOrder.push(id);
     return {
-      projectsExpanded:
-        typeof value.projectsExpanded === "boolean"
-          ? value.projectsExpanded
-          : DEFAULT_SIDEBAR_PURPOSE_SECTION_PREFERENCES.projectsExpanded,
-      conversationsExpanded:
-        typeof value.conversationsExpanded === "boolean"
-          ? value.conversationsExpanded
-          : DEFAULT_SIDEBAR_PURPOSE_SECTION_PREFERENCES.conversationsExpanded,
-      sectionOrder: normalizeSectionOrder(value.sectionOrder),
+      sections,
+      sectionOrder,
+      projectSectionByWorkspaceKey: Object.fromEntries(
+        Object.entries(saved.projectSectionByWorkspaceKey ?? {}).filter(
+          ([, id]) => typeof id === "string" && !BUILTIN_IDS.includes(id) && ids.has(id),
+        ),
+      ) as Record<string, string>,
+      expandedBySectionId: Object.fromEntries(
+        Object.entries(saved.expandedBySectionId ?? {}).filter(
+          ([id, expanded]) => ids.has(id) && typeof expanded === "boolean",
+        ),
+      ) as Record<string, boolean>,
     };
   } catch {
-    return getDefaultPreferences();
+    return defaultPreferences();
   }
 }
 
-export function persistSidebarPurposeSectionPreferences(
-  preferences: SidebarPurposeSectionPreferences,
-  storage: StorageLike | null = getBrowserStorage(),
-) {
+export function persistSidebarSectionPreferences(
+  preferences: SidebarSectionPreferences,
+  storage: BrowserStorageLike | null,
+): void {
+  if (!storage) {
+    logger.warn("[sidebarSections] 本端存储不可用，项目分区仅在当前页面保留");
+    return;
+  }
   try {
-    storage?.setItem(
-      SIDEBAR_PURPOSE_SECTION_PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        projectsExpanded: preferences.projectsExpanded,
-        conversationsExpanded: preferences.conversationsExpanded,
-        sectionOrder: normalizeSectionOrder(preferences.sectionOrder),
-      }),
-    );
-  } catch {
-    // 受限 WebView 或隐私模式可能禁止写 localStorage；偏好写入失败不能阻断侧栏交互。
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, ...preferences }));
+  } catch (error) {
+    logger.warn("[sidebarSections] 无法保存本端项目分区", error);
   }
 }

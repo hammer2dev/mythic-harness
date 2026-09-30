@@ -5,13 +5,11 @@ import { buildTaskEntityKey, buildTaskWorkspaceKey } from "@/lib/taskQueryCache.
 import { compareZCodeTaskListItems } from "@/lib/taskListOrdering.js";
 import { mergeTaskWithOptimisticMeta } from "@/lib/zcodeTaskMetaMerge.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import type { GroupedDraftTaskState } from "@/store/zcodeSessionStoreTypes.js";
 import { mergeTaskListMembershipFields } from "@/v4/taskListRowActivity.js";
 
 export interface WorkspaceOptimisticTaskOverlay {
   activeTaskId: string | null;
   tasks: ZCodeTaskMeta[];
-  promotedGroupedDraftTaskByTaskId: Record<string, GroupedDraftTaskState>;
 }
 
 type WorkspaceTaskListSortBy = "created" | "updated";
@@ -90,7 +88,6 @@ export function useWorkspaceTaskOptimisticOverlayByWorkspaceKey(
           workspaceState.activeTaskId,
           Object.values(workspaceState.optimisticTaskListByTaskId)
             .map((task) => {
-              const promotedDraft = workspaceState.promotedGroupedDraftTaskByTaskId[task.taskId];
               return [
                 task.taskId,
                 task.title,
@@ -100,9 +97,6 @@ export function useWorkspaceTaskOptimisticOverlayByWorkspaceKey(
                 task.unreadAt,
                 task.provider,
                 task.model,
-                promotedDraft?.createdAt,
-                promotedDraft?.placement.type,
-                promotedDraft?.placement.type === "group" ? promotedDraft.placement.groupId : null,
               ];
             })
             .sort(([leftTaskId], [rightTaskId]) =>
@@ -127,7 +121,6 @@ export function useWorkspaceTaskOptimisticOverlayByWorkspaceKey(
           {
             activeTaskId: workspaceState.activeTaskId,
             tasks: Object.values(workspaceState.optimisticTaskListByTaskId),
-            promotedGroupedDraftTaskByTaskId: workspaceState.promotedGroupedDraftTaskByTaskId,
           },
         ];
       }),

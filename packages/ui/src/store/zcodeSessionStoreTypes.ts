@@ -43,16 +43,6 @@ export interface WorkspaceInitState {
   attempts: number;
 }
 
-export type GroupedDraftTaskPlacement = { type: "top" } | { type: "group"; groupId: string };
-
-export interface GroupedDraftTaskState {
-  draftId: string;
-  workspacePath: string;
-  workspaceIdentity?: string;
-  placement: GroupedDraftTaskPlacement;
-  createdAt: number;
-}
-
 export interface TaskRuntimeState {
   status: ZCodeTaskRuntimeStatus;
   error: string | null;
@@ -187,12 +177,8 @@ export interface WorkspaceZCodeUIState {
   taskUnreadByTaskId: Record<string, boolean>;
   /** 任务列表的乐观元数据，解决新 task 落盘前左侧列表显示慢半拍的问题 */
   optimisticTaskListByTaskId: Record<string, ZCodeTaskMeta>;
-  /** grouped mode 下点击 New task 后的 UI-only 草稿锚点，不进入真实 task index。 */
-  groupedDraftTask: GroupedDraftTaskState | null;
   /** 用户发起当前草稿的入口；预热不改变来源。 */
   draftCreateSource: SessionCreateSource;
-  /** 首发创建后、grouped sqlite order 落地前，真实 task 继承草稿锚点的本地定位。 */
-  promotedGroupedDraftTaskByTaskId: Record<string, GroupedDraftTaskState>;
   /** 当前 workspace 选中的 ZCode Agent provider */
   selectedProvider: ZCodeProvider;
   /** 当前模型供应商选中键（native/custom/ghost） */
@@ -221,17 +207,6 @@ export interface ZCodeSessionStoreState {
   getWorkspaceState: (workspacePath: string, workspaceIdentity?: string) => WorkspaceZCodeUIState;
 
   setActiveTaskId: (workspacePath: string, id: string | null, workspaceIdentity?: string) => void;
-  promoteGroupedDraftTask: (
-    workspacePath: string,
-    taskId: string,
-    draft: GroupedDraftTaskState,
-    workspaceIdentity?: string,
-  ) => void;
-  clearPromotedGroupedDraftTask: (
-    workspacePath: string,
-    taskId: string,
-    workspaceIdentity?: string,
-  ) => void;
   setDraftSessionId: (
     workspacePath: string,
     sessionId: string | null,
@@ -265,11 +240,9 @@ export interface ZCodeSessionStoreState {
     provider?: ZCodeProvider,
     workspaceIdentity?: string,
     options?: {
-      groupedDraftPlacement?: GroupedDraftTaskPlacement;
       createSource?: SessionCreateSource;
     },
   ) => void;
-  clearGroupedDraftTask: (workspacePath: string, workspaceIdentity?: string) => void;
   bindRuntimeProvider: (
     workspacePath: string,
     provider: ZCodeProvider,
@@ -533,9 +506,7 @@ export function createDefaultWorkspaceState(
     taskConfigOptionsStatusByTaskId: {},
     taskUnreadByTaskId: {},
     optimisticTaskListByTaskId: {},
-    groupedDraftTask: null,
     draftCreateSource: "session",
-    promotedGroupedDraftTaskByTaskId: {},
     selectedProvider,
     selectedSupplierKey: buildNativeSupplierKey(selectedProvider),
     isGhostSupplier: false,

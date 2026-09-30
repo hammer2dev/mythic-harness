@@ -320,7 +320,7 @@ export interface ZCodeTaskMeta {
   /**
    * 闲时任务身份标记：该 session/幻影行属于哪条 off-peak 任务。
    * 与 cronAutomationId 是兄弟标记（闲时不复用 cron 标记）；行 id = 创建时
-   * 预分配的 sessionId，标记从创建到运行恒定，供月亮图标与系统分组归属使用。
+   * 预分配的 sessionId，标记从创建到运行恒定，供月亮图标与自动化关联使用。
    */
   offPeakTaskId?: string;
   /** fork 产物保留来源 taskId，供 UI 做本地化标题兜底和后续追溯。 */

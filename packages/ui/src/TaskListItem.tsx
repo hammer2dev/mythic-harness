@@ -45,7 +45,7 @@ import { isWorkspaceReadOnly } from "@/store/tabStore.js";
 import { TaskTitleOverflowText } from "@/components/TaskTitleOverflowText.js";
 import { createTaskWorkbenchDragPreview } from "@/lib/taskWorkbenchDragPreview.js";
 import { runUserAction } from "@/lib/userActionTelemetry.js";
-import { TaskRowActionButton } from "@/workspace-grouped-tasks/task-row-action-button.js";
+import { TaskRowActionButton } from "@/TaskRowActionButton.js";
 import { TaskWorkflowRunLines } from "@/components/workflow-run-line/TaskWorkflowRunLines.js";
 
 type TaskListItemIntl = {
@@ -276,7 +276,7 @@ export const MemoTaskItem = memo(function TaskListItem({
       );
       event.dataTransfer.setData("text/plain", taskTitle);
       // 浏览器默认 drag preview 背景透明、边界不清晰；保留原行内容，
-      // 只补齐 Grouped drag overlay 使用的背景、边框和阴影。
+      // 补齐浮层使用的背景、边框和阴影。
       const cleanupDragPreview = createTaskWorkbenchDragPreview({
         clientX: event.clientX,
         clientY: event.clientY,
@@ -468,8 +468,7 @@ export const MemoTaskItem = memo(function TaskListItem({
     !hasPendingInteraction &&
     (shouldMountWorkspaceTaskActions || isMobileActive) ? (
       <span className="inline-flex shrink-0">
-        {/* Pinned 文件树按钮曾手写 hover 背景和 tooltip，导致与 Grouped task
-            的同一操作视觉不一致。直接复用共享 action，统一 bg-hover、尺寸和 pointer 行为。 */}
+        {/* 文件树入口复用共享 action，统一 bg-hover、尺寸和 pointer 行为。 */}
         <TaskRowActionButton
           label={intl.formatMessage({ id: "git.action.showTree" })}
           onClick={handleOpenFileTree}
@@ -623,8 +622,7 @@ export const MemoTaskItem = memo(function TaskListItem({
               className="text-ui-base text-foreground"
               title={taskTitleWithChanges}
             >
-              {/* workspace/timeline task 标题之前使用 truncate，会在长标题末尾显示省略号；
-                      grouped task 已改为右侧渐隐。这里统一 task 列表标题溢出策略，避免同一侧栏里出现两种截断语义。 */}
+              {/* workspace/timeline task 统一使用右侧渐隐表达长标题溢出。 */}
               {taskTitle}
             </TaskTitleOverflowText>
             {task.pendingInteraction ? (
@@ -662,7 +660,7 @@ export const MemoTaskItem = memo(function TaskListItem({
                   ) : null}
                   {isTaskCron ? (
                     // 定时任务 icon 不能占用左侧状态槽；未读、运行中、置顶 hover 都会接管那里。
-                    // 放在时间前面，和 grouped task row 的元信息位置一致，状态变化时也不会丢。
+                    // 放在时间前面的元信息区，状态变化时仍能识别定时任务。
                     <Clock
                       data-cron-task-icon="true"
                       aria-label={intl.formatMessage({
@@ -715,8 +713,7 @@ export const MemoTaskItem = memo(function TaskListItem({
                 className="text-ui-base text-foreground"
                 title={taskTitleWithChanges}
               >
-                {/* 默认 workspace task item 和 timeline item 共享标题溢出规则；
-                        使用 mask 渐隐而不是省略号，和 grouped task row 保持一致。 */}
+                {/* workspace task item 和 timeline item 共享标题渐隐规则。 */}
                 {taskTitle}
               </TaskTitleOverflowText>
               {changeSummaryNode ? (

@@ -112,7 +112,6 @@ import {
   useConversationShareSelectionStore,
   type ConversationShareDisplayWarnings,
 } from "@/store/conversationShareSelectionStore.js";
-import type { GroupedDraftTaskState } from "@/store/zcodeSessionStoreTypes.js";
 import {
   ConversationComposer,
   type ComposerRestoreRequest,
@@ -1294,7 +1293,6 @@ export function SessionPane({
   );
   const codingPlanUpgradeDialog = useOptionalCodingPlanUpgradeDialog();
   const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
-  const promoteGroupedDraftTask = useZCodeSessionStore((state) => state.promoteGroupedDraftTask);
   // 首发 commandId 在 accepted 时已存在，也是 completion 的 message_id；不必等回复完成。
   const reportDraftCreated = useCallback(
     (createdSessionId: string, source: SessionCreateSource, messageId: string) => {
@@ -1311,16 +1309,12 @@ export function SessionPane({
     [platform, workspacePath, workspaceIdentity, remoteSessionId, isDesktop],
   );
   const handleDraftSessionCreated = useCallback(
-    (
-      createdSessionId: string,
-      groupedDraftTask: GroupedDraftTaskState | null | undefined,
-      createSource?: SessionCreateSource,
-      messageId?: string,
-    ) => {
+    (createdSessionId: string, createSource?: SessionCreateSource, messageId?: string) => {
       if (messageId) {
         reportDraftCreated(
           createdSessionId,
-          createSource ?? (groupedDraftTask ? "group" : "session"),
+          // 旧待确认命令可能保留已退役的分组来源，恢复时归入独立任务入口。
+          createSource === "project" ? "project" : "session",
           messageId,
         );
       }
@@ -1330,30 +1324,9 @@ export function SessionPane({
       // 再次显式打开同一 Session 时标记会清除，恢复正常的已有 Session 打开测量。
       newlyCreatedSessionIdRef.current = createdSessionId;
       promoteComposerDraft(createdSessionId);
-      // 只有 draft create/promote 的 accepted 边界能继承 grouped placement。
-      // fork 和普通任务导航仍复用 onSessionCreated，但不会污染已有 task 的分组排序。
-      if (groupedDraftTask) {
-        promoteGroupedDraftTask(
-          workspacePath,
-          createdSessionId,
-          groupedDraftTask,
-          workspaceIdentity,
-        );
-        logger.debug("[v4-pane] grouped draft 已显式提升", {
-          createdSessionId,
-          draftId: groupedDraftTask.draftId,
-        });
-      }
       onSessionCreated?.(createdSessionId);
     },
-    [
-      reportDraftCreated,
-      onSessionCreated,
-      promoteComposerDraft,
-      promoteGroupedDraftTask,
-      workspaceIdentity,
-      workspacePath,
-    ],
+    [reportDraftCreated, onSessionCreated, promoteComposerDraft],
   );
   const { settings: sharedSettings } = useSettings();
   const readPlanIdentitySnapshot = usePlanIdentitySnapshot(
@@ -1420,11 +1393,6 @@ export function SessionPane({
       });
       onEnvelopeCreated?.(envelope);
       // 必须早于第一次上行：transport error/renderer refresh 后仍有可查询线索。
-      const groupedDraftTask =
-        type === "createSession"
-          ? useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
-              .groupedDraftTask
-          : null;
       pendingCommandRegistry.record(
         envelope,
         type === "createSession"
@@ -1433,7 +1401,6 @@ export function SessionPane({
                 workspacePath,
                 ...(workspaceIdentity ? { workspaceIdentity } : {}),
               },
-              ...(groupedDraftTask ? { groupedDraftTask } : {}),
               sessionCreateSource:
                 sessionCreateSource ??
                 useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
@@ -2567,13 +2534,6 @@ export function SessionPane({
         // 命令只负责配置 shortcut；后续必须走普通 sendText，不能进入 goal/compact command 分支。
         slashCommand = null;
       }
-      // create/send ACK 期间用户可能切换任务或创建另一份 draft。
-      // placement 必须绑定发送开始时的稳定 identity，不能在完成回调里读取当前 workspace 草稿。
-      const groupedDraftTaskAtSend =
-        sessionId === null
-          ? useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
-              .groupedDraftTask
-          : null;
       const selectionSideSlashCommand =
         sessionId && (appSlashCommands?.length ?? 0) > 0
           ? parseSelectionSideSlashCommand(text, readyAttachments, {
@@ -2687,11 +2647,7 @@ export function SessionPane({
             if (consumed) {
               onAcceptedSelection?.();
               prewarm.promote();
-              handleDraftSessionCreated(
-                prewarm.sessionId,
-                groupedDraftTaskAtSend,
-                createSourceAtSend,
-              );
+              handleDraftSessionCreated(prewarm.sessionId, createSourceAtSend);
               return;
             }
           } catch (error) {
@@ -2721,7 +2677,7 @@ export function SessionPane({
           throw new Error("createSession 缺少 sessionId");
         }
         const newSessionId = createResult.sessionId;
-        handleDraftSessionCreated(newSessionId, groupedDraftTaskAtSend, createSourceAtSend);
+        handleDraftSessionCreated(newSessionId, createSourceAtSend);
         await dispatchSlashCommand(
           draftSlashCommand,
           newSessionId,
@@ -2754,12 +2710,7 @@ export function SessionPane({
             );
             if (ack.status === "accepted") {
               prewarm.promote();
-              handleDraftSessionCreated(
-                prewarm.sessionId,
-                groupedDraftTaskAtSend,
-                createSourceAtSend,
-                ack.commandId,
-              );
+              handleDraftSessionCreated(prewarm.sessionId, createSourceAtSend, ack.commandId);
               return;
             }
             // failed ACK 也可能发生在 runtime 已启动、但 TurnStarted projection commit
@@ -2811,12 +2762,7 @@ export function SessionPane({
           if (!result || result.type !== "createSession") {
             throw new Error("createSession 缺少 sessionId");
           }
-          handleDraftSessionCreated(
-            result.sessionId,
-            groupedDraftTaskAtSend,
-            createSourceAtSend,
-            ack.commandId,
-          );
+          handleDraftSessionCreated(result.sessionId, createSourceAtSend, ack.commandId);
           return;
         }
         // 本地 desktop localPath 是零拷贝 ready，不依赖 attachment transaction；极短窗口内
@@ -2851,12 +2797,7 @@ export function SessionPane({
         if (sendAck.status !== "accepted") {
           throw new Error(sendAck.reasonCode ?? "sendText 被拒绝");
         }
-        handleDraftSessionCreated(
-          newSessionId,
-          groupedDraftTaskAtSend,
-          createSourceAtSend,
-          sendAck.commandId,
-        );
+        handleDraftSessionCreated(newSessionId, createSourceAtSend, sendAck.commandId);
         return;
       }
       // 附件 ref 已在 composer 预传状态机中收口。
@@ -4349,7 +4290,6 @@ export function SessionPane({
           }
           handleDraftSessionCreated(
             ack.result.sessionId,
-            replay.clientContext?.groupedDraftTask,
             replay.clientContext?.sessionCreateSource,
             replay.payload.firstInput ? ack.commandId : undefined,
           );

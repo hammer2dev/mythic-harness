@@ -70,7 +70,7 @@ export const taskListE2EActions: TaskListE2EActions = {
     }
     return {
       // E2E 非 UI 证据：置顶入口必须让同一个 entity 在 query cache 中切换 membership，
-      // 不能只靠 DOM 临时保留一行掩盖 grouped/pinned 分区仍然错误。
+      // 不能只靠 DOM 临时保留一行掩盖置顶归属仍然错误。
       membershipKinds: [...membershipKinds].sort(),
       taskPresent: Boolean(state.taskMetaByEntityKey[entityKey]),
     };

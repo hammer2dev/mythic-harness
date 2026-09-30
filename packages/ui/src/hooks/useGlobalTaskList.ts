@@ -153,7 +153,7 @@ export function useGlobalTaskList(params: {
           return;
         }
         // Controller 的每个 activity 帧（运行中任务的 tool 调用等）都会让本 hook 重查，
-        // 而 attachTaskListRowActivity 与 tasks-index join 每次都产生全新对象。下游（grouped 视图）
+        // 而 attachTaskListRowActivity 与 tasks-index join 每次都产生全新对象。下游列表
         // 只能按引用判等，于是整棵列表树换代重渲染并重测量虚拟器。这里与 sessions-index lane 同款
         // 逐条引用稳定化：内容等价复用旧对象，整表等价复用旧数组。
         const nextItems = stabilizeTaskListItems(

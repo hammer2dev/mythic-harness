@@ -105,10 +105,8 @@ export function TaskTitleOverflowText({
         ? window.matchMedia("(prefers-reduced-motion: reduce)")
         : null;
     // 走马灯事件原本绑在文字节点上，鼠标位于 task item 的时间、
-    // 状态或操作区域时不会滚动。统一绑到最近的普通或 grouped task 行边界。
-    const hoverTarget =
-      textElement.closest<HTMLElement>("[data-task-item-key], [data-grouped-task-key]") ??
-      textElement;
+    // 状态或操作区域时不会滚动。统一绑到最近的任务行边界。
+    const hoverTarget = textElement.closest<HTMLElement>("[data-task-item-key]") ?? textElement;
     let animations: Animation[] = [];
     let startTimer: number | null = null;
 

@@ -149,7 +149,9 @@ export function DesktopTopOverlay({
             </DesktopTopOverlayActionButton>
           )}
 
-          {isMacDesktop && (
+          {/* 普通 Web 缺少可触摸的侧栏入口，窄屏自动收起后无法再打开。
+              macOS 与 Web 共用现有切换按钮，沿用同一侧栏状态和动作。 */}
+          {!usesCustomCaptionArea && (
             <DesktopTopOverlayActionButton
               title={toggleSidebarTitle}
               shortcut={toggleSidebarShortcutLabel}

@@ -588,7 +588,7 @@ async function dispatchOffPeakRun(request: OffPeakRunDispatchRequest): Promise<{
       await zcodeTaskService.resumeTask({
         ...workspaceScope,
         taskId,
-        // 绑定会话首次盖章归属标记，侧栏归入闲时分组（机制同 cron targetTaskId）。
+        // 绑定会话首次盖章持久归属标记，供闲时任务识别与调度恢复使用。
         offPeakTaskId: request.offPeakTaskId,
       });
       await zcodeTaskService.setConfigOption({
@@ -629,7 +629,7 @@ async function dispatchOffPeakRun(request: OffPeakRunDispatchRequest): Promise<{
         // 闲时任务是无界面的 createTask + sendPrompt 连续派发；空 session 必须在首条
         // V4 admission 内先持久化，否则 session_input 外键会先于 session 主记录写入。
         deferPersistenceUntilFirstPrompt: true,
-        // 创建时即盖章持久归属标记（月亮图标/后续系统分组只看该标记，不再反查 store）。
+        // 创建时即盖章持久归属标记，后续通过任务元数据识别闲时任务。
         offPeakTaskId: request.offPeakTaskId,
       });
       taskId = task.taskId;

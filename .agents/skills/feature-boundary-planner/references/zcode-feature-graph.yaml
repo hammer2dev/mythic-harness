@@ -355,7 +355,46 @@ nodes:
     codeSeeds:
       - file: apps/zcode-cli/packages/core/src/runtime/methods/turn-model.ts
         symbol: applySubmissionExecutionState
+  - id: capability.sidebar-project-sections
+    kind: capability
+    label: Client-local project sections in the sidebar
+    aliases:
+      - project sections
+      - 项目分区
+      - 侧栏分区
+    codeSeeds:
+      - file: packages/ui/src/WorkspaceSidebar.tsx
+        symbol: WorkspaceSidebar
+    invariants:
+      - Sections contain projects; independent tasks keep their own list. Retired task groups are not project sections.
+  - id: state.sidebar-project-sections
+    kind: state-owner
+    label: Client-local section definitions, order, expansion and project membership
+    codeSeeds:
+      - file: packages/ui/src/store/sidebarSectionsStore.ts
+        symbol: createSidebarSectionsStore
+    invariants:
+      - Project order remains owned by tabStore; sections only project the open workspace list.
+      - No section state is sent to the CLI or synchronized between desktop and mobile attachments.
+  - id: persistence.sidebar-project-sections
+    kind: persistence
+    label: Versioned local sidebar preferences
+    codeSeeds:
+      - file: packages/ui/src/lib/sidebarPurposeSectionPreferences.ts
+        symbol: readSidebarSectionPreferences
 edges:
+  - from: capability.sidebar-project-sections
+    to: state.sidebar-project-sections
+    type: owned-by
+    rank: must-inspect
+  - from: state.sidebar-project-sections
+    to: persistence.sidebar-project-sections
+    type: persists-to
+    rank: must-inspect
+  - from: state.sidebar-project-sections
+    to: boundary.workspace-key
+    type: isolated-by
+    rank: must-inspect
   - from: capability.model-selection
     to: surface.conversation-model-control
     type: renders-in

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type SessionCreateSource = "group" | "project" | "session";
+export type SessionCreateSource = "project" | "session";
 export type SessionCreateClientKind = "desktop" | "mobile" | "web";
 
 /** 手机转发只开放本事件；公共用户/设备身份仍由桌面 TelemetryCore 注入。 */
@@ -20,7 +20,7 @@ export const sessionCreateTelemetrySchema = z
       .strict(),
     eventExtraDetail: z
       .object({
-        create_source: z.enum(["group", "project", "session"]),
+        create_source: z.enum(["project", "session"]),
         client_kind: z.literal("mobile"),
         workspace_kind: z.enum(["local", "remote"]),
         remote_kind: z.enum(["", "ssh", "wsl", "docker", "server"]),

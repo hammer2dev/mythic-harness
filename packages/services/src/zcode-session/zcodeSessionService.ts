@@ -135,7 +135,6 @@ export function createZCodeSessionService({
     options: {
       modelOverride?: string;
       thoughtLevelOverride?: string;
-      moveGroupedTaskToTop?: boolean;
       /** 设计修正：必填，发射点必须声明变更类别。 */
       broadcastReason: ZCodeWorkspaceTaskListChanged["reason"];
     },
@@ -253,14 +252,11 @@ export function createZCodeSessionService({
         sessionId: snapshot.session.sessionId,
       });
       // 立刻把初始 snapshot 也同步到 sqlite + 广播，让 UI 列表第一时间看到新会话行。
-      // desktop-continuous 首发不会经过 legacy createTask，必须在这里同步写 grouped 顶部顺序。
+      // desktop-continuous 首发保留真实任务写入与 task_created 广播，不再写任务分组顺序。
       const snapshotWithRuntime = withApiRetryRuntime(snapshot);
       const broadcastStartedAt = Date.now();
       await broadcastSnapshot(snapshotWithRuntime, "createSession", {
-        moveGroupedTaskToTop: true,
-        // 首发广播沿用 task_meta_changed 旧语义（低频，一个任务一次）；
-        // 语义化成 task_created（insert-active）需连同乐观插入去重一起改。
-        broadcastReason: "task_meta_changed",
+        broadcastReason: "task_created",
       });
       logger.info(sessionTraceId, "[zcode-session-service] createSession task index 同步完成", {
         broadcastDurationMs: Date.now() - broadcastStartedAt,

@@ -1893,13 +1893,8 @@ export function createZCodeTaskServiceAdapter(
       const meta = await syncTaskIndexMeta({
         ...baseMeta,
         ...(params.automationId ? { cronAutomationId: params.automationId } : {}),
-        // 闲时派发在创建时即盖章持久归属；月亮图标与后续系统分组归属都只看该标记。
+        // 闲时派发在创建时即盖章持久归属；月亮图标与自动化关联都只看该标记。
         ...(params.offPeakTaskId ? { offPeakTaskId: params.offPeakTaskId } : {}),
-      });
-      await taskIndexRepo.initializeGroupedTaskAtTop({
-        workspacePath: meta.workspacePath,
-        workspaceIdentity: meta.workspaceIdentity,
-        taskId: meta.taskId,
       });
       notifySyncerSession({
         taskId: meta.taskId,
@@ -2331,6 +2326,8 @@ export function createZCodeTaskServiceAdapter(
     },
 
     async listTasks(params): Promise<ZCodeTaskMeta[]> {
+      // 旧入口只在分组结构查询时执行自动归档；分组退役后由活动任务读取承接同一规则。
+      await runWorkspaceTaskAutoArchive([params]);
       const tasks = await taskIndexRepo.listTaskMetas({
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
@@ -2370,7 +2367,7 @@ export function createZCodeTaskServiceAdapter(
     },
 
     // listTaskList 的消费面是全文搜索（searchable_text/snippets）与
-    // remoteTimelineTaskStore 补充链路；侧栏 5 视图 + remote shard 的无搜索行集合
+    // remoteTimelineTaskStore 补充链路；侧栏任务视图 + remote shard 的无搜索行集合
     // 走上方三个分区读取。workspace 行在客户端用各 endpoint 的 task 行 + session detail 构建。
     async listTaskList(params: ZCodeTaskListQuery): Promise<ZCodeTaskListResult> {
       const result = await taskIndexRepo.queryTaskList({
@@ -2380,67 +2377,6 @@ export function createZCodeTaskServiceAdapter(
       return {
         ...result,
         items: result.items.map(rememberIndexedTaskMeta),
-      };
-    },
-
-    async createTaskGroup(params) {
-      const group = await taskIndexRepo.createTaskGroup(params);
-      return group;
-    },
-
-    async renameTaskGroup(params) {
-      const group = await taskIndexRepo.renameTaskGroup(params);
-      for (const scope of params.workspaceScopes ?? []) {
-        // grouped 结构变更无单任务 meta，沿用 task_meta_changed 驱动 grouped 视图重拉。
-        emitWorkspaceTaskListChanged(scope, undefined, "task_meta_changed");
-      }
-      return group;
-    },
-
-    async updateTaskGroupColor(params) {
-      const group = await taskIndexRepo.updateTaskGroupColor(params);
-      for (const scope of params.workspaceScopes ?? []) {
-        emitWorkspaceTaskListChanged(scope, undefined, "task_meta_changed");
-      }
-      return group;
-    },
-
-    async deleteTaskGroup(params) {
-      await taskIndexRepo.deleteTaskGroup(params);
-      for (const scope of params.workspaceScopes ?? []) {
-        emitWorkspaceTaskListChanged(scope, undefined, "task_meta_changed");
-      }
-    },
-
-    // grouped 视图任务内容由 sessions-index 提供；provider 过滤与 meta 翻译
-    // 随客户端 task 行 join 完成，此处仅保留结构读取。
-
-    async listGroupedTaskViewStructure(params) {
-      // grouped 原始结构（不 join tasks 表）；任务内容由 sessions-index 提供，客户端 join。
-      // 与 listGroupedTaskView 同口径保留 auto-archive 触发（进入 grouped 视图时清理超期任务）。
-      await runWorkspaceTaskAutoArchive(params.workspaceScopes);
-      return taskIndexRepo.queryGroupedTaskViewStructure(params);
-    },
-
-    async applyGroupedTaskViewOrder(params) {
-      const result = await taskIndexRepo.applyGroupedTaskViewOrder({
-        ...params,
-        // grouped 保存排序后的回包也必须继承列表查询的 glm provider 边界，
-        // 否则历史外部 provider 的 task 会通过未过滤的二次查询短暂回到 UI。
-        provider: GLM_PROVIDER,
-      });
-      for (const scope of params.workspaceScopes) {
-        emitWorkspaceTaskListChanged(scope, undefined, "task_meta_changed");
-      }
-      return {
-        nodes: result.nodes.map((node) =>
-          node.type === "task"
-            ? { ...node, task: rememberIndexedTaskMeta(node.task) }
-            : {
-                ...node,
-                tasks: node.tasks.map(rememberIndexedTaskMeta),
-              },
-        ),
       };
     },
 

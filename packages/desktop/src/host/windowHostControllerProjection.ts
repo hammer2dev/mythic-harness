@@ -469,9 +469,6 @@ export function createWindowHostControllerProjection(options: { createId: () => 
     },
 
     getTasks: allRows,
-    getGroupedTaskFacts(): WindowHostControllerTaskRow[] {
-      return allRows().filter((task) => !task.address.remoteSessionId);
-    },
 
     async mutate(
       address: WindowHostTaskAddress,

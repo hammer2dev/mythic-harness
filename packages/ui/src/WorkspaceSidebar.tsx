@@ -3,13 +3,11 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
-  type SetStateAction,
 } from "react";
 import {
   Archive,
@@ -18,14 +16,11 @@ import {
   Clock3,
   Cloud,
   Folder,
-  FolderOpen,
-  Hash,
   ListFilter,
   Maximize2,
   MessageCircleCheck,
   MessageCirclePlus,
   Minimize2,
-  Plus,
   Search,
   X,
 } from "lucide-react";
@@ -47,23 +42,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import type { Locale, RemoteTarget, UserInfo, ZCodeTaskMeta } from "@zcode/shared";
-import { BUILTIN_MODEL_PROVIDER_IDS } from "@zcode/shared";
 import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
   TID_AUTOMATIONS_OPEN,
-  TID_PROJECT_ADD,
   TID_PROJECT_SECTION,
   TID_SIDEBAR,
   TID_WORKSPACE_LIST,
 } from "@zcode/shared";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { Button } from "@/components/ui/button.js";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -71,7 +62,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { logger } from "@/logger.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
@@ -84,13 +74,9 @@ import {
   type SidebarTaskOrganizeBy,
   type SidebarTaskSortBy,
 } from "@/lib/sidebarTaskPreferences.js";
-import {
-  persistSidebarPurposeSectionPreferences,
-  readSidebarPurposeSectionPreferences,
-  reorderSidebarPurposeSections,
-} from "@/lib/sidebarPurposeSectionPreferences.js";
+import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
+import { ProjectSectionHeaderActions } from "@/WorkspaceSidebar/ProjectSectionHeaderActions.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
-import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
 import {
   increaseWorkspaceTaskVisibleLimit,
@@ -100,14 +86,6 @@ import {
   type WorkspaceTaskVisibleLimitByKey,
 } from "@/lib/workspaceTaskPagination.js";
 import { partitionWorkspaceTabsByPurpose } from "@/lib/workspacePurpose.js";
-import {
-  areAllGroupedTaskGroupsExpanded,
-  pruneCollapsedGroupedTaskGroupIds,
-} from "@/workspace-grouped-tasks/shared.js";
-import {
-  persistGroupedTaskCollapsedGroupIds,
-  readGroupedTaskCollapsedGroupIds,
-} from "@/lib/groupedTaskExpansionPreference.js";
 import type { Theme } from "@/useTheme.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
@@ -116,17 +94,11 @@ import { WorkspaceArchivedTasksFlatSection } from "@/WorkspaceArchivedTasksFlatS
 import { WorkspaceSidebarFooter } from "@/WorkspaceSidebarFooter.js";
 import { WorkspacePinnedTasksSection } from "@/WorkspacePinnedTasksSection.js";
 import { WorkspaceTimelineTasksSection } from "@/WorkspaceTimelineTasksSection.js";
-import { WorkspaceGroupedTasksSection } from "@/WorkspaceGroupedTasksSection.js";
-import { StickyGroupHeaderSlot } from "@/workspace-grouped-tasks/sticky-group-header-slot.js";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import {
   SortableWorkspaceSidebarItem,
   restrictVerticalDragWithinContainer,
 } from "./SortableWorkspaceSidebar.js";
-import {
-  resolveSidebarTaskGroupTogglePresentation,
-  type SidebarTaskGroupTogglePresentation,
-} from "@/WorkspaceSidebar/taskGroupTogglePresentation.js";
 import { WorkspacePurposeSection } from "@/WorkspaceSidebar/WorkspacePurposeSection.js";
 import { cn } from "@/components/lib/utils.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
@@ -157,8 +129,7 @@ export { WorkspaceSidebarCollapsedRail } from "@/WorkspaceSidebar/WorkspaceSideb
 
 type TaskOrganizeBy = SidebarTaskOrganizeBy;
 type TaskSortBy = SidebarTaskSortBy;
-type PrimaryTaskMode = "workspace" | "grouped";
-type SidebarTaskViewMode = "grouped" | "workspace" | "timeline" | "archived";
+type SidebarTaskViewMode = "workspace" | "timeline" | "archived";
 
 interface SidebarFileTreeTarget {
   workspacePath: string;
@@ -213,9 +184,6 @@ function resolveSidebarTaskViewMode(params: {
   }
   if (params.taskOrganizeBy === "chronological") {
     return "timeline";
-  }
-  if (params.taskOrganizeBy === "grouped") {
-    return "grouped";
   }
   return "workspace";
 }
@@ -336,7 +304,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     [onSelectTask],
   );
   const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
-  const bumpTaskListVersion = useZCodeSessionStore((state) => state.bumpTaskListVersion);
   const workspaceIdentity = useTabStore((state) => {
     if (!state.activeTabId) {
       return undefined;
@@ -389,155 +356,57 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   );
   const [isFileTreeOpen, setIsFileTreeOpen] = useState(false);
   const [fileTreeTarget, setFileTreeTarget] = useState<SidebarFileTreeTarget | null>(null);
-  const [groupedStickyHeader, setGroupedStickyHeader] = useState<ReactNode | null>(null);
   const [taskOrganizeBy, setTaskOrganizeBy] = useState<TaskOrganizeBy>(
     () => readSidebarTaskPreferences().organizeBy,
   );
   const [taskSortBy, setTaskSortBy] = useState<TaskSortBy>(
     () => readSidebarTaskPreferences().sortBy,
   );
-  const [purposeSectionPreferences, setPurposeSectionPreferences] = useState(
-    readSidebarPurposeSectionPreferences,
+  const sections = useSidebarSectionsStore((state) => state.sections);
+  const sectionOrder = useSidebarSectionsStore((state) => state.sectionOrder);
+  const projectSectionByWorkspaceKey = useSidebarSectionsStore(
+    (state) => state.projectSectionByWorkspaceKey,
   );
-  const [workspaceTaskOrganizeBy, setWorkspaceTaskOrganizeBy] = useState<
-    Extract<TaskOrganizeBy, "project" | "chronological">
-  >(() => {
-    const initialOrganizeBy = readSidebarTaskPreferences().organizeBy;
-    return initialOrganizeBy === "chronological" ? "chronological" : "project";
-  });
+  const expandedBySectionId = useSidebarSectionsStore((state) => state.expandedBySectionId);
+  const setSectionExpanded = useSidebarSectionsStore((state) => state.setSectionExpanded);
+  const setProjectSectionsExpanded = useSidebarSectionsStore(
+    (state) => state.setProjectSectionsExpanded,
+  );
+  const reorderSections = useSidebarSectionsStore((state) => state.reorderSections);
   const [workspaceTaskVisibleLimitByKey, setWorkspaceTaskVisibleLimitByKey] =
     useState<WorkspaceTaskVisibleLimitByKey>({});
   const [activeWorkspaceDragId, setActiveWorkspaceDragId] = useState<string | null>(null);
   const [activeWorkspaceDragWidth, setActiveWorkspaceDragWidth] = useState<number | null>(null);
-  const [groupedTaskGroupIds, setGroupedTaskGroupIds] = useState<string[]>([]);
-  const [groupedTaskGroupIdsHydrated, setGroupedTaskGroupIdsHydrated] = useState(false);
-  const [lastNonEmptyGroupedTaskGroupIds, setLastNonEmptyGroupedTaskGroupIds] = useState<string[]>(
-    [],
+  const handlePurposeSectionDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      if (event.over) reorderSections(String(event.active.id), String(event.over.id));
+    },
+    [reorderSections],
   );
-  const [groupedTaskGroupSnapshotHasGroups, setGroupedTaskGroupSnapshotHasGroups] = useState<
-    boolean | null
-  >(null);
-  const [collapsedGroupedTaskGroupIds, setCollapsedGroupedTaskGroupIds] = useState<Set<string>>(
-    () => readGroupedTaskCollapsedGroupIds(),
-  );
-  const handleProjectSectionOpenChange = useCallback((projectsExpanded: boolean) => {
-    setPurposeSectionPreferences((current) => {
-      if (current.projectsExpanded === projectsExpanded) {
-        return current;
-      }
-      const next = { ...current, projectsExpanded };
-      persistSidebarPurposeSectionPreferences(next);
-      return next;
-    });
-  }, []);
-  const handleConversationSectionOpenChange = useCallback((conversationsExpanded: boolean) => {
-    setPurposeSectionPreferences((current) => {
-      if (current.conversationsExpanded === conversationsExpanded) {
-        return current;
-      }
-      const next = { ...current, conversationsExpanded };
-      persistSidebarPurposeSectionPreferences(next);
-      return next;
-    });
-  }, []);
-  const handlePurposeSectionDragEnd = useCallback((event: DragEndEvent) => {
-    if (!event.over) {
-      return;
+  const sectionTabsById = useMemo(() => {
+    const result = new Map<string, WorkspaceTabState[]>();
+    for (const sectionId of sectionOrder) result.set(sectionId, []);
+    for (const tab of projectWorkspaceTabs) {
+      const sectionId =
+        projectSectionByWorkspaceKey[
+          buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity)
+        ] ?? "projects";
+      result.get(sectionId)?.push(tab);
     }
-
-    setPurposeSectionPreferences((current) => {
-      const sectionOrder = reorderSidebarPurposeSections(
-        current.sectionOrder,
-        String(event.active.id),
-        String(event.over?.id),
-      );
-      if (sectionOrder.every((sectionId, index) => sectionId === current.sectionOrder[index])) {
-        return current;
-      }
-
-      const next = { ...current, sectionOrder };
-      persistSidebarPurposeSectionPreferences(next);
-      return next;
-    });
-  }, []);
-  const primaryTaskTabsListRef = useRef<HTMLDivElement | null>(null);
-  const primaryTaskTabTriggerRefs = useRef<Record<PrimaryTaskMode, HTMLButtonElement | null>>({
-    workspace: null,
-    grouped: null,
-  });
-  const [primaryTaskIndicatorStyle, setPrimaryTaskIndicatorStyle] = useState<CSSProperties>({
-    opacity: 0,
-    transform: "translateX(0px)",
-    width: 0,
-  });
-  const lastStableTaskGroupTogglePresentationRef =
-    useRef<SidebarTaskGroupTogglePresentation | null>(null);
-  const handleCollapsedGroupedTaskGroupIdsChange = useCallback(
-    (updater: SetStateAction<Set<string>>) => {
-      setCollapsedGroupedTaskGroupIds((currentGroupIds) => {
-        const nextGroupIds = typeof updater === "function" ? updater(currentGroupIds) : updater;
-        if (nextGroupIds === currentGroupIds) {
-          return currentGroupIds;
-        }
-        // grouped 展开态是本端用户偏好，不能只保存在 React 内存里。
-        // 单组点击、批量按钮、拖拽临时收起后的恢复都必须同步到 localStorage。
-        persistGroupedTaskCollapsedGroupIds(nextGroupIds);
-        return nextGroupIds;
-      });
-    },
-    [],
+    return result;
+  }, [projectWorkspaceTabs, projectSectionByWorkspaceKey, sectionOrder]);
+  const expandedSectionWorkspaceTabs = useMemo(
+    () =>
+      projectWorkspaceTabs.filter(
+        (tab) =>
+          expandedBySectionId[
+            projectSectionByWorkspaceKey[
+              buildTaskWorkspaceKey(tab.workspacePath, tab.workspaceIdentity)
+            ] ?? "projects"
+          ] !== false,
+      ),
+    [projectWorkspaceTabs, projectSectionByWorkspaceKey, expandedBySectionId],
   );
-  const handleGroupedTaskGroupIdsChange = useCallback(
-    (nextGroupIds: string[]) => {
-      if (
-        nextGroupIds.length === 0 &&
-        !groupedTaskGroupIdsHydrated &&
-        groupedTaskGroupSnapshotHasGroups !== false &&
-        (lastNonEmptyGroupedTaskGroupIds.length > 0 || collapsedGroupedTaskGroupIds.size > 0)
-      ) {
-        // 从 Project 切回 Group 或重启后首进 Group 时，
-        // 子列表首帧还没加载 sqlite view，会先回传空 groupIds。
-        // 这个瞬时空快照不能当成“所有 group 已删除”，否则会把用户收起偏好
-        // prune 成空并写回 localStorage。
-        return;
-      }
-
-      setGroupedTaskGroupIdsHydrated(true);
-      setGroupedTaskGroupSnapshotHasGroups(nextGroupIds.length > 0);
-      if (nextGroupIds.length > 0) {
-        setLastNonEmptyGroupedTaskGroupIds(nextGroupIds);
-      }
-      setGroupedTaskGroupIds((currentGroupIds) =>
-        currentGroupIds.length === nextGroupIds.length &&
-        currentGroupIds.every((groupId, index) => groupId === nextGroupIds[index])
-          ? currentGroupIds
-          : nextGroupIds,
-      );
-      setCollapsedGroupedTaskGroupIds((currentGroupIds) => {
-        const nextCollapsedGroupIds = pruneCollapsedGroupedTaskGroupIds(
-          currentGroupIds,
-          nextGroupIds,
-        );
-        if (
-          nextCollapsedGroupIds.size === currentGroupIds.size &&
-          [...nextCollapsedGroupIds].every((groupId) => currentGroupIds.has(groupId))
-        ) {
-          return currentGroupIds;
-        }
-        // 刷新或重启后需要从 localStorage 恢复 grouped 展开态；
-        // view 刷新时也要清掉已删除 group 的旧收起记录，避免新 group 被旧状态误命中。
-        persistGroupedTaskCollapsedGroupIds(nextCollapsedGroupIds);
-        return nextCollapsedGroupIds;
-      });
-    },
-    [
-      groupedTaskGroupIdsHydrated,
-      groupedTaskGroupSnapshotHasGroups,
-      collapsedGroupedTaskGroupIds.size,
-      lastNonEmptyGroupedTaskGroupIds.length,
-    ],
-  );
-
   useEffect(() => {
     if (!fileTreeOpenRequest) {
       return;
@@ -557,63 +426,27 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       sortBy: taskSortBy,
     });
   }, [taskOrganizeBy, taskSortBy]);
-  useEffect(() => {
-    if (taskOrganizeBy === "project" || taskOrganizeBy === "chronological") {
-      setWorkspaceTaskOrganizeBy(taskOrganizeBy);
-    }
-  }, [taskOrganizeBy]);
   const taskViewMode = resolveSidebarTaskViewMode({
     showArchivedTasks,
     taskOrganizeBy,
   });
-  const effectiveTaskViewMode = taskViewMode;
   const visibleWorkspaceTaskKeys = useMemo(
     () =>
       resolveVisibleWorkspaceTaskKeys({
-        enabled:
-          effectiveTaskViewMode === "workspace" && purposeSectionPreferences.projectsExpanded,
+        enabled: taskViewMode === "workspace",
         expandedWorkspacePaths,
-        workspaces: projectWorkspaceTabs,
+        workspaces: expandedSectionWorkspaceTabs,
       }),
-    [
-      effectiveTaskViewMode,
-      expandedWorkspacePaths,
-      projectWorkspaceTabs,
-      purposeSectionPreferences.projectsExpanded,
-    ],
+    [taskViewMode, expandedWorkspacePaths, expandedSectionWorkspaceTabs],
   );
   useEffect(() => {
     // 交互规则：分页进度只属于当前可见且已展开的 workspace。
-    // 单组/项目区/全部收起、切换视图或移除 workspace 都通过同一可见集合清理，
+    // 收起项目、分区或全部项目，切换视图或移除 workspace，都通过同一可见集合清理，
     // 避免不同收起入口各自维护重置逻辑而出现遗漏。
     setWorkspaceTaskVisibleLimitByKey((current) =>
       retainWorkspaceTaskVisibleLimits(current, visibleWorkspaceTaskKeys),
     );
   }, [visibleWorkspaceTaskKeys]);
-  useEffect(() => {
-    if (taskViewMode !== "grouped") {
-      setGroupedStickyHeader(null);
-    }
-  }, [taskViewMode]);
-  const [createGroupedTaskGroupAction, setCreateGroupedTaskGroupAction] = useState<
-    (() => void) | null
-  >(null);
-  const [createGroupedTaskDraftAction, setCreateGroupedTaskDraftAction] = useState<
-    (() => void) | null
-  >(null);
-  const handleCreateGroupActionChange = useCallback((action: (() => void) | null) => {
-    setCreateGroupedTaskGroupAction(() => action);
-  }, []);
-  const handleCreateDraftTaskActionChange = useCallback((action: (() => void) | null) => {
-    setCreateGroupedTaskDraftAction(() => action);
-  }, []);
-  const shouldShowPinnedTasks =
-    // grouped 主体会主动过滤 pinned task；如果同页不渲染全局置顶区，
-    // 从 Header 置顶当前任务后整条 row 会无处展示，看起来像 session 被删除。
-    taskViewMode === "workspace" ||
-    taskViewMode === "timeline" ||
-    taskViewMode === "archived" ||
-    taskViewMode === "grouped";
   const workspaceScrollRef = useRef<HTMLDivElement | null>(null);
   const [showWorkspaceTopMask, setShowWorkspaceTopMask] = useState(false);
   const [showWorkspaceBottomMask, setShowWorkspaceBottomMask] = useState(false);
@@ -831,182 +664,33 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     };
   }, [expandedWorkspacePaths, workspaceTabs.length]);
 
-  const isGroupedTaskGroupView = !showArchivedTasks && taskOrganizeBy === "grouped";
-  const toggleableGroupedTaskGroupIds =
-    groupedTaskGroupIds.length > 0
-      ? groupedTaskGroupIds
-      : groupedTaskGroupSnapshotHasGroups === false
-        ? []
-        : lastNonEmptyGroupedTaskGroupIds;
-  const showOptimisticGroupedTaskGroupToggle =
-    isGroupedTaskGroupView &&
-    !groupedTaskGroupIdsHydrated &&
-    groupedTaskGroupSnapshotHasGroups !== false;
-  const showToggleAllGroupedTaskGroups =
-    isGroupedTaskGroupView &&
-    (groupedTaskGroupIds.length > 0 || showOptimisticGroupedTaskGroupToggle);
-  const canToggleAllGroupedTaskGroups =
-    isGroupedTaskGroupView && toggleableGroupedTaskGroupIds.length > 0;
-  const areAllToggleableGroupedTaskGroupsOpen = areAllGroupedTaskGroupsExpanded(
-    toggleableGroupedTaskGroupIds,
-    collapsedGroupedTaskGroupIds,
-  );
-  const canToggleAllProjectTaskGroups =
+  const canToggleAllProjects =
     !showArchivedTasks && taskOrganizeBy === "project" && projectWorkspaceTabs.length > 0;
-  const showToggleAllTaskGroups = canToggleAllProjectTaskGroups || showToggleAllGroupedTaskGroups;
-  const canToggleAllTaskGroups = canToggleAllProjectTaskGroups || canToggleAllGroupedTaskGroups;
-  const areAllTaskGroupsExpanded =
-    taskOrganizeBy === "grouped"
-      ? areAllToggleableGroupedTaskGroupsOpen
-      : purposeSectionPreferences.projectsExpanded && areAllWorkspaceGroupsExpanded;
-  const toggleAllTaskGroupsTransitionPending = showOptimisticGroupedTaskGroupToggle;
-  const toggleAllTaskGroupsPresentation = resolveSidebarTaskGroupTogglePresentation({
-    current: {
-      visible: showToggleAllTaskGroups,
-      canToggle: canToggleAllTaskGroups,
-      areAllExpanded: areAllTaskGroupsExpanded,
-      transitionPending: toggleAllTaskGroupsTransitionPending,
-    },
-    previous: lastStableTaskGroupTogglePresentationRef.current,
-  });
-  const activePrimaryTaskMode: PrimaryTaskMode =
-    taskOrganizeBy === "grouped" ? "grouped" : "workspace";
-  const workspaceTaskViewValue = taskOrganizeBy === "chronological" ? "chronological" : "project";
-  const showTaskViewFilter = activePrimaryTaskMode === "workspace" || showArchivedTasks;
-  const showWorkspaceViewOptions = activePrimaryTaskMode === "workspace" && !showArchivedTasks;
-  const showTaskSortOptions = activePrimaryTaskMode === "workspace" || showArchivedTasks;
-  const handlePrimaryTaskModeChange = useCallback(
-    (value: string) => {
-      logger.debug("[WorkspaceSidebar] 切换任务一级视图", {
-        from: taskOrganizeBy,
-        to: value,
-        groupedHydrated: groupedTaskGroupIdsHydrated,
-        groupedCount: groupedTaskGroupIds.length,
-        lastGroupedCount: lastNonEmptyGroupedTaskGroupIds.length,
-      });
-      if (value === "grouped") {
-        setGroupedTaskGroupIdsHydrated(false);
-        setTaskOrganizeBy("grouped");
-        return;
-      }
-      if (value === "workspace") {
-        setTaskOrganizeBy(workspaceTaskOrganizeBy);
-      }
-    },
-    [
-      groupedTaskGroupIds.length,
-      groupedTaskGroupIdsHydrated,
-      lastNonEmptyGroupedTaskGroupIds.length,
-      taskOrganizeBy,
-      workspaceTaskOrganizeBy,
-    ],
+  const areAllProjectSectionsExpanded = sectionOrder.every(
+    (id) => id === "conversations" || expandedBySectionId[id] !== false,
   );
+  const areAllProjectsExpanded = areAllProjectSectionsExpanded && areAllWorkspaceGroupsExpanded;
+  const toggleAllProjectsLabel = intl.formatMessage({
+    id: areAllProjectsExpanded
+      ? "workspaceSidebar.collapseAllProjects"
+      : "workspaceSidebar.expandAllProjects",
+  });
+  const workspaceTaskViewValue = taskOrganizeBy;
+  const showWorkspaceViewOptions = !showArchivedTasks;
   const handleWorkspaceTaskViewChange = useCallback((value: string) => {
-    if (value !== "project" && value !== "chronological") {
-      return;
-    }
-    setWorkspaceTaskOrganizeBy(value);
-    setTaskOrganizeBy(value);
+    if (value === "project" || value === "chronological") setTaskOrganizeBy(value);
   }, []);
-  const handleToggleAllTaskGroups = useCallback(() => {
-    if (!canToggleAllTaskGroups) {
-      return;
-    }
-    if (taskOrganizeBy === "grouped") {
-      if (toggleableGroupedTaskGroupIds.length === 0) {
-        return;
-      }
-      handleCollapsedGroupedTaskGroupIdsChange(
-        areAllToggleableGroupedTaskGroupsOpen ? new Set(toggleableGroupedTaskGroupIds) : new Set(),
-      );
-      return;
-    }
-    if (purposeSectionPreferences.projectsExpanded && areAllWorkspaceGroupsExpanded) {
-      handleProjectSectionOpenChange(false);
-      collapseAllWorkspaceTabs(workspacePaths);
-      return;
-    }
-
-    handleProjectSectionOpenChange(true);
-    expandAllWorkspaceTabs(workspacePaths);
+  const handleToggleAllProjects = useCallback(() => {
+    setProjectSectionsExpanded(!areAllProjectsExpanded);
+    if (areAllProjectsExpanded) collapseAllWorkspaceTabs(workspacePaths);
+    else expandAllWorkspaceTabs(workspacePaths);
   }, [
-    areAllWorkspaceGroupsExpanded,
-    areAllToggleableGroupedTaskGroupsOpen,
-    canToggleAllTaskGroups,
+    areAllProjectsExpanded,
     collapseAllWorkspaceTabs,
     expandAllWorkspaceTabs,
-    handleCollapsedGroupedTaskGroupIdsChange,
-    handleProjectSectionOpenChange,
-    purposeSectionPreferences.projectsExpanded,
-    taskOrganizeBy,
-    toggleableGroupedTaskGroupIds,
+    setProjectSectionsExpanded,
     workspacePaths,
   ]);
-  useEffect(() => {
-    // Group 视图会在切换后的下一轮子组件渲染里回传 group ids。
-    // 如果切换帧直接使用未 hydrate 的模型，按钮会短暂变成 disabled/expand 图标，造成闪动。
-    // 因此在待 hydrate 期间复用上一帧展示模型；真实点击能力仍由 handleToggleAllTaskGroups 的当前状态 guard。
-    if (!toggleAllTaskGroupsTransitionPending) {
-      lastStableTaskGroupTogglePresentationRef.current = toggleAllTaskGroupsPresentation;
-    }
-  }, [toggleAllTaskGroupsPresentation, toggleAllTaskGroupsTransitionPending]);
-
-  useLayoutEffect(() => {
-    const listNode = primaryTaskTabsListRef.current;
-    if (!listNode) {
-      return;
-    }
-
-    const updateIndicator = () => {
-      const activeTrigger = primaryTaskTabTriggerRefs.current[activePrimaryTaskMode];
-      if (!activeTrigger) {
-        return;
-      }
-
-      const nextTransform = `translateX(${activeTrigger.offsetLeft}px)`;
-      const nextWidth = activeTrigger.offsetWidth;
-      setPrimaryTaskIndicatorStyle((current) =>
-        current.opacity === 1 && current.transform === nextTransform && current.width === nextWidth
-          ? current
-          : {
-              opacity: 1,
-              transform: nextTransform,
-              width: nextWidth,
-            },
-      );
-    };
-
-    let animationFrameId: number | null = null;
-    const scheduleUpdate = () => {
-      if (animationFrameId !== null) {
-        return;
-      }
-      animationFrameId = requestAnimationFrame(() => {
-        animationFrameId = null;
-        updateIndicator();
-      });
-    };
-
-    updateIndicator();
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleUpdate);
-    resizeObserver?.observe(listNode);
-    for (const triggerNode of Object.values(primaryTaskTabTriggerRefs.current)) {
-      if (triggerNode) {
-        resizeObserver?.observe(triggerNode);
-      }
-    }
-    window.addEventListener("resize", scheduleUpdate);
-
-    return () => {
-      if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-      }
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [activePrimaryTaskMode]);
 
   const archivedTasksActionLabel = intl.formatMessage({
     // 归档视图打开后按钮图标会切换为 X，之前 tooltip 仍固定显示“归档”，
@@ -1018,232 +702,139 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const workspaceTaskToolbar = useCallback(
     () => (
       <div className="pl-2.5 pr-3">
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <div className="flex min-w-0 shrink-0 items-center gap-1">
-            <Tabs
-              value={activePrimaryTaskMode}
-              onValueChange={handlePrimaryTaskModeChange}
-              className="w-fit shrink-0"
-              aria-label={intl.formatMessage({
-                id: "workspaceSidebar.organize",
-              })}
-            >
-              {/* TabsList 默认横向态是 h-8；这里同步覆盖 variant，避免实际 Radix 横向态把外壳撑高。 */}
-              <TabsList
-                ref={primaryTaskTabsListRef}
-                className="relative h-7 w-fit overflow-hidden rounded-full bg-surface p-0.5 group-data-horizontal/tabs:h-7"
-              >
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0.5 left-0 rounded-full bg-background transition-[opacity,transform,width] duration-200 ease-out"
-                  style={primaryTaskIndicatorStyle}
-                />
-                <TabsTrigger
-                  ref={(node) => {
-                    primaryTaskTabTriggerRefs.current.grouped = node;
-                  }}
-                  value="grouped"
-                  className="relative z-10 h-6 flex-none gap-1 rounded-full border-transparent bg-transparent py-0 pl-1.5 pr-2 text-ui-sm font-medium text-foreground-subtle transition-colors data-active:border-transparent data-active:bg-transparent data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent"
-                >
-                  <Hash aria-hidden="true" className="size-3 shrink-0" />
-                  <span>
-                    {intl.formatMessage({
-                      id: "workspaceSidebar.organizeGrouped",
-                    })}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  ref={(node) => {
-                    primaryTaskTabTriggerRefs.current.workspace = node;
-                  }}
-                  value="workspace"
-                  className="relative z-10 h-6 flex-none gap-1 rounded-full border-transparent bg-transparent py-0 pl-1.5 pr-2 text-ui-sm font-medium text-foreground-subtle transition-colors data-active:border-transparent data-active:bg-transparent data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent"
-                >
-                  <Folder aria-hidden="true" className="size-3 shrink-0" />
-                  <span>
-                    {intl.formatMessage({
-                      id: "workspaceSidebar.organizeByProject",
-                    })}
-                  </span>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {toggleAllTaskGroupsPresentation ? (
-              <ControlHintTooltip
-                title={intl.formatMessage({
-                  id: toggleAllTaskGroupsPresentation.messageId,
-                })}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-foreground-subtle hover:text-foreground"
-                  aria-label={intl.formatMessage({
-                    id: toggleAllTaskGroupsPresentation.messageId,
-                  })}
-                  disabled={!toggleAllTaskGroupsPresentation.canToggle}
-                  onClick={handleToggleAllTaskGroups}
-                >
-                  {toggleAllTaskGroupsPresentation.areAllExpanded ? (
-                    <Minimize2 className="size-3.5" />
-                  ) : (
-                    <Maximize2 className="size-3.5" />
-                  )}
-                </Button>
-              </ControlHintTooltip>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {taskViewMode === "grouped" ? (
-              <ControlHintTooltip
-                title={workspaceReadOnlyReason ?? intl.formatMessage({ id: "taskGroup.newGroup" })}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-foreground-subtle hover:text-foreground"
-                  aria-label={intl.formatMessage({
-                    id: "taskGroup.newGroup",
-                  })}
-                  disabled={workspaceReadOnly || !createGroupedTaskGroupAction}
-                  onClick={() => {
-                    if (!workspaceReadOnly) {
-                      createGroupedTaskGroupAction?.();
-                    }
-                  }}
-                >
-                  <Hash className="size-3.5" />
-                </Button>
-              </ControlHintTooltip>
-            ) : null}
-            {showTaskViewFilter ? (
-              <DropdownMenu>
-                <ControlHintTooltip
-                  title={intl.formatMessage({
-                    id: "workspaceSidebar.taskViewOptions",
-                  })}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0 text-foreground-subtle hover:text-foreground"
-                      aria-label={intl.formatMessage({
-                        id: "workspaceSidebar.taskViewOptions",
-                      })}
-                    >
-                      <ListFilter className="size-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </ControlHintTooltip>
-                <DropdownMenuContent align="end" className="w-48 min-w-48">
-                  {showWorkspaceViewOptions ? (
-                    <>
-                      <DropdownMenuLabel>
-                        {intl.formatMessage({
-                          id: "workspaceSidebar.organize",
-                        })}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={workspaceTaskViewValue}
-                        onValueChange={handleWorkspaceTaskViewChange}
-                      >
-                        <DropdownMenuRadioItem value="project">
-                          <Folder className="size-4" />
-                          {intl.formatMessage({
-                            id: "workspaceSidebar.viewByWorkspace",
-                          })}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="chronological">
-                          <Clock3 className="size-4" />
-                          {intl.formatMessage({
-                            id: "workspaceSidebar.organizeChronologicalList",
-                          })}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </>
-                  ) : null}
-                  {showWorkspaceViewOptions && showTaskSortOptions ? (
-                    <DropdownMenuSeparator />
-                  ) : null}
-                  {showTaskSortOptions ? (
-                    <>
-                      <DropdownMenuLabel>
-                        {intl.formatMessage({
-                          id: "workspaceSidebar.sortBy",
-                        })}
-                      </DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={taskSortBy}
-                        onValueChange={(value) => {
-                          if (value === "created" || value === "updated") {
-                            setTaskSortBy(value);
-                          }
-                        }}
-                      >
-                        <DropdownMenuRadioItem value="updated">
-                          <MessageCircleCheck className="size-4" />
-                          {intl.formatMessage({
-                            id: "workspaceSidebar.sortByUpdated",
-                          })}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="created">
-                          <MessageCirclePlus className="size-4" />
-                          {intl.formatMessage({
-                            id: "workspaceSidebar.sortByCreated",
-                          })}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            {showArchivedTasks ? (
-              <div
-                ref={setArchivedActionsContainer}
-                data-testid="archived-tasks-toolbar-actions"
-                className="flex shrink-0 items-center"
-              />
-            ) : null}
-            <ControlHintTooltip title={archivedTasksActionLabel}>
+        <div className="flex min-w-0 items-center justify-end gap-1">
+          {canToggleAllProjects ? (
+            <ControlHintTooltip title={toggleAllProjectsLabel}>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="shrink-0 text-foreground-subtle hover:text-foreground data-[state=on]:bg-hover data-[state=on]:text-foreground"
-                data-state={showArchivedTasks ? "on" : "off"}
-                aria-label={archivedTasksActionLabel}
-                onClick={() => {
-                  setShowArchivedTasks((current) => !current);
-                }}
+                className="shrink-0 text-foreground-subtle hover:text-foreground"
+                aria-label={toggleAllProjectsLabel}
+                onClick={handleToggleAllProjects}
               >
-                {showArchivedTasks ? <X className="size-3.5" /> : <Archive className="size-3.5" />}
+                {areAllProjectsExpanded ? (
+                  <Minimize2 className="size-3.5" />
+                ) : (
+                  <Maximize2 className="size-3.5" />
+                )}
               </Button>
             </ControlHintTooltip>
-          </div>
+          ) : null}
+          <DropdownMenu>
+            <ControlHintTooltip
+              title={intl.formatMessage({
+                id: "workspaceSidebar.taskViewOptions",
+              })}
+            >
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-foreground-subtle hover:text-foreground"
+                  aria-label={intl.formatMessage({
+                    id: "workspaceSidebar.taskViewOptions",
+                  })}
+                >
+                  <ListFilter className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </ControlHintTooltip>
+            <DropdownMenuContent align="end" className="w-48 min-w-48">
+              {showWorkspaceViewOptions ? (
+                <>
+                  <DropdownMenuLabel>
+                    {intl.formatMessage({
+                      id: "workspaceSidebar.organize",
+                    })}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={workspaceTaskViewValue}
+                    onValueChange={handleWorkspaceTaskViewChange}
+                  >
+                    <DropdownMenuRadioItem value="project">
+                      <Folder className="size-4" />
+                      {intl.formatMessage({
+                        id: "workspaceSidebar.viewByWorkspace",
+                      })}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="chronological">
+                      <Clock3 className="size-4" />
+                      {intl.formatMessage({
+                        id: "workspaceSidebar.organizeChronologicalList",
+                      })}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </>
+              ) : null}
+              {showWorkspaceViewOptions ? <DropdownMenuSeparator /> : null}
+              <>
+                <DropdownMenuLabel>
+                  {intl.formatMessage({
+                    id: "workspaceSidebar.sortBy",
+                  })}
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={taskSortBy}
+                  onValueChange={(value) => {
+                    if (value === "created" || value === "updated") {
+                      setTaskSortBy(value);
+                    }
+                  }}
+                >
+                  <DropdownMenuRadioItem value="updated">
+                    <MessageCircleCheck className="size-4" />
+                    {intl.formatMessage({
+                      id: "workspaceSidebar.sortByUpdated",
+                    })}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="created">
+                    <MessageCirclePlus className="size-4" />
+                    {intl.formatMessage({
+                      id: "workspaceSidebar.sortByCreated",
+                    })}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {showArchivedTasks ? (
+            <div
+              ref={setArchivedActionsContainer}
+              data-testid="archived-tasks-toolbar-actions"
+              className="flex shrink-0 items-center"
+            />
+          ) : null}
+          <ControlHintTooltip title={archivedTasksActionLabel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-foreground-subtle hover:text-foreground data-[state=on]:bg-hover data-[state=on]:text-foreground"
+              data-state={showArchivedTasks ? "on" : "off"}
+              aria-label={archivedTasksActionLabel}
+              onClick={() => {
+                setShowArchivedTasks((current) => !current);
+              }}
+            >
+              {showArchivedTasks ? <X className="size-3.5" /> : <Archive className="size-3.5" />}
+            </Button>
+          </ControlHintTooltip>
         </div>
       </div>
     ),
     [
-      activePrimaryTaskMode,
       archivedTasksActionLabel,
-      createGroupedTaskGroupAction,
-      handlePrimaryTaskModeChange,
-      handleToggleAllTaskGroups,
+      canToggleAllProjects,
+      areAllProjectsExpanded,
+      toggleAllProjectsLabel,
+      handleToggleAllProjects,
       handleWorkspaceTaskViewChange,
       intl,
-      primaryTaskIndicatorStyle,
       showArchivedTasks,
-      showTaskSortOptions,
-      showTaskViewFilter,
       showWorkspaceViewOptions,
       taskSortBy,
-      taskViewMode,
-      toggleAllTaskGroupsPresentation,
       workspaceTaskViewValue,
     ],
   );
@@ -1269,14 +860,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 disabled={workspaceReadOnly}
                 onCreateTask={() => {
                   if (workspaceReadOnly) {
-                    return;
-                  }
-                  if (taskViewMode === "grouped") {
-                    if (createGroupedTaskDraftAction) {
-                      createGroupedTaskDraftAction();
-                      return;
-                    }
-                    onCreateTask({ groupedDraftPlacement: { type: "top" } });
                     return;
                   }
                   onCreateTask({ createSource: "project" });
@@ -1349,17 +932,13 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <StickyGroupHeaderSlot header={groupedStickyHeader} />
             <div
               ref={workspaceScrollRef}
-              className={
-                // grouped task 拖拽预览会改变列表高度，禁用 scroll anchoring 避免浏览器自动锚定把 dnd-kit 测量放大成抖动。
-                "flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto"
-              }
+              className={"flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto"}
               style={workspaceScrollMaskStyle}
             >
               {workspaceTaskToolbar()}
-              {shouldShowPinnedTasks ? (
+              {
                 // 归档切换主任务区时不应隐藏 pinned。
                 // pinned 是全局置顶区，归档态保持置顶区可见。
                 <WorkspacePinnedTasksSection
@@ -1374,7 +953,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                     setIsFileTreeOpen(true);
                   }}
                 />
-              ) : null}
+              }
               <div className="flex min-h-0 flex-col gap-3 px-2">
                 {taskViewMode === "archived" ? (
                   <WorkspaceArchivedTasksFlatSection
@@ -1385,26 +964,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                     activeTaskId={activeTaskId}
                     sortBy={taskSortBy}
                     onSelectTask={onSelectTask}
-                  />
-                ) : taskViewMode === "grouped" ? (
-                  <WorkspaceGroupedTasksSection
-                    workspaceTabs={workspaceTabs}
-                    activeWorkspacePath={workspacePath}
-                    activeWorkspaceIdentity={workspaceIdentity}
-                    activeTaskId={activeTaskId}
-                    onSelectTask={onSelectTask}
-                    onCreateTask={onCreateTask}
-                    onOpenFileTree={(target) => {
-                      setFileTreeTarget(target);
-                      setIsFileTreeOpen(true);
-                    }}
-                    onCreateGroupActionChange={handleCreateGroupActionChange}
-                    onCreateDraftTaskActionChange={handleCreateDraftTaskActionChange}
-                    collapsedGroupIds={collapsedGroupedTaskGroupIds}
-                    onGroupedTaskGroupIdsChange={handleGroupedTaskGroupIdsChange}
-                    onCollapsedGroupIdsChange={handleCollapsedGroupedTaskGroupIdsChange}
-                    onStickyGroupHeaderChange={setGroupedStickyHeader}
-                    onOpenAutomations={handleOpenAutomationsMain}
                   />
                 ) : taskViewMode === "timeline" ? (
                   <WorkspaceTimelineTasksSection
@@ -1422,75 +981,47 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                     modifiers={[restrictVerticalDragWithinContainer]}
                     onDragEnd={handlePurposeSectionDragEnd}
                   >
-                    <SortableContext
-                      items={purposeSectionPreferences.sectionOrder}
-                      strategy={verticalListSortingStrategy}
-                    >
+                    <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
                       <div data-purpose-section-list="true">
-                        {purposeSectionPreferences.sectionOrder.map((sectionId) =>
-                          sectionId === "projects" ? (
+                        {sectionOrder.map((sectionId) => {
+                          const sectionTabs = sectionTabsById.get(sectionId) ?? [];
+                          const sectionTitle =
+                            sectionId === "projects"
+                              ? intl.formatMessage({ id: "workspaceSidebar.projectsSection" })
+                              : (sections.find((section) => section.id === sectionId)?.name ?? "");
+                          return sectionId !== "conversations" ? (
                             <WorkspacePurposeSection
                               key={sectionId}
                               sortableId={sectionId}
                               dragHandleLabel={intl.formatMessage(
                                 { id: "workspaceSidebar.reorderSection" },
                                 {
-                                  section: intl.formatMessage({
-                                    id: "workspaceSidebar.projectsSection",
-                                  }),
+                                  section: sectionTitle,
                                 },
                               )}
-                              title={intl.formatMessage({
-                                id: "workspaceSidebar.projectsSection",
-                              })}
-                              open={purposeSectionPreferences.projectsExpanded}
-                              onOpenChange={handleProjectSectionOpenChange}
-                              testId={TID_PROJECT_SECTION}
+                              title={sectionTitle}
+                              open={expandedBySectionId[sectionId] !== false}
+                              onOpenChange={(open) => setSectionExpanded(sectionId, open)}
+                              testId={
+                                sectionId === "projects"
+                                  ? TID_PROJECT_SECTION
+                                  : "sidebar-project-section-" + sectionId
+                              }
                               action={
-                                <DropdownMenu>
-                                  <ControlHintTooltip
-                                    title={intl.formatMessage({
-                                      id: "workspaceSidebar.addProject",
-                                    })}
-                                  >
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        className="text-foreground-subtle hover:text-foreground data-[state=open]:text-foreground"
-                                        aria-label={intl.formatMessage({
-                                          id: "workspaceSidebar.addProject",
-                                        })}
-                                        data-testid={TID_PROJECT_ADD}
-                                      >
-                                        <Plus className="size-3.5" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                  </ControlHintTooltip>
-                                  <DropdownMenuContent align="end" className="min-w-44">
-                                    <DropdownMenuItem onSelect={onOpenFolderFromWorkspaceMenu}>
-                                      <FolderOpen className="size-4" />
-                                      {intl.formatMessage({
-                                        id: "workspace.openFolder",
-                                      })}
-                                    </DropdownMenuItem>
-                                    {onOpenRemoteWorkspace ? (
-                                      <DropdownMenuItem onSelect={onOpenRemoteWorkspace}>
-                                        <Cloud className="size-4" />
-                                        {intl.formatMessage({
-                                          id: "remote.trigger",
-                                        })}
-                                      </DropdownMenuItem>
-                                    ) : null}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                <ProjectSectionHeaderActions
+                                  sectionId={sectionId}
+                                  onOpenFolder={onOpenFolderFromWorkspaceMenu}
+                                  onOpenRemote={onOpenRemoteWorkspace}
+                                />
                               }
                             >
-                              {projectWorkspaceTabs.length === 0 ? (
+                              {sectionTabs.length === 0 ? (
                                 <div className="px-3 py-2 text-ui-base text-foreground-subtle">
                                   {intl.formatMessage({
-                                    id: "workspaceSidebar.noProjects",
+                                    id:
+                                      sectionId === "projects"
+                                        ? "workspaceSidebar.noProjects"
+                                        : "sidebarSection.empty",
                                   })}
                                 </div>
                               ) : (
@@ -1503,11 +1034,18 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                   onDragCancel={handleWorkspaceDragCancel}
                                 >
                                   <SortableContext
-                                    items={projectWorkspaceTabs.map((tab) => tab.id)}
+                                    items={sectionTabs.map((tab) => tab.id)}
                                     strategy={workspaceVerticalListSortingStrategy}
                                   >
-                                    <ul data-testid={TID_WORKSPACE_LIST} className="space-y-2 pb-4">
-                                      {projectWorkspaceTabs.map((tab) => {
+                                    <ul
+                                      data-testid={
+                                        sectionId === "projects"
+                                          ? TID_WORKSPACE_LIST
+                                          : "sidebar-section-workspaces-" + sectionId
+                                      }
+                                      className="space-y-2 pb-4"
+                                    >
+                                      {sectionTabs.map((tab) => {
                                         const workspaceKey = buildTaskWorkspaceKey(
                                           tab.workspacePath,
                                           tab.workspaceIdentity,
@@ -1592,8 +1130,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                               title={intl.formatMessage({
                                 id: "workspaceSidebar.conversationsSection",
                               })}
-                              open={purposeSectionPreferences.conversationsExpanded}
-                              onOpenChange={handleConversationSectionOpenChange}
+                              open={expandedBySectionId.conversations !== false}
+                              onOpenChange={(open) => setSectionExpanded("conversations", open)}
                               testId={TID_CONVERSATION_SECTION}
                               action={
                                 <ControlHintTooltip
@@ -1632,8 +1170,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                 onSelectTask={handleTaskRowSelect}
                               />
                             </WorkspacePurposeSection>
-                          ),
-                        )}
+                          );
+                        })}
                       </div>
                     </SortableContext>
                   </DndContext>

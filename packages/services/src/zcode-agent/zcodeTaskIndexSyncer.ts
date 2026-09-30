@@ -120,7 +120,6 @@ export interface ZCodeTaskIndexSyncer {
     options: {
       modelOverride?: string;
       thoughtLevelOverride?: string;
-      moveGroupedTaskToTop?: boolean;
       unreadSignal?: ZCodeWorkspaceTaskListChanged["unreadSignal"];
       /**
        * 设计修正：必填。切模型（task_model_changed）/快照收敛（task_status_changed）
@@ -502,7 +501,7 @@ export function createZCodeTaskIndexSyncer(
     target: ZCodeAgentSessionTarget,
     reason: string,
     options?: {
-      moveGroupedTaskToTop?: boolean;
+      broadcastReason?: ZCodeWorkspaceTaskListChanged["reason"];
       unreadSignal?: ZCodeWorkspaceTaskListChanged["unreadSignal"];
     },
   ): Promise<void> {
@@ -518,8 +517,7 @@ export function createZCodeTaskIndexSyncer(
       // 回源收敛是状态/正文同步，不涉及 pin/archive/unread 归属（task_status_changed）。
       await syncSnapshotAndBroadcast(snapshot, {
         ...(options?.unreadSignal ? { unreadSignal: options.unreadSignal } : {}),
-        broadcastReason: "task_status_changed",
-        moveGroupedTaskToTop: options?.moveGroupedTaskToTop,
+        broadcastReason: options?.broadcastReason ?? "task_status_changed",
       });
     } catch (error) {
       logger.warn(
@@ -567,7 +565,7 @@ export function createZCodeTaskIndexSyncer(
   function applyTerminalTransition(
     target: ZCodeAgentSessionTarget,
     summary: SessionSummary,
-    options?: { moveGroupedTaskToTop?: boolean },
+    broadcastReason: ZCodeWorkspaceTaskListChanged["reason"] = "task_status_changed",
   ): void {
     emitTerminalAndReady(target, summary);
     const failed = summary.phase === "error";
@@ -608,7 +606,7 @@ export function createZCodeTaskIndexSyncer(
         // 不经过 zcodeSessionService 的 op 驱动 snapshot 同步，行缺失/正文搜索/lastError
         // 全靠这里收敛；readSession(existing-only) 只读现有 runtime，不重新恢复 session。
         void resyncTaskIndexRowFromAgent(target, failed ? "phase.error" : "phase.completed", {
-          moveGroupedTaskToTop: options?.moveGroupedTaskToTop,
+          broadcastReason,
           // patch 已广播时不能让随后的 snapshot 回源再次制造完成提醒；
           // 行缺失时则把同一 signal 交给回源结果，保证提醒既不丢也不重复。
           ...(meta || !unreadSignal ? {} : { unreadSignal }),
@@ -642,10 +640,9 @@ export function createZCodeTaskIndexSyncer(
           // draft session 不预写占位行；首个标题（旧 first_input）先于任何
           // snapshot upsert 到达时按完整 snapshot 回源，避免依赖空 session 占位行。
           // v4 createSession 不经过 zcodeSessionService.createSession；首个标题到达且
-          // task index 尚无行，说明这是新会话首次落库。回源时必须同时写 grouped 顶层最小
-          // sort_order，否则缺序节点会被客户端补到列表末尾。
+          // task index 尚无行，仍须回源写入真实任务，并按首次公开的语义广播。
           void resyncTaskIndexRowFromAgent(target, "meta.titleUpdated", {
-            moveGroupedTaskToTop: true,
+            broadcastReason: "task_created",
           });
         }
       })
@@ -678,17 +675,19 @@ export function createZCodeTaskIndexSyncer(
     const becameTerminal =
       previous !== undefined && !isTerminalPhase(previous.phase) && isTerminalPhase(next.phase);
     if (becameTerminal) {
-      applyTerminalTransition(target, next, {
-        moveGroupedTaskToTop: becameVisibleTask,
-      });
+      applyTerminalTransition(
+        target,
+        next,
+        becameVisibleTask ? "task_created" : "task_status_changed",
+      );
       return;
     }
     if (becameVisibleTask) {
       // v4 预热 session 从 draft 提升，或 online delta 首次出现新 session 时，
       // 不经过 zcodeSessionService.createSession。此处是最早且不依赖标题时序的新任务边界；
-      // 立即回源写入 task 行与 grouped root 最小 sort_order，避免缺序节点落到末尾。
+      // 分组排序退役后仍保留首次公开边界，回源写入 task 事实并通知列表新任务出现。
       void resyncTaskIndexRowFromAgent(target, "session.became-visible", {
-        moveGroupedTaskToTop: true,
+        broadcastReason: "task_created",
       });
       return;
     }
@@ -1664,7 +1663,6 @@ export function createZCodeTaskIndexSyncer(
     options: {
       modelOverride?: string;
       thoughtLevelOverride?: string;
-      moveGroupedTaskToTop?: boolean;
       unreadSignal?: ZCodeWorkspaceTaskListChanged["unreadSignal"];
       broadcastReason: ZCodeWorkspaceTaskListChanged["reason"];
     },
@@ -1675,34 +1673,13 @@ export function createZCodeTaskIndexSyncer(
     // 同时把 snapshot.messages 里可见的聊天正文索引下去，
     // 让 TaskSearchDialog 正文搜索能命中；旧 sqlite 行下次到这里时自然回填。
     const searchableText = buildSearchableTextFromSnapshot(snapshot);
-    // desktop-continuous 首发若先提交 task row、再补 grouped sort_order，
-    // sessions-index 会在两次写之间把缺序 task 暴露给 Renderer，产生先到底部再回顶部的跳动。
-    const { meta: persisted, initializedGroupedOrder } = options?.moveGroupedTaskToTop
-      ? await taskIndexRepo.syncTaskMetaAtGroupedTop({ meta, searchableText })
-      : {
-          meta: await taskIndexRepo.syncTaskMeta({ meta, searchableText }),
-          initializedGroupedOrder: false,
-        };
+    const persisted = await taskIndexRepo.syncTaskMeta({ meta, searchableText });
     // createSession 刚回来时 snapshot 既没有 title 也没有 user message，
     // 默认 title 会落成 "New session" 占位符。这种"还没有任何用户内容"的快照不应该广播给 UI，
     // 否则侧边栏会先闪一下 "New session"，等 sendPrompt 完成后才换成真正的 prompt 文本。
     // sqlite 行仍然要写，让后续标题更新走 applyAgentPatch 时能找到对应行；那次
     // 标题触发的广播才是用户首次在列表里看到这个会话的时刻，标题直接就是 prompt 文本，不会闪。
     if (!hasUserVisibleContent(snapshot)) {
-      if (initializedGroupedOrder) {
-        // 预热 session 从 draft 提升时，grouped 顺序会先于首标题落库。
-        // 即使暂时没有可广播的 task meta，也必须通知 renderer 重拉 structure；
-        // 否则 sessions-index 已显示 task、structure 仍缺序，当前进程会把它补到末尾。
-        emitWorkspaceTaskListChanged(
-          {
-            workspacePath: persisted.workspacePath,
-            workspaceIdentity: persisted.workspaceIdentity,
-            taskId: persisted.taskId,
-          },
-          undefined,
-          "task_created",
-        );
-      }
       return persisted;
     }
     emitWorkspaceTaskListChanged(
@@ -1712,10 +1689,7 @@ export function createZCodeTaskIndexSyncer(
         taskId: persisted.taskId,
       },
       persisted,
-      // sessions-index 可见帧可能早于首次 grouped sort_order 落库。
-      // 首次初始化必须用 task_created 通知运行中的 grouped structure 缓存失效；
-      // 重复 snapshot 没有新增顺序，仍保留调用方原本的 status/title 语义。
-      initializedGroupedOrder ? "task_created" : options.broadcastReason,
+      options.broadcastReason,
       options.unreadSignal ? { unreadSignal: options.unreadSignal } : undefined,
     );
     return persisted;
