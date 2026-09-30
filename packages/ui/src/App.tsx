@@ -16,7 +16,6 @@ import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceReadOnly, isWorkspaceTab } from "@/store/tabStore.js";
 import type { TaskChatMessage as TestChatMessage } from "@/lib/taskChatMessageTypes.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { getPathLeaf } from "@/lib/path.js";
 import {
   addPluginStoreOpenListener,
@@ -134,7 +133,6 @@ export function App({
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const supportsEmbeddedBrowser = explicitSupportsEmbeddedBrowser ?? Boolean(isDesktop);
   const { intl, locale, setLocale } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const platform = usePlatform();
   // 进程内存本地诊断日志：每窗口一个 60s 采样器，
   // 经门控后写桌面主日志；Web 端无日志桥时为 no-op。同一次读数还经 preload 桥把 heap 送 main 的
@@ -971,8 +969,8 @@ export function App({
   const quickPickCommands = useMemo(
     () =>
       createQuickPickCommands({
-        supportsTerminal: !isOfficeMode,
-        supportsReview: !isOfficeMode,
+        supportsTerminal: true,
+        supportsReview: true,
         allowOpenWorkspace,
         canOpenCommunity: canOpenCommunityFromQuickPick,
         isSidebarVisible,
@@ -1015,7 +1013,6 @@ export function App({
       }),
     [
       allowOpenWorkspace,
-      isOfficeMode,
       canOpenCommunityFromQuickPick,
       handleOpenCommunity,
       handleOpenFeedback,

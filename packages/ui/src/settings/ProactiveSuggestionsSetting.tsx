@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch.js";
 import { toast } from "@/components/ui/toast.js";
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { useOnboardingRecordService } from "@/hooks/useOnboardingRecordService.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -12,7 +11,6 @@ export function ProactiveSuggestionsSetting() {
   const { intl } = useZCodeIntl();
   const { settings, update } = useSettings();
   const onboardingRecordService = useOnboardingRecordService();
-  const isOfficeMode = useIsOfficeMode();
   const [saving, setSaving] = useState(false);
   const setSuggestions = async (enabled: boolean) => {
     setSaving(true);
@@ -25,7 +23,7 @@ export function ProactiveSuggestionsSetting() {
         });
     } catch (error) {
       logger.warn("[settings] 更新主动任务推荐失败", { error: String(error) });
-      toast(intl.formatMessage({ id: "chat.officeSuggestions.saveError" }));
+      toast(intl.formatMessage({ id: "chat.proactiveSuggestions.saveError" }));
     } finally {
       setSaving(false);
     }
@@ -33,14 +31,14 @@ export function ProactiveSuggestionsSetting() {
 
   return (
     <SettingsRow
-      label={intl.formatMessage({ id: "chat.officeSuggestions.setting" })}
-      description={intl.formatMessage({ id: "chat.officeSuggestions.settingDescription" })}
+      label={intl.formatMessage({ id: "chat.proactiveSuggestions.setting" })}
+      description={intl.formatMessage({ id: "chat.proactiveSuggestions.settingDescription" })}
       control={
         <Switch
-          checked={isOfficeMode && settings?.proactiveSuggestionsEnabled === true}
-          disabled={!isOfficeMode || saving || !settings}
+          checked={settings?.proactiveSuggestionsEnabled === true}
+          disabled={saving || !settings}
           onCheckedChange={setSuggestions}
-          aria-label={intl.formatMessage({ id: "chat.officeSuggestions.setting" })}
+          aria-label={intl.formatMessage({ id: "chat.proactiveSuggestions.setting" })}
         />
       }
     />

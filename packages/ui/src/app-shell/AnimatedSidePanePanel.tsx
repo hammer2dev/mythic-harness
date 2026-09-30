@@ -17,7 +17,6 @@ import { horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortabl
 import type { BrowserViewScreenshotSurfacePreparePayload, GitChangeSourceId } from "@zcode/shared";
 import { PreviewPane } from "@/PreviewPane.js";
 import { SidePaneTerminalPane } from "@/SidePaneTerminalPane.js";
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { WorkspaceSidePaneToggleButton } from "@/WorkspaceSidePaneToggleButton.js";
 import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import { BrowserUseSidePaneContent } from "@/browser-use/BrowserUseSidePaneContent.js";
@@ -402,7 +401,6 @@ export function AnimatedSidePanePanel({
   onSelectGitSource: (value: GitChangeSourceId) => void;
 }) {
   const { intl } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const developerToolsEnabled = useDeveloperToolsVisibility();
   const isDragCollapsible = !isVisible;
   const isResizeDisabled = !isVisible;
@@ -705,7 +703,7 @@ export function AnimatedSidePanePanel({
             <span>{intl.formatMessage({ id: "sidePane.selectionChat" })}</span>
           </DropdownMenuItem>
         ) : null}
-        {!isOfficeMode && !hasReviewTab ? (
+        {!hasReviewTab ? (
           <DropdownMenuItem
             onSelect={() => {
               onOpenReviewTab();
@@ -724,17 +722,15 @@ export function AnimatedSidePanePanel({
           <PaletteIcon className="size-4" />
           <span>{intl.formatMessage({ id: "whiteboard.title" })}</span>
         </DropdownMenuItem> */}
-        {!isOfficeMode ? (
-          <DropdownMenuItem
-            data-side-pane-add-item="terminal"
-            onSelect={() => {
-              onOpenTerminalTab();
-            }}
-          >
-            <SquareTerminalIcon className="size-4" />
-            <span>{intl.formatMessage({ id: "terminal.title" })}</span>
-          </DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem
+          data-side-pane-add-item="terminal"
+          onSelect={() => {
+            onOpenTerminalTab();
+          }}
+        >
+          <SquareTerminalIcon className="size-4" />
+          <span>{intl.formatMessage({ id: "terminal.title" })}</span>
+        </DropdownMenuItem>
         {supportsEmbeddedBrowser ? (
           <DropdownMenuItem
             data-side-pane-add-item="browser"
@@ -797,9 +793,7 @@ export function AnimatedSidePanePanel({
     developerToolsEnabled,
     hasReviewTab,
     supportsEmbeddedBrowser,
-  })
-    .filter((itemId) => !isOfficeMode || (itemId !== "terminal" && itemId !== "review"))
-    .map((itemId) => openTabLauncherItemById[itemId]);
+  }).map((itemId) => openTabLauncherItemById[itemId]);
   const closeSidePaneButton =
     isVisible && onCloseSidePane ? (
       <div className="flex shrink-0 items-center gap-0.5 [app-region:no-drag]">

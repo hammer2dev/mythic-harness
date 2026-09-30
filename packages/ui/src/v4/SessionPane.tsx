@@ -4,7 +4,6 @@ import type { SessionCreateSource } from "@zcode/shared";
 import { reportSessionCreate } from "@/lib/sessionCreateTelemetry.js";
 import { getLocalTtftObserver } from "@/v4/telemetry/localTtftObserver.js";
 /* oxlint-disable eslint(max-lines) -- SessionPane 是单 pane 竖切的命令编排收口（订阅/发送/停止/fork/edit/retry/queue/slash 全集），与旧 ChatView 同粒度；HEAD 已超限（693 行计数），拆散命令组会打散 dispatchCommand/snapshotRef 的闭包纪律。 */
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import {
   useCallback,
   useEffect,
@@ -3768,11 +3767,9 @@ export function SessionPane({
     setSelectionSideChatBlocked(sessionId, Boolean(blockingInteractionId));
     return () => setSelectionSideChatBlocked(sessionId, false);
   }, [blockingInteractionId, selectionSideChat, sessionId]);
-  const isOfficeMode = useIsOfficeMode();
   const statusPanelModel = useMemo(
     () =>
       buildConversationStatusPanelModel({
-        isOfficeMode,
         workspacePath,
         gitSummary,
         gitDirtyFileCount,
@@ -3785,7 +3782,6 @@ export function SessionPane({
         workflowRuns: snapshot?.workflowRuns?.runs ?? [],
       }),
     [
-      isOfficeMode,
       gitDirtyFileCount,
       gitSummary,
       gitWorktreeChangeSummary,
@@ -4492,11 +4488,10 @@ export function SessionPane({
         />
       ) : null}
       {composerNode}
-      {/* 办公模式显示主动任务推荐；编程模式保留原有小型场景入口。 */}
-      {isDraft && (!isOfficeMode || sharedSettings?.proactiveSuggestionsEnabled === true) ? (
+      {isDraft ? (
         <ConversationDraftSuggestedPromptsContainer
-          className={isOfficeMode ? "mt-4" : "mt-6"}
-          proactive={isOfficeMode}
+          className={sharedSettings?.proactiveSuggestionsEnabled === true ? "mt-4" : "mt-6"}
+          proactive={sharedSettings?.proactiveSuggestionsEnabled === true}
           onOpenAutomations={
             onOpenAutomationsMain
               ? (automationTab) => onOpenAutomationsMain(undefined, automationTab)

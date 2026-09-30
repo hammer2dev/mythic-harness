@@ -1,5 +1,4 @@
 /* oxlint-disable eslint(max-lines) -- v4 逐行 row 渲染分发集中收口（每种 row 一个 memo 叶子 + timelineMarker 分隔线），拆分会打散行类型对照。 */
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArchiveIcon,
@@ -1502,7 +1501,6 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
   codeCommentProjectionEnabled?: boolean;
 }) {
   const streaming = row.state === "streaming";
-  const isOfficeMode = useIsOfficeMode();
   const codeCommentCardsEnabled = useAssistantCodeCommentFeatureEnabled();
   const projectsCodeComments = codeCommentCardsEnabled && codeCommentProjectionEnabled === true;
   const visibleText = useMemo(
@@ -1529,7 +1527,6 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
           workspaceRemoteSessionId={context.workspaceRemoteSessionId}
           theme={context.theme}
           codePreviewSettings={context.codePreviewSettings}
-          forceCodeWrap={isOfficeMode}
           onOpenCodeViewer={context.onOpenCodeViewer}
           onOpenFileLink={context.onOpenFileLink}
           onOpenExternalUrl={context.onOpenBrowserUrl}
@@ -1754,7 +1751,6 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
   context: ConversationRowRenderContext;
 }) {
   const { intl } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const marker = row.marker;
   const modelSelectionView = context.modelSelectionView ?? null;
   const view = useMemo((): {
@@ -1765,8 +1761,7 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
     switch (marker.type) {
       case "compact": {
         const running = marker.status === "running";
-        const automaticOptimization = isOfficeMode && marker.origin === "auto";
-        const scope = automaticOptimization ? "chat.contextOptimization" : "chat.contextCompaction";
+        const scope = "chat.contextCompaction";
         const statusMessage =
           marker.status === "running"
             ? "started"
@@ -1776,7 +1771,7 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
                 ? "interrupted"
                 : marker.status === "failed"
                   ? "failed"
-                  : marker.origin === "auto" && !automaticOptimization
+                  : marker.origin === "auto"
                     ? "completedAuto"
                     : "completed";
         return {
@@ -1853,7 +1848,7 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
       default:
         return null;
     }
-  }, [intl, isOfficeMode, marker, modelSelectionView]);
+  }, [intl, marker, modelSelectionView]);
 
   // fork 跳父会话（Tier 1）：仅 forkNotice 且宿主提供 onNavigateToRow 时可点，
   // 切到 marker.parentSessionId（rowId 预留 Tier 2 精确滚动，当前恒 0 占位）。

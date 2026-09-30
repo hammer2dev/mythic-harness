@@ -206,7 +206,7 @@ export function ConversationDraftSuggestedPrompts({
                 disabled={disabled || refreshDisabled}
                 onClick={onRefresh}
               >
-                {intl.formatMessage({ id: "chat.officeSuggestions.refresh" })}
+                {intl.formatMessage({ id: "chat.proactiveSuggestions.refresh" })}
               </Button>
             ) : null}
             {onClose ? (
@@ -215,7 +215,7 @@ export function ConversationDraftSuggestedPrompts({
                 variant="ghost"
                 size="icon-sm"
                 disabled={disabled || refreshDisabled}
-                aria-label={intl.formatMessage({ id: "chat.officeSuggestions.closeTitle" })}
+                aria-label={intl.formatMessage({ id: "chat.proactiveSuggestions.closeTitle" })}
                 onClick={() => setConfirmClose(true)}
               >
                 <X className="size-4" />
@@ -227,10 +227,10 @@ export function ConversationDraftSuggestedPrompts({
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {intl.formatMessage({ id: "chat.officeSuggestions.closeTitle" })}
+                {intl.formatMessage({ id: "chat.proactiveSuggestions.closeTitle" })}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                {intl.formatMessage({ id: "chat.officeSuggestions.closeDescription" })}
+                {intl.formatMessage({ id: "chat.proactiveSuggestions.closeDescription" })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

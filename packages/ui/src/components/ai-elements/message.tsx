@@ -353,8 +353,6 @@ export const MessageBranchPage = ({ className, ...props }: MessageBranchPageProp
 };
 
 export type MessageResponseProps = {
-  /** 办公模式的正式回答固定换行，不覆盖用户保存的代码预览设置。 */
-  forceCodeWrap?: boolean;
   className?: string;
   children?: ReactNode;
   dir?: "auto" | "ltr" | "rtl";
@@ -1295,7 +1293,6 @@ export const messageResponsePropsAreEqual = (
   nextProps: Readonly<MessageResponseProps>,
 ): boolean =>
   prevProps.children === nextProps.children &&
-  prevProps.forceCodeWrap === nextProps.forceCodeWrap &&
   nextProps.streaming === prevProps.streaming &&
   nextProps.streamingAnimationKey === prevProps.streamingAnimationKey &&
   nextProps.workspacePath === prevProps.workspacePath &&
@@ -1315,7 +1312,6 @@ export const MessageResponse = memo(
   ({
     className,
     streaming = false,
-    forceCodeWrap = false,
     onOpenCodeViewer,
     onOpenFileLink,
     onOpenExternalUrl,
@@ -1330,7 +1326,7 @@ export const MessageResponse = memo(
     codePreviewSettings = DEFAULT_CODE_PREVIEW_SETTINGS,
     children,
   }: MessageResponseProps) => {
-    const wrapLongLines = forceCodeWrap || codePreviewSettings.wrapLongLines;
+    const wrapLongLines = codePreviewSettings.wrapLongLines;
     const rawMarkdown = useMemo(() => extractCodeText(children), [children]);
     const renderStreaming = streaming;
     const projectedCitationMarkdown = useMemo(
@@ -1397,25 +1393,22 @@ export const MessageResponse = memo(
       [codePreviewSettings.lightTheme, codePreviewSettings.darkTheme],
     );
     const streamdownRenderKey = useMemo(() => {
-      return (
-        buildMessageStreamdownRenderKey({
-          attachmentReaderEpoch: getAttachmentReaderEpoch(readAttachment),
-          codeBlockTheme,
-          fontSizePx: codePreviewSettings.fontSizePx,
-          renderZCodeFileCitations,
-          sessionId,
-          workspacePath,
-          workspaceHomePath,
-          workspaceIdentity,
-          workspaceRemoteSessionId,
-          wrapLongLines,
-        }) + (forceCodeWrap ? ":wrap-locked" : "")
-      );
+      return buildMessageStreamdownRenderKey({
+        attachmentReaderEpoch: getAttachmentReaderEpoch(readAttachment),
+        codeBlockTheme,
+        fontSizePx: codePreviewSettings.fontSizePx,
+        renderZCodeFileCitations,
+        sessionId,
+        workspacePath,
+        workspaceHomePath,
+        workspaceIdentity,
+        workspaceRemoteSessionId,
+        wrapLongLines,
+      });
     }, [
       codeBlockTheme,
       codePreviewSettings.fontSizePx,
       wrapLongLines,
-      forceCodeWrap,
       renderZCodeFileCitations,
       readAttachment,
       sessionId,
@@ -1572,11 +1565,7 @@ export const MessageResponse = memo(
               appTheme={theme}
               wrapLongLines={wrapLongLines}
             >
-              <CodeBlockHeader
-                className="pl-3 pr-2 pt-2"
-                language={language}
-                showWrapButton={!forceCodeWrap}
-              />
+              <CodeBlockHeader className="pl-3 pr-2 pt-2" language={language} />
             </CodeBlock>
           );
         },
@@ -1595,7 +1584,6 @@ export const MessageResponse = memo(
         codeBlockTheme,
         codePreviewSettings.fontSizePx,
         wrapLongLines,
-        forceCodeWrap,
         onOpenFileLink,
         onOpenCodeViewer,
         onOpenExternalUrl,

@@ -1,4 +1,3 @@
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { useOnboardingRecordService } from "@/hooks/useOnboardingRecordService.js";
 import {
@@ -89,23 +88,21 @@ export function ConversationDraftSuggestedPromptsContainer({
 }: Props) {
   const { intl, locale } = useZCodeIntl();
   const platform = usePlatform();
-  const isOfficeMode = useIsOfficeMode();
   const { update } = useSettings();
   const onboardingRecordService = useOnboardingRecordService();
   const recommendationPaneId = useId();
-  const recommendationMode = isOfficeMode ? "office" : "coding";
   const recommendationRevision = useSyncExternalStore(
     subscribeRecommendedPrompts,
     getRecommendedPromptsRevision,
   );
   useEffect(() => {
     if (!proactive) return;
-    registerRecommendedPromptPane(recommendationPaneId, recommendationMode);
+    registerRecommendedPromptPane(recommendationPaneId);
     return () => unregisterRecommendedPromptPane(recommendationPaneId);
-  }, [proactive, recommendationMode, recommendationPaneId]);
+  }, [proactive, recommendationPaneId]);
   const recommendedItems = useMemo(
-    () => getRecommendedPromptsForPane(recommendationPaneId, recommendationMode),
-    [recommendationMode, recommendationPaneId, recommendationRevision],
+    () => getRecommendedPromptsForPane(recommendationPaneId),
+    [recommendationPaneId, recommendationRevision],
   );
   const [closing, setClosing] = useState(false);
   const closeRecommendations = async () => {
@@ -121,7 +118,7 @@ export function ConversationDraftSuggestedPromptsContainer({
         });
     } catch (error) {
       logger.warn("[v4-suggested-prompts] 关闭推荐失败", { error: String(error) });
-      toast(intl.formatMessage({ id: "chat.officeSuggestions.closeError" }));
+      toast(intl.formatMessage({ id: "chat.proactiveSuggestions.closeError" }));
     } finally {
       setClosing(false);
     }
