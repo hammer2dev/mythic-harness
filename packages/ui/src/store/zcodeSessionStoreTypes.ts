@@ -426,7 +426,7 @@ export interface ZCodeSessionStoreState {
     workspaceIdentity?: string,
   ) => void;
 
-  /** workspace 导航历史（全局、跨 workspace，包含 task 与 Automations） */
+  /** workspace 导航历史（全局、跨 workspace，包含任务、定时任务、工作流和插件市场） */
   taskNavHistory: TaskNavigationHistory;
   /** 记录 Automations 主视图或详情导航。 */
   taskNavPushAutomations: (
@@ -437,6 +437,8 @@ export interface ZCodeSessionStoreState {
   ) => void;
   /** 记录插件市场主视图导航。 */
   taskNavPushPluginStore: (workspacePath: string, workspaceIdentity?: string) => void;
+  /** 记录工作流主视图导航，沿用同一 workspace 历史。 */
+  taskNavPushWorkflows: (workspacePath: string, workspaceIdentity?: string) => void;
   /** 后退，返回目标 entry；到头了返回 null */
   taskNavGoBack: () => WorkspaceNavEntry | null;
   /** 前进，返回目标 entry；到头了返回 null */

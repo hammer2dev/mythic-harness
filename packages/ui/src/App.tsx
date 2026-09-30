@@ -56,6 +56,7 @@ import {
 import { useTaskSidePaneMemoryBridge } from "@/app-shell/useTaskSidePaneMemoryBridge.js";
 import { resolveAppWorkspaceRpcTarget } from "@/app-shell/workspaceRpcTarget.js";
 import { useWorkspaceServicesResolution } from "@/hooks/useWorkspaceServices.js";
+import { useDynamicWorkflowAvailability } from "@/hooks/useDynamicWorkflowAvailability.js";
 import { useWorkspaceTerminalTaskNotifications } from "@/hooks/useTaskNotifications.js";
 import { useOffPeakTaskNotifications } from "@/hooks/useOffPeakTaskNotifications.js";
 import type { AppProps, WorkspaceMainView } from "@/app-shell/types.js";
@@ -799,6 +800,12 @@ export function App({
   );
   useTestActions(testActions);
   const [workspaceMainView, setWorkspaceMainView] = useState<WorkspaceMainView>("chat");
+  const { enabled: dynamicWorkflowEnabled } = useDynamicWorkflowAvailability();
+  useEffect(() => {
+    if (!dynamicWorkflowEnabled && workspaceMainView === "workflows") {
+      setWorkspaceMainView("automations");
+    }
+  }, [dynamicWorkflowEnabled, workspaceMainView]);
   const [openAutomationId, setOpenAutomationId] = useState<string | null>(null);
   const [openAutomationTab, setOpenAutomationTab] = useState<NonNullable<
     AutomationsNavigationTarget["automationTab"]
@@ -817,6 +824,9 @@ export function App({
     setOpenAutomationTab(target.automationTab ?? null);
     setWorkspaceMainView("automations");
   }, []);
+  const handleNavigateToWorkflowsMain = useCallback(() => {
+    setWorkspaceMainView("workflows");
+  }, []);
   const handleNavigateToPluginStoreMain = useCallback(() => {
     setPluginStoreOpenVersion((version) => version + 1);
     preserveNextSettingsExit();
@@ -829,6 +839,7 @@ export function App({
   const {
     handleSelectTask,
     handleOpenAutomations,
+    handleOpenWorkflows,
     handleOpenPluginStore,
     handleTaskNavBack,
     handleTaskNavForward,
@@ -843,6 +854,7 @@ export function App({
     activateTabByPath,
     onNavigateToTask: handleNavigateToTaskMain,
     onNavigateToAutomations: handleNavigateToAutomationsMain,
+    onNavigateToWorkflows: handleNavigateToWorkflowsMain,
     onNavigateToPluginStore: handleNavigateToPluginStoreMain,
   });
   const handleOpenPluginStoreRequest = useCallback(() => {
@@ -1090,6 +1102,7 @@ export function App({
         onWorkspaceMainViewChange={setWorkspaceMainView}
         onOpenAutomationConsumed={handleOpenAutomationConsumed}
         handleOpenAutomations={handleOpenAutomations}
+        handleOpenWorkflows={handleOpenWorkflows}
         handleOpenPluginStore={handleOpenPluginStoreRequest}
         onConnectRemote={onConnectRemote}
         onSelectRemoteProject={onSelectRemoteProject}

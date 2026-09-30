@@ -43,9 +43,14 @@ export interface SavedWorkflowsOpenArtifactParams {
 export interface SavedWorkflowGroupState {
   loaded: boolean;
   empty: boolean;
+  /** 目录保留未连接项目的入口，但不把其查询状态显示成空目录。 */
+  available: boolean;
   /** 本组的合法工作流条数（未加载前为 0）；页对已加载组求和得到标题旁的总数。 */
   count: number;
 }
 
-/** 组的两种模式：列表 / 单个工作流详情。项目组与全局组共用。 */
-export type SavedWorkflowGroupMode = { kind: "list" } | { kind: "detail"; name: string };
+/** 未选中的组只保留查询与监听，选中的组渲染列表或单个工作流详情。 */
+export type SavedWorkflowGroupMode =
+  | { kind: "list" }
+  | { kind: "detail"; name: string }
+  | { kind: "hidden" };

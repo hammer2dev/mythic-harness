@@ -1485,6 +1485,7 @@ const zhCN: Record<string, string> = {
   "workspaceSidebar.projectsSection": "项目",
   "workspaceNavigation.label": "主导航",
   "workspaceNavigation.scheduledTasks": "定时任务",
+  "workspaceNavigation.workflows": "工作流",
   "workspaceSidebar.newConversation": "新建任务",
   "workspaceSidebar.reorderSection": "移动{section}分区",
   "workspaceSidebar.addProject": "添加项目",
@@ -4802,11 +4803,13 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.models.noLevels": "没有思考强度档位",
   "chat.toolCall.workflow.models.truncated": "未显示全部模型",
 
-  // ── 已保存工作流的 GUI 中枢：自动化页「工作流」标签、
+  // ── 已保存工作流的独立管理页、
   // 卡片、实参窗、详情页、运行历史。术语（run = 实例）。
-  "automations.pageTab.ariaLabel": "自动化页面",
-  "automations.pageTab.automation": "自动化",
-  "automations.pageTab.workflow": "工作流",
+  "workflows.breadcrumbLabel": "工作流路径",
+  "workflows.navigation.title": "工作流",
+  "workflows.navigation.overview": "全部工作流",
+  "workflows.navigation.empty": "暂无工作流",
+  "workflows.navigation.unavailable": "项目未连接",
   "workflows.hub.description": "保存在已打开项目里的工作流，填好参数就能再跑一次。",
   "workflows.hub.sectionTitle": "已保存的工作流",
   "workflows.hub.refresh": "刷新",
@@ -6001,7 +6004,7 @@ const zhCN: Record<string, string> = {
   // Automations 同时包含定时任务和闲时任务，顶层入口不能误用其中一个子类型的名称。
   "workspace.openScheduledSettings": "自动化",
   "settings.automations.title": "自动化",
-  "automations.breadcrumbLabel": "自动化路径",
+  "automations.breadcrumbLabel": "定时任务路径",
   "settings.automations.betaBadge": "Beta",
   "automations.noWorkspace": "打开一个工作区以管理它的定时任务。",
   "automations.workspace.label": "项目",

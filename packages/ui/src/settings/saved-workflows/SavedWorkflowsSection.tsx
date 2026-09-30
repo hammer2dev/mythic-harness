@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import {
   TID_WORKFLOWS_CREATE_VIA_CHAT,
@@ -22,6 +23,11 @@ import { buildSavedWorkflowCreatePrompt } from "@/settings/saved-workflows/saved
 import { SavedWorkflowProjectGroup } from "@/settings/saved-workflows/SavedWorkflowProjectGroup.js";
 import { SavedWorkflowGlobalGroup } from "@/settings/saved-workflows/SavedWorkflowGlobalGroup.js";
 import type { SavedWorkflowLaunchTarget } from "@/settings/saved-workflows/useSavedWorkflowLauncher.js";
+import { SavedWorkflowsSecondaryNavigation } from "@/settings/saved-workflows/SavedWorkflowsSecondaryNavigation.js";
+import {
+  resolveSavedWorkflowGroupMode,
+  type SavedWorkflowsSelection,
+} from "@/settings/saved-workflows/savedWorkflowNavigation.js";
 import type {
   SavedWorkflowGroupState,
   SavedWorkflowProjectTarget,
@@ -42,7 +48,9 @@ export type SavedWorkflowsOpenTarget =
   | { scope: "global"; name: string };
 
 interface SavedWorkflowsSectionProps {
-  /** 页头（标题切换 + 副标题）；只在列表态渲染，详情页与定时任务编辑页一样独占整页。 */
+  /** undefined 使用页面内布局；null 表示外部二级目录插槽尚未挂载。 */
+  navigationContainer?: HTMLElement | null;
+  /** 概览页的标题与说明；详情页保留独立标题。 */
   header?: ReactNode;
   /** 活动 workspace：只用来打「当前」标记和作全局空态的创建目标。 */
   workspacePath?: string | null;
@@ -60,11 +68,6 @@ interface SavedWorkflowsSectionProps {
   onOpenWorkflowConsumed?: () => void;
 }
 
-type SavedWorkflowsView =
-  | { mode: "list" }
-  | { mode: "detail"; scope: "project"; workspaceKey: string; name: string }
-  | { mode: "detail"; scope: "global"; name: string };
-
 /** 全局组的 readiness 用固定键 `"global"`，与项目组的 workspaceKey 同存一张表。 */
 const GLOBAL_READINESS_KEY = "global";
 
@@ -80,6 +83,7 @@ function resolveOptionKey(option: AutomationWorkspaceOption): string {
  * 其下按已打开项目分组。页只持有刷新计数器、每组的加载态、详情态；「项目」= `buildAutomationWorkspaceOptions`。
  */
 export function SavedWorkflowsSection({
+  navigationContainer,
   header,
   workspacePath,
   workspaceIdentity,
@@ -99,7 +103,7 @@ export function SavedWorkflowsSection({
     [projects],
   );
 
-  const [view, setView] = useState<SavedWorkflowsView>({ mode: "list" });
+  const [view, setView] = useState<SavedWorkflowsSelection>({ mode: "list" });
   const [refreshSeq, setRefreshSeq] = useState(0);
   const [readiness, setReadiness] = useState<Record<string, SavedWorkflowGroupState>>({});
 
@@ -122,7 +126,8 @@ export function SavedWorkflowsSection({
         prev &&
         prev.loaded === next.loaded &&
         prev.empty === next.empty &&
-        prev.count === next.count
+        prev.count === next.count &&
+        prev.available === next.available
       ) {
         return current;
       }
@@ -197,42 +202,6 @@ export function SavedWorkflowsSection({
     onMoved: handleMoved,
   };
 
-  // 详情态：只渲染选中的那一组（它内部渲染整页详情），不带页头 / 工具行。
-  if (view.mode === "detail" && view.scope === "global") {
-    return (
-      <SavedWorkflowGlobalGroup
-        {...globalGroupCommonProps}
-        mode={{ kind: "detail", name: view.name }}
-        onOpenDetail={(name) => setView({ mode: "detail", scope: "global", name })}
-        onBack={() => setView({ mode: "list" })}
-      />
-    );
-  }
-  if (view.mode === "detail") {
-    const project = projects.find((candidate) => resolveOptionKey(candidate) === view.workspaceKey);
-    if (project) {
-      return (
-        <SavedWorkflowProjectGroup
-          key={view.workspaceKey}
-          project={project}
-          isCurrent={activeKey === view.workspaceKey}
-          refreshSeq={refreshSeq}
-          mode={{ kind: "detail", name: view.name }}
-          onStateChange={handleStateChange}
-          onOpenDetail={(name) =>
-            setView({ mode: "detail", scope: "project", workspaceKey: view.workspaceKey, name })
-          }
-          onBack={() => setView({ mode: "list" })}
-          onNavigateToLaunchedRun={onNavigateToLaunchedRun}
-          onCreateViaChat={onCreateViaChat}
-          onOpenWorkflowRun={onOpenWorkflowRun}
-          onOpenWorkflowArtifact={onOpenWorkflowArtifact}
-        />
-      );
-    }
-    // 项目在详情打开后被关闭：上面的 effect 会把 view 复位为列表，这里先落回列表渲染。
-  }
-
   const globalReady = readiness[GLOBAL_READINESS_KEY];
   const anyLoaded =
     Boolean(globalReady?.loaded) ||
@@ -240,7 +209,10 @@ export function SavedWorkflowsSection({
   // 全局空态卡只看项目组：所有项目组都加载且空时出现，忽略全局组的空/满。
   const allProjectsLoaded =
     projects.length > 0 &&
-    projects.every((project) => readiness[resolveOptionKey(project)]?.loaded);
+    projects.every((project) => {
+      const state = readiness[resolveOptionKey(project)];
+      return state?.loaded && state.available;
+    });
   const allProjectsEmpty =
     allProjectsLoaded && projects.every((project) => readiness[resolveOptionKey(project)]?.empty);
   // 标题旁的总数 = 各已加载组（含全局组）的合法工作流条数之和。
@@ -252,101 +224,123 @@ export function SavedWorkflowsSection({
     globalReady?.loaded ? globalReady.count : 0,
   );
 
+  const navigation = navigationContainer
+    ? createPortal(
+        <SavedWorkflowsSecondaryNavigation
+          projects={projects}
+          readiness={readiness}
+          selection={view}
+          onSelect={setView}
+        />,
+        navigationContainer,
+      )
+    : null;
+
   return (
-    <div data-automations-content className={cn(SETTINGS_FRAME_CONTENT_CLASSNAME, "flex flex-col")}>
-      {header}
+    <>
+      {navigation}
+      <div
+        data-workflows-content
+        className={cn("flex flex-col", view.mode === "list" && SETTINGS_FRAME_CONTENT_CLASSNAME)}
+      >
+        {view.mode === "list" ? header : null}
 
-      <div className="mt-8 flex items-center justify-between">
-        <h2 className="text-ui-base font-medium leading-5 text-foreground-subtle">
-          {intl.formatMessage({ id: "workflows.hub.sectionTitle" })}
-          {totalCount > 0 ? (
-            <span className="ml-1 font-normal text-foreground-subtlest">{totalCount}</span>
-          ) : null}
-        </h2>
-        <ControlHintTooltip title={intl.formatMessage({ id: "workflows.hub.refresh" })}>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label={intl.formatMessage({ id: "workflows.hub.refresh" })}
-            data-testid={TID_WORKFLOWS_REFRESH}
-            onClick={() => setRefreshSeq((seq) => seq + 1)}
-          >
-            <AutomationRefreshIcon className="size-3.5" aria-hidden="true" />
-          </Button>
-        </ControlHintTooltip>
-      </div>
-
-      {!anyLoaded ? (
-        <div className="mt-8 flex h-40 items-center justify-center">
-          <Spinner className="size-5" />
-        </div>
-      ) : null}
-
-      {/* 组始终挂载才能各自加载并回报状态（未就绪 / 空项目组内部渲染 null；全局组空也显示）；
-         首屏 spinner 只是覆盖在上，不阻断加载。全局组恒置顶，项目组在其下。 */}
-      <div className={cn("flex flex-col", anyLoaded ? "mt-5" : "hidden")}>
-        <SavedWorkflowGlobalGroup
-          {...globalGroupCommonProps}
-          mode={{ kind: "list" }}
-          onOpenDetail={(name) => setView({ mode: "detail", scope: "global", name })}
-          onBack={() => setView({ mode: "list" })}
-        />
-
-        {projects.length === 0 ? (
-          <p className="mt-8 text-ui-base text-foreground-subtlest">
-            {intl.formatMessage({ id: "workflows.hub.noWorkspace" })}
-          </p>
-        ) : allProjectsEmpty ? (
-          <div
-            data-testid={TID_WORKFLOWS_EMPTY}
-            className="mt-8 flex h-[226px] w-full items-center justify-center rounded-2xl border border-card-border bg-background px-4"
-          >
-            <div className="flex translate-y-2 flex-col items-center gap-5">
-              <div className="flex flex-col items-center gap-1.5 text-center">
-                <p className="text-ui-base font-medium leading-5 text-foreground-subtlest">
-                  {intl.formatMessage({ id: "workflows.hub.empty.title" })}
-                </p>
-                <p className="max-w-[420px] text-ui-base leading-5 text-foreground-subtlest">
-                  {intl.formatMessage({ id: "workflows.hub.empty.hint" })}
-                </p>
-              </div>
+        {view.mode === "list" ? (
+          <div className="mt-8 flex items-center justify-between">
+            <h2 className="text-ui-base font-medium leading-5 text-foreground-subtle">
+              {intl.formatMessage({ id: "workflows.hub.sectionTitle" })}
+              {totalCount > 0 ? (
+                <span className="ml-1 font-normal text-foreground-subtlest">{totalCount}</span>
+              ) : null}
+            </h2>
+            <ControlHintTooltip title={intl.formatMessage({ id: "workflows.hub.refresh" })}>
               <Button
                 type="button"
-                size="lg"
-                data-icon="inline-start"
-                data-testid={TID_WORKFLOWS_CREATE_VIA_CHAT}
-                onClick={handleCreateFromEmpty}
+                variant="outline"
+                size="icon"
+                aria-label={intl.formatMessage({ id: "workflows.hub.refresh" })}
+                data-testid={TID_WORKFLOWS_REFRESH}
+                onClick={() => setRefreshSeq((seq) => seq + 1)}
               >
-                <Plus className="size-4" aria-hidden="true" />
-                {intl.formatMessage({ id: "workflows.hub.createViaChat" })}
+                <AutomationRefreshIcon className="size-3.5" aria-hidden="true" />
               </Button>
-            </div>
+            </ControlHintTooltip>
           </div>
         ) : null}
 
-        {projects.map((project) => {
-          const workspaceKey = resolveOptionKey(project);
-          return (
-            <SavedWorkflowProjectGroup
-              key={workspaceKey}
-              project={project}
-              isCurrent={activeKey === workspaceKey}
-              refreshSeq={refreshSeq}
-              mode={{ kind: "list" }}
-              onStateChange={handleStateChange}
-              onOpenDetail={(name) =>
-                setView({ mode: "detail", scope: "project", workspaceKey, name })
-              }
-              onBack={() => setView({ mode: "list" })}
-              onNavigateToLaunchedRun={onNavigateToLaunchedRun}
-              onCreateViaChat={onCreateViaChat}
-              onOpenWorkflowRun={onOpenWorkflowRun}
-              onOpenWorkflowArtifact={onOpenWorkflowArtifact}
-            />
-          );
-        })}
+        {view.mode === "list" && !anyLoaded ? (
+          <div className="mt-8 flex h-40 items-center justify-center">
+            <Spinner className="size-5" />
+          </div>
+        ) : null}
+
+        {/* 组始终挂载才能各自加载并回报状态（未就绪 / 空项目组内部渲染 null；全局组空也显示）；
+         首屏 spinner 只是覆盖在上，不阻断加载。全局组恒置顶，项目组在其下。 */}
+        <div
+          className={cn("flex flex-col", view.mode === "list" && (anyLoaded ? "mt-5" : "hidden"))}
+        >
+          <SavedWorkflowGlobalGroup
+            {...globalGroupCommonProps}
+            mode={resolveSavedWorkflowGroupMode(view, "global")}
+            onOpenDetail={(name) => setView({ mode: "detail", scope: "global", name })}
+            onBack={() => setView({ mode: "list" })}
+          />
+
+          {view.mode !== "list" ? null : projects.length === 0 ? (
+            <p className="mt-8 text-ui-base text-foreground-subtlest">
+              {intl.formatMessage({ id: "workflows.hub.noWorkspace" })}
+            </p>
+          ) : allProjectsEmpty ? (
+            <div
+              data-testid={TID_WORKFLOWS_EMPTY}
+              className="mt-8 flex h-[226px] w-full items-center justify-center rounded-2xl border border-card-border bg-background px-4"
+            >
+              <div className="flex translate-y-2 flex-col items-center gap-5">
+                <div className="flex flex-col items-center gap-1.5 text-center">
+                  <p className="text-ui-base font-medium leading-5 text-foreground-subtlest">
+                    {intl.formatMessage({ id: "workflows.hub.empty.title" })}
+                  </p>
+                  <p className="max-w-[420px] text-ui-base leading-5 text-foreground-subtlest">
+                    {intl.formatMessage({ id: "workflows.hub.empty.hint" })}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="lg"
+                  data-icon="inline-start"
+                  data-testid={TID_WORKFLOWS_CREATE_VIA_CHAT}
+                  onClick={handleCreateFromEmpty}
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                  {intl.formatMessage({ id: "workflows.hub.createViaChat" })}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {projects.map((project) => {
+            const workspaceKey = resolveOptionKey(project);
+            return (
+              <SavedWorkflowProjectGroup
+                key={workspaceKey}
+                project={project}
+                isCurrent={activeKey === workspaceKey}
+                refreshSeq={refreshSeq}
+                mode={resolveSavedWorkflowGroupMode(view, "project", workspaceKey)}
+                onStateChange={handleStateChange}
+                onOpenDetail={(name) =>
+                  setView({ mode: "detail", scope: "project", workspaceKey, name })
+                }
+                onBack={() => setView({ mode: "list" })}
+                onNavigateToLaunchedRun={onNavigateToLaunchedRun}
+                onCreateViaChat={onCreateViaChat}
+                onOpenWorkflowRun={onOpenWorkflowRun}
+                onOpenWorkflowArtifact={onOpenWorkflowArtifact}
+              />
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

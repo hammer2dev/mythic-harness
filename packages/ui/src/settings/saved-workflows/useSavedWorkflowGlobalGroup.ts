@@ -27,6 +27,7 @@ import {
 import type { SavedWorkflowGroupMode } from "@/settings/saved-workflows/SavedWorkflowProjectGroup.js";
 import { useSavedWorkflowRunOpeners } from "@/settings/saved-workflows/useSavedWorkflowRunOpeners.js";
 import type {
+  SavedWorkflowGroupState,
   SavedWorkflowProjectTarget,
   SavedWorkflowsOpenArtifactParams,
   SavedWorkflowsOpenRunParams,
@@ -36,7 +37,7 @@ import { selectSavedWorkflowState, useSavedWorkflowStore } from "@/store/savedWo
 interface UseSavedWorkflowGlobalGroupParams {
   refreshSeq: number;
   mode: SavedWorkflowGroupMode;
-  onStateChange: (key: "global", state: { loaded: boolean; empty: boolean; count: number }) => void;
+  onStateChange: (key: "global", state: SavedWorkflowGroupState) => void;
   onOpenDetail: (name: string) => void;
   onBack: () => void;
   /** 「运行」= GUI 直接启动：accepted 后切到新会话。 */
@@ -104,11 +105,18 @@ export function useSavedWorkflowGlobalGroup({
     refresh,
   });
 
-  const empty = state.loaded && state.entries.length === 0 && state.invalid.length === 0;
+  // 读取失败不能当作空库存，保留全局运行时与读取失败提示。
+  const empty =
+    state.loaded && !state.error && state.entries.length === 0 && state.invalid.length === 0;
   const count = state.loaded ? state.entries.length : 0;
   useEffect(() => {
-    onStateChange("global", { loaded: state.loaded, empty, count });
-  }, [count, empty, onStateChange, state.loaded]);
+    onStateChange("global", {
+      loaded: state.loaded,
+      empty,
+      count,
+      available: state.error === null,
+    });
+  }, [count, empty, onStateChange, state.error, state.loaded]);
 
   const lastRuns = useMemo(() => lastRunByWorkflowName(state.runs), [state.runs]);
   const resolveRunProject = useMemo(

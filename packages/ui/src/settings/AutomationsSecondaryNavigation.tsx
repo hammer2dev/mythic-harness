@@ -1,14 +1,16 @@
-import { Clock3, Moon, Workflow } from "lucide-react";
+import { Clock3, Moon } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { Spinner } from "@/components/ui/spinner.js";
 import type { AutomationsNavigationTab } from "@/lib/taskNavigationHistory.js";
 
+type AutomationTaskNavigationTab = Exclude<AutomationsNavigationTab, "workflow">;
+
 interface AutomationsSecondaryNavigationProps {
   title: string;
-  tabs: readonly { id: AutomationsNavigationTab; label: string }[];
-  activeTab: AutomationsNavigationTab;
-  onTabChange: (tab: AutomationsNavigationTab) => void;
+  tabs: readonly { id: AutomationTaskNavigationTab; label: string }[];
+  activeTab: AutomationTaskNavigationTab;
+  onTabChange: (tab: AutomationTaskNavigationTab) => void;
   onTaskSelect: (id: string) => void;
   taskList: {
     items: readonly { id: string; title: string }[];
@@ -19,7 +21,7 @@ interface AutomationsSecondaryNavigationProps {
   } | null;
 }
 
-const TAB_ICONS = { scheduled: Clock3, idle: Moon, workflow: Workflow };
+const TAB_ICONS = { scheduled: Clock3, idle: Moon };
 
 export function resolveAutomationTemplateVisibility({
   hasAnyTasks,

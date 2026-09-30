@@ -459,6 +459,7 @@ nodes:
     invariants:
       - The rail derives its active module from App.workspaceMainView; clicking the active module only expands the sidebar.
       - Secondary navigation is rendered by each page through a portal, without copying business state to the shell.
+      - Scheduled tasks and saved workflows have independent primary entries and navigation history kinds; saved workflows retain global/project directories while viewing details.
       - Plugin marketplace secondary navigation contains public/personal discovery and management entries, with sources at the bottom; catalog category groups remain in the public page body, without a category menu.
   - id: state.workspace-navigation
     kind: state-owner
@@ -468,6 +469,8 @@ nodes:
         symbol: App
       - file: packages/ui/src/settings/AutomationsSection.tsx
         symbol: AutomationsSection
+      - file: packages/ui/src/settings/saved-workflows/SavedWorkflowsSection.tsx
+        symbol: SavedWorkflowsSection
       - file: packages/ui/src/settings/PluginStorePage.tsx
         symbol: PluginStorePage
       - file: packages/ui/src/settings/PluginStoreBrowsePage.tsx
@@ -475,7 +478,7 @@ nodes:
       - file: packages/ui/src/settings/PluginsSection.tsx
         symbol: PluginsSection
     invariants:
-      - AutomationsSection owns view/tab/pageTab; PluginStorePage owns the selected browse or management page.
+      - AutomationsSection owns scheduled/idle view and tab; SavedWorkflowsSection owns workflow selection and projects existing savedWorkflowStore inventory into the secondary navigation. PluginStorePage owns the selected browse or management page.
       - PluginStoreBrowsePage owns segment/query/detail and no category selection state; PluginsSection owns management scope and editor state. Browse and management mount exclusively to avoid conflicting inventory initialization.
       - useAppPanels owns sidebar visibility; narrow and wide navigation share this state.
 edges:

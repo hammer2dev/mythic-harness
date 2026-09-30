@@ -6,6 +6,7 @@ import {
   canGoForward as navCanGoForward,
   isAutomationsNavEntry,
   isPluginStoreNavEntry,
+  isWorkflowsNavEntry,
   type AutomationsNavigationTab,
 } from "@/lib/taskNavigationHistory.js";
 import { shouldBlockTaskSelectionDuringModelRestart } from "@/lib/taskSwitchGuard.js";
@@ -27,11 +28,14 @@ import { isWorkspaceTab } from "@/store/tabStore.js";
 import { bumpTaskListMembershipVersion } from "@/v4/taskListMembershipVersion.js";
 import { resolveProjectNavigationTarget } from "@/lib/projectNavigationTarget.js";
 
-export interface AutomationsNavigationTarget {
+export interface WorkflowsNavigationTarget {
   workspacePath: string;
   workspaceIdentity?: string;
+}
+
+export interface AutomationsNavigationTarget extends WorkflowsNavigationTarget {
   automationId?: string;
-  automationTab?: AutomationsNavigationTab;
+  automationTab?: Exclude<AutomationsNavigationTab, "workflow">;
 }
 
 export function useWorkspaceTaskNavigation({
@@ -41,6 +45,7 @@ export function useWorkspaceTaskNavigation({
   activateTabByPath,
   onNavigateToTask,
   onNavigateToAutomations,
+  onNavigateToWorkflows,
   onNavigateToPluginStore,
 }: {
   intl: { formatMessage: (descriptor: { id: string }) => string };
@@ -49,6 +54,7 @@ export function useWorkspaceTaskNavigation({
   activateTabByPath: (workspacePath: string, options?: { workspaceIdentity?: string }) => boolean;
   onNavigateToTask?: () => void;
   onNavigateToAutomations?: (target: AutomationsNavigationTarget) => void;
+  onNavigateToWorkflows?: (target: WorkflowsNavigationTarget) => void;
   onNavigateToPluginStore?: (target: Omit<AutomationsNavigationTarget, "automationId">) => void;
 }) {
   // 跨 workspace 选择会先同步切换 tab，但本次 React render 捕获的 ambient
@@ -59,6 +65,7 @@ export function useWorkspaceTaskNavigation({
   const setActiveTaskId = useZCodeSessionStore((s) => s.setActiveTaskId);
   const taskNavHistory = useZCodeSessionStore((s) => s.taskNavHistory);
   const taskNavPushAutomations = useZCodeSessionStore((s) => s.taskNavPushAutomations);
+  const taskNavPushWorkflows = useZCodeSessionStore((s) => s.taskNavPushWorkflows);
   const taskNavPushPluginStore = useZCodeSessionStore((s) => s.taskNavPushPluginStore);
   const taskNavGoBack = useZCodeSessionStore((s) => s.taskNavGoBack);
   const taskNavGoForward = useZCodeSessionStore((s) => s.taskNavGoForward);
@@ -217,8 +224,17 @@ export function useWorkspaceTaskNavigation({
     [activateTabByPath, intl, onNavigateToTask, baseServices, tabStoreApi, setActiveTaskId],
   );
 
+  const handleOpenWorkflows = useCallback(() => {
+    taskNavPushWorkflows(workspaceAbsPath, workspaceIdentity);
+    onNavigateToWorkflows?.({ workspacePath: workspaceAbsPath, workspaceIdentity });
+  }, [onNavigateToWorkflows, taskNavPushWorkflows, workspaceAbsPath, workspaceIdentity]);
+
   const handleOpenAutomations = useCallback(
     (automationId?: string, automationTab?: AutomationsNavigationTab) => {
+      if (automationTab === "workflow") {
+        handleOpenWorkflows();
+        return;
+      }
       const normalizedAutomationId = automationId?.trim() || undefined;
       // Automations 过去只切换 WorkspaceShellLayout 的本地视图，完全绕过
       // 浏览器式导航历史，导致顶部前进/后退无法返回或恢复该页面。这里把它作为
@@ -236,7 +252,13 @@ export function useWorkspaceTaskNavigation({
         ...(automationTab ? { automationTab } : {}),
       });
     },
-    [onNavigateToAutomations, taskNavPushAutomations, workspaceAbsPath, workspaceIdentity],
+    [
+      handleOpenWorkflows,
+      onNavigateToAutomations,
+      taskNavPushAutomations,
+      workspaceAbsPath,
+      workspaceIdentity,
+    ],
   );
 
   const handleOpenPluginStore = useCallback(() => {
@@ -287,6 +309,16 @@ export function useWorkspaceTaskNavigation({
         });
         return;
       }
+      if (isWorkflowsNavEntry(currentEntry)) {
+        activateTabByPath(
+          currentEntry.workspacePath,
+          currentEntry.workspaceIdentity
+            ? { workspaceIdentity: currentEntry.workspaceIdentity }
+            : undefined,
+        );
+        onNavigateToWorkflows?.(currentEntry);
+        return;
+      }
       if (isPluginStoreNavEntry(currentEntry)) {
         activateTabByPath(
           currentEntry.workspacePath,
@@ -325,6 +357,7 @@ export function useWorkspaceTaskNavigation({
     handleSelectTask,
     intl,
     onNavigateToAutomations,
+    onNavigateToWorkflows,
     onNavigateToPluginStore,
     removeTaskFromNavHistory,
     taskNavGoBack,
@@ -373,6 +406,16 @@ export function useWorkspaceTaskNavigation({
         });
         return;
       }
+      if (isWorkflowsNavEntry(currentEntry)) {
+        activateTabByPath(
+          currentEntry.workspacePath,
+          currentEntry.workspaceIdentity
+            ? { workspaceIdentity: currentEntry.workspaceIdentity }
+            : undefined,
+        );
+        onNavigateToWorkflows?.(currentEntry);
+        return;
+      }
       if (isPluginStoreNavEntry(currentEntry)) {
         activateTabByPath(
           currentEntry.workspacePath,
@@ -410,6 +453,7 @@ export function useWorkspaceTaskNavigation({
     handleSelectTask,
     intl,
     onNavigateToAutomations,
+    onNavigateToWorkflows,
     onNavigateToPluginStore,
     removeTaskFromNavHistory,
     taskNavGoForward,
@@ -429,6 +473,7 @@ export function useWorkspaceTaskNavigation({
   return {
     handleSelectTask,
     handleOpenAutomations,
+    handleOpenWorkflows,
     handleOpenPluginStore,
     handleTaskNavBack,
     handleTaskNavForward,

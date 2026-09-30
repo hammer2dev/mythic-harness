@@ -41,7 +41,7 @@ export function useWorkspaceMainViewSettingsExit({
 
       if (workspaceMainView === settingsEntryMainViewRef.current) {
         // Settings 只是覆盖 workspace，底层 App 不卸载，进入前的
-        // automations 主视图会一直保留。设置层退出时统一回到对话，
+        // 定时任务、工作流或市场主视图会一直保留。设置层退出时统一回到对话，
         // 让 Back、插件提示词、创建 Skill 和设置页快捷键共享同一导航语义。
         onExitSettings();
       }

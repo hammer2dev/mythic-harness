@@ -113,17 +113,18 @@ export interface GitChangeSummary {
   removed: number;
 }
 
-export type WorkspaceMainView = "chat" | "automations" | "plugin-store";
+export type WorkspaceMainView = "chat" | "automations" | "workflows" | "plugin-store";
 
 export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackService"> {
   workspaceReadOnlyReason?: string;
   workspaceMainView: WorkspaceMainView;
   pluginStoreOpenVersion: number;
   openAutomationId: string | null;
-  openAutomationTab: AutomationsNavigationTab | null;
+  openAutomationTab: Exclude<AutomationsNavigationTab, "workflow"> | null;
   onWorkspaceMainViewChange: (view: WorkspaceMainView) => void;
   onOpenAutomationConsumed: () => void;
   handleOpenAutomations: OpenAutomationsMain;
+  handleOpenWorkflows: () => void;
   handleOpenPluginStore: () => void;
   workspaceShellZCodeState: WorkspaceShellZCodeState;
   theme: Theme;

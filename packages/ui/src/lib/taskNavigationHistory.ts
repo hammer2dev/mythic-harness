@@ -15,8 +15,7 @@ export interface TaskNavEntry extends WorkspaceNavEntryBase {
   taskId: string;
 }
 
-// "workflow" 是自动化页的顶级「工作流」标签；
-// scheduled / idle 仍是「自动化」标签内部的胶囊。
+// workflow 仅兼容旧入口，入栈时转换为独立的 workflows 记录。
 export type AutomationsNavigationTab = "scheduled" | "idle" | "workflow";
 
 export type OpenAutomationsMain = (
@@ -27,14 +26,22 @@ export type OpenAutomationsMain = (
 export interface AutomationsNavEntry extends WorkspaceNavEntryBase {
   kind: "automations";
   automationId?: string;
-  automationTab?: AutomationsNavigationTab;
+  automationTab?: Exclude<AutomationsNavigationTab, "workflow">;
+}
+
+export interface WorkflowsNavEntry extends WorkspaceNavEntryBase {
+  kind: "workflows";
 }
 
 export interface PluginStoreNavEntry extends WorkspaceNavEntryBase {
   kind: "plugin-store";
 }
 
-export type WorkspaceNavEntry = TaskNavEntry | AutomationsNavEntry | PluginStoreNavEntry;
+export type WorkspaceNavEntry =
+  | TaskNavEntry
+  | AutomationsNavEntry
+  | WorkflowsNavEntry
+  | PluginStoreNavEntry;
 
 export interface TaskNavigationHistory {
   entries: WorkspaceNavEntry[];
@@ -54,6 +61,10 @@ function isTaskNavEntry(entry: WorkspaceNavEntry): entry is TaskNavEntry {
 
 export function isAutomationsNavEntry(entry: WorkspaceNavEntry): entry is AutomationsNavEntry {
   return entry.kind === "automations";
+}
+
+export function isWorkflowsNavEntry(entry: WorkspaceNavEntry): entry is WorkflowsNavEntry {
+  return entry.kind === "workflows";
 }
 
 export function isPluginStoreNavEntry(entry: WorkspaceNavEntry): entry is PluginStoreNavEntry {
@@ -129,12 +140,27 @@ export function pushAutomationsNavEntry(
   automationId?: string,
   automationTab?: AutomationsNavigationTab,
 ): TaskNavigationHistory {
+  if (automationTab === "workflow") {
+    return pushWorkflowsNavEntry(history, workspacePath, workspaceIdentity);
+  }
   return pushEntry(history, {
     kind: "automations",
     workspacePath,
     ...(workspaceIdentity ? { workspaceIdentity } : {}),
     ...(automationId ? { automationId } : {}),
     ...(automationTab ? { automationTab } : {}),
+  });
+}
+
+export function pushWorkflowsNavEntry(
+  history: TaskNavigationHistory,
+  workspacePath: string,
+  workspaceIdentity?: string,
+): TaskNavigationHistory {
+  return pushEntry(history, {
+    kind: "workflows",
+    workspacePath,
+    ...(workspaceIdentity ? { workspaceIdentity } : {}),
   });
 }
 
@@ -200,7 +226,7 @@ export function goForward(
 
 /**
  * 从历史中移除指定 taskId 的所有 task 条目（task 被删除时调用）。
- * Automations 条目不属于 task 生命周期，必须原样保留。
+ * 定时任务、工作流和插件市场条目不属于 task 生命周期，必须原样保留。
  */
 export function removeTaskFromHistory(
   history: TaskNavigationHistory,

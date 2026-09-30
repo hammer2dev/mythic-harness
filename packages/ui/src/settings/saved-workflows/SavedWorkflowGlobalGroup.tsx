@@ -93,6 +93,8 @@ export function SavedWorkflowGlobalGroup(props: SavedWorkflowGlobalGroupProps) {
     refresh,
   } = group;
 
+  if (mode.kind === "hidden") return null;
+
   const launchDialog = (
     <SavedWorkflowLaunchDialog
       entry={launchEntry}
@@ -123,6 +125,7 @@ export function SavedWorkflowGlobalGroup(props: SavedWorkflowGlobalGroupProps) {
     return (
       <>
         <SavedWorkflowDetailView
+          key={mode.name}
           target={GLOBAL_SAVED_WORKFLOW_TARGET}
           agentService={agentService}
           name={mode.name}
