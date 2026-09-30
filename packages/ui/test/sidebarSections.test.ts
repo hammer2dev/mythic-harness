@@ -68,3 +68,59 @@ test("旧固定分区偏好迁移，旧任务分组展示偏好回到项目视�
     sortBy: "created",
   });
 });
+
+test("现有分区偏好没有置顶字段时按空列表恢复，读取置顶 ID 时仅保留字符串并去重", () => {
+  const preferences = {
+    version: 1,
+    sections: [{ id: "company", name: "公司" }],
+    sectionOrder: ["company", "projects", "conversations"],
+    projectSectionByWorkspaceKey: { "project-one": "company" },
+    expandedBySectionId: { company: false },
+  };
+  const storage = createStorage({
+    "zcode-sidebar-project-sections": JSON.stringify(preferences),
+  });
+  const restored = createSidebarSectionsStore(storage);
+  assert.deepEqual(restored.getState().pinnedProjectIds, []);
+  assert.deepEqual(restored.getState().sectionOrder, preferences.sectionOrder);
+  assert.deepEqual(
+    restored.getState().projectSectionByWorkspaceKey,
+    preferences.projectSectionByWorkspaceKey,
+  );
+  assert.equal(restored.getState().expandedBySectionId.company, false);
+  storage.setItem(
+    "zcode-sidebar-project-sections",
+    JSON.stringify({ ...preferences, pinnedProjectIds: ["project-one", 1, "project-one"] }),
+  );
+  assert.deepEqual(createSidebarSectionsStore(storage).getState().pinnedProjectIds, [
+    "project-one",
+  ]);
+});
+
+test("项目置顶幂等且可恢复，取消置顶保留当前分区，删除分区后返回默认区", () => {
+  const storage = createStorage();
+  const store = createSidebarSectionsStore(storage);
+  const originalSection = store.getState().createSection("公司", "project-one")!;
+  const targetSection = store.getState().createSection("个人")!;
+  store.getState().setProjectPinned("project-one", true);
+  const pinnedIds = store.getState().pinnedProjectIds;
+  store.getState().setProjectPinned("project-one", true);
+  assert.equal(store.getState().pinnedProjectIds, pinnedIds);
+  assert.equal(store.getState().projectSectionByWorkspaceKey["project-one"], originalSection);
+
+  const restored = createSidebarSectionsStore(storage);
+  assert.deepEqual(restored.getState().pinnedProjectIds, ["project-one"]);
+  restored.getState().moveProject("project-one", targetSection);
+  assert.deepEqual(restored.getState().pinnedProjectIds, ["project-one"]);
+  restored.getState().setProjectPinned("project-one", false);
+  assert.deepEqual(restored.getState().pinnedProjectIds, []);
+  assert.equal(restored.getState().projectSectionByWorkspaceKey["project-one"], targetSection);
+
+  restored.getState().setProjectPinned("project-one", true);
+  restored.getState().removeSection(targetSection);
+  assert.deepEqual(restored.getState().pinnedProjectIds, ["project-one"]);
+  restored.getState().setProjectPinned("project-one", false);
+  const afterRemoval = createSidebarSectionsStore(storage);
+  assert.deepEqual(afterRemoval.getState().pinnedProjectIds, []);
+  assert.equal(afterRemoval.getState().projectSectionByWorkspaceKey["project-one"], undefined);
+});

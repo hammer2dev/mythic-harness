@@ -1617,6 +1617,8 @@ const enUS: Record<string, string> = {
   "workspaceSidebar.closeTaskSearch": "Close task search",
   "workspaceSidebar.remove": "Remove",
   "project.edit": "Edit project",
+  "project.pin": "Pin project",
+  "project.unpin": "Unpin project",
   "project.name": "Project name",
   "project.taskCount": "{count} tasks",
   "project.sourceFolders": "Source folders",

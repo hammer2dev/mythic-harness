@@ -358,6 +358,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   );
   const sections = useSidebarSectionsStore((state) => state.sections);
   const sectionOrder = useSidebarSectionsStore((state) => state.sectionOrder);
+  const pinnedProjectIds = useSidebarSectionsStore((state) => state.pinnedProjectIds);
+  const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
+  const pinnedProjectTabs = useMemo(
+    () => projectWorkspaceTabs.filter((tab) => pinnedProjectIdSet.has(getWorkspaceProjectKey(tab))),
+    [projectWorkspaceTabs, pinnedProjectIdSet],
+  );
   const projectSectionByWorkspaceKey = useSidebarSectionsStore(
     (state) => state.projectSectionByWorkspaceKey,
   );
@@ -394,20 +400,22 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     const result = new Map<string, WorkspaceTabState[]>();
     for (const sectionId of sectionOrder) result.set(sectionId, []);
     for (const tab of projectWorkspaceTabs) {
+      if (pinnedProjectIdSet.has(getWorkspaceProjectKey(tab))) continue;
       const sectionId = projectSectionByWorkspaceKey[getWorkspaceProjectKey(tab)] ?? "projects";
       result.get(sectionId)?.push(tab);
     }
     return result;
-  }, [projectWorkspaceTabs, projectSectionByWorkspaceKey, sectionOrder]);
+  }, [projectWorkspaceTabs, projectSectionByWorkspaceKey, sectionOrder, pinnedProjectIdSet]);
   const expandedSectionWorkspaceTabs = useMemo(
     () =>
       projectWorkspaceTabs.filter(
         (tab) =>
+          pinnedProjectIdSet.has(getWorkspaceProjectKey(tab)) ||
           expandedBySectionId[
             projectSectionByWorkspaceKey[getWorkspaceProjectKey(tab)] ?? "projects"
           ] !== false,
       ),
-    [projectWorkspaceTabs, projectSectionByWorkspaceKey, expandedBySectionId],
+    [projectWorkspaceTabs, projectSectionByWorkspaceKey, expandedBySectionId, pinnedProjectIdSet],
   );
   useEffect(() => {
     if (!fileTreeOpenRequest) {
@@ -435,11 +443,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const visibleWorkspaceTaskKeys = useMemo(
     () =>
       resolveVisibleWorkspaceTaskKeys({
-        enabled: taskViewMode === "workspace",
+        enabled: true,
         expandedWorkspacePaths,
-        workspaces: expandedSectionWorkspaceTabs,
+        workspaces: taskViewMode === "workspace" ? expandedSectionWorkspaceTabs : pinnedProjectTabs,
       }),
-    [taskViewMode, expandedWorkspacePaths, expandedSectionWorkspaceTabs],
+    [taskViewMode, expandedWorkspacePaths, expandedSectionWorkspaceTabs, pinnedProjectTabs],
   );
   useEffect(() => {
     // 交互规则：分页进度只属于当前可见且已展开的 workspace。
@@ -835,6 +843,76 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     ],
   );
 
+  const renderProjectList = (projectTabs: WorkspaceTabState[], listTestId: string) => (
+    <DndContext
+      sensors={workspaceSensors}
+      collisionDetection={closestCenter}
+      modifiers={[restrictVerticalDragWithinContainer]}
+      onDragStart={handleWorkspaceDragStart}
+      onDragEnd={handleWorkspaceDragEnd}
+      onDragCancel={handleWorkspaceDragCancel}
+    >
+      <SortableContext
+        items={projectTabs.map((tab) => tab.id)}
+        strategy={workspaceVerticalListSortingStrategy}
+      >
+        <ul data-testid={listTestId} className="space-y-2 pb-4">
+          {projectTabs.map((tab) => {
+            const workspaceKey = getWorkspaceProjectKey(tab);
+            const taskGroup = workspaceTaskGroupByKey.get(workspaceKey);
+            const taskLoading = workspaceTaskLists.loadingByWorkspaceKey[workspaceKey] ?? false;
+
+            return (
+              <SortableWorkspaceSidebarItem
+                key={tab.id}
+                tab={tab}
+                isActiveWorkspace={tab.id === activeTabId}
+                isExpanded={resolveWorkspaceDragExpanded({
+                  activeDragId: activeWorkspaceDragId,
+                  expanded: expandedWorkspacePaths.has(tab.workspacePath),
+                  tabId: tab.id,
+                })}
+                activateTab={activateTab}
+                closeTab={closeTab}
+                toggleWorkspaceExpanded={toggleWorkspaceExpanded}
+                onSelectTask={onSelectTask}
+                onStartDraftInWorkspace={onStartDraftInWorkspace}
+                taskItems={taskGroup?.items ?? EMPTY_WORKSPACE_TASK_ITEMS}
+                taskListLoading={taskLoading}
+                taskListTotal={taskGroup?.total ?? 0}
+                taskListHasMore={taskGroup?.hasMore ?? false}
+                taskListHasUnread={taskGroup?.hasUnread ?? false}
+                taskListLiveWorkflowCount={taskGroup?.liveWorkflowCount ?? 0}
+                workspaceKey={workspaceKey}
+                onShowMoreWorkspaceTasks={handleShowMoreWorkspaceTasks}
+                reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
+                remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
+                reconnectingRemoteWorkspaceLogsByWorkspaceKey={
+                  reconnectingRemoteWorkspaceLogsByWorkspaceKey
+                }
+                onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
+                onOpenFileTree={handleOpenWorkspaceFileTree}
+              />
+            );
+          })}
+        </ul>
+      </SortableContext>
+      {typeof document === "undefined"
+        ? null
+        : createPortal(
+            <DragOverlay>
+              {activeWorkspaceDragTab ? (
+                <WorkspaceDragOverlay
+                  tab={activeWorkspaceDragTab}
+                  width={activeWorkspaceDragWidth}
+                />
+              ) : null}
+            </DragOverlay>,
+            document.body,
+          )}
+    </DndContext>
+  );
+
   const footer = (
     <WorkspaceSidebarFooter
       layout={navigationFooterContainer !== undefined ? "rail" : "default"}
@@ -914,6 +992,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 // 归档切换主任务区时不应隐藏 pinned。
                 // pinned 是全局置顶区，归档态保持置顶区可见。
                 <WorkspacePinnedTasksSection
+                  projects={
+                    pinnedProjectTabs.length > 0
+                      ? renderProjectList(pinnedProjectTabs, "sidebar-pinned-projects")
+                      : null
+                  }
                   workspaceTabs={workspaceTabs}
                   activeWorkspacePath={workspacePath}
                   activeWorkspaceIdentity={workspaceIdentity}
@@ -997,92 +1080,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                   })}
                                 </div>
                               ) : (
-                                <DndContext
-                                  sensors={workspaceSensors}
-                                  collisionDetection={closestCenter}
-                                  modifiers={[restrictVerticalDragWithinContainer]}
-                                  onDragStart={handleWorkspaceDragStart}
-                                  onDragEnd={handleWorkspaceDragEnd}
-                                  onDragCancel={handleWorkspaceDragCancel}
-                                >
-                                  <SortableContext
-                                    items={sectionTabs.map((tab) => tab.id)}
-                                    strategy={workspaceVerticalListSortingStrategy}
-                                  >
-                                    <ul
-                                      data-testid={
-                                        sectionId === "projects"
-                                          ? TID_WORKSPACE_LIST
-                                          : "sidebar-section-workspaces-" + sectionId
-                                      }
-                                      className="space-y-2 pb-4"
-                                    >
-                                      {sectionTabs.map((tab) => {
-                                        const workspaceKey = getWorkspaceProjectKey(tab);
-                                        const taskGroup = workspaceTaskGroupByKey.get(workspaceKey);
-                                        const taskLoading =
-                                          workspaceTaskLists.loadingByWorkspaceKey[workspaceKey] ??
-                                          false;
-
-                                        return (
-                                          <SortableWorkspaceSidebarItem
-                                            key={tab.id}
-                                            tab={tab}
-                                            isActiveWorkspace={tab.id === activeTabId}
-                                            isExpanded={resolveWorkspaceDragExpanded({
-                                              activeDragId: activeWorkspaceDragId,
-                                              expanded: expandedWorkspacePaths.has(
-                                                tab.workspacePath,
-                                              ),
-                                              tabId: tab.id,
-                                            })}
-                                            activateTab={activateTab}
-                                            closeTab={closeTab}
-                                            toggleWorkspaceExpanded={toggleWorkspaceExpanded}
-                                            onSelectTask={onSelectTask}
-                                            onStartDraftInWorkspace={onStartDraftInWorkspace}
-                                            taskItems={
-                                              taskGroup?.items ?? EMPTY_WORKSPACE_TASK_ITEMS
-                                            }
-                                            taskListLoading={taskLoading}
-                                            taskListTotal={taskGroup?.total ?? 0}
-                                            taskListHasMore={taskGroup?.hasMore ?? false}
-                                            taskListHasUnread={taskGroup?.hasUnread ?? false}
-                                            taskListLiveWorkflowCount={
-                                              taskGroup?.liveWorkflowCount ?? 0
-                                            }
-                                            workspaceKey={workspaceKey}
-                                            onShowMoreWorkspaceTasks={handleShowMoreWorkspaceTasks}
-                                            reconnectingRemoteWorkspaceKeys={
-                                              reconnectingRemoteWorkspaceKeys
-                                            }
-                                            remoteWorkspaceErrorByWorkspaceKey={
-                                              remoteWorkspaceErrorByWorkspaceKey
-                                            }
-                                            reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                                              reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                                            }
-                                            onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
-                                            onOpenFileTree={handleOpenWorkspaceFileTree}
-                                          />
-                                        );
-                                      })}
-                                    </ul>
-                                  </SortableContext>
-                                  {typeof document === "undefined"
-                                    ? null
-                                    : createPortal(
-                                        <DragOverlay>
-                                          {activeWorkspaceDragTab ? (
-                                            <WorkspaceDragOverlay
-                                              tab={activeWorkspaceDragTab}
-                                              width={activeWorkspaceDragWidth}
-                                            />
-                                          ) : null}
-                                        </DragOverlay>,
-                                        document.body,
-                                      )}
-                                </DndContext>
+                                renderProjectList(
+                                  sectionTabs,
+                                  sectionId === "projects"
+                                    ? TID_WORKSPACE_LIST
+                                    : "sidebar-section-workspaces-" + sectionId,
+                                )
                               )}
                             </WorkspacePurposeSection>
                           ) : (

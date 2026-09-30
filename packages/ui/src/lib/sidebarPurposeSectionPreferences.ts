@@ -10,6 +10,7 @@ export interface SidebarSectionPreferences {
   sectionOrder: string[];
   projectSectionByWorkspaceKey: Record<string, string>;
   expandedBySectionId: Record<string, boolean>;
+  pinnedProjectIds: string[];
 }
 
 const STORAGE_KEY = "zcode-sidebar-project-sections";
@@ -22,6 +23,7 @@ function defaultPreferences(): SidebarSectionPreferences {
     sectionOrder: [...BUILTIN_IDS],
     projectSectionByWorkspaceKey: {},
     expandedBySectionId: {},
+    pinnedProjectIds: [],
   };
 }
 
@@ -77,6 +79,13 @@ export function readSidebarSectionPreferences(
           ([id, expanded]) => ids.has(id) && typeof expanded === "boolean",
         ),
       ) as Record<string, boolean>,
+      pinnedProjectIds: [
+        ...new Set<string>(
+          (Array.isArray(saved.pinnedProjectIds) ? saved.pinnedProjectIds : []).filter(
+            (id: unknown): id is string => typeof id === "string",
+          ),
+        ),
+      ],
     };
   } catch {
     return defaultPreferences();

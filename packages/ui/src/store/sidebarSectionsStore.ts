@@ -12,6 +12,7 @@ interface SidebarSectionsState extends SidebarSectionPreferences {
   renameSection: (id: string, name: string) => void;
   removeSection: (id: string) => void;
   moveProject: (workspaceKey: string, sectionId: string) => void;
+  setProjectPinned: (projectId: string, pinned: boolean) => void;
   migrateProjectKey: (projectId: string, legacyWorkspaceKeys: readonly string[]) => void;
   setSectionExpanded: (id: string, expanded: boolean) => void;
   setProjectSectionsExpanded: (expanded: boolean) => void;
@@ -25,9 +26,21 @@ export function createSidebarSectionsStore(
   return create<SidebarSectionsState>((set, get) => {
     const commit = (patch: Partial<SidebarSectionPreferences>) => {
       set(patch);
-      const { sections, sectionOrder, projectSectionByWorkspaceKey, expandedBySectionId } = get();
+      const {
+        sections,
+        sectionOrder,
+        projectSectionByWorkspaceKey,
+        expandedBySectionId,
+        pinnedProjectIds,
+      } = get();
       persistSidebarSectionPreferences(
-        { sections, sectionOrder, projectSectionByWorkspaceKey, expandedBySectionId },
+        {
+          sections,
+          sectionOrder,
+          projectSectionByWorkspaceKey,
+          expandedBySectionId,
+          pinnedProjectIds,
+        },
         storage,
       );
     };
@@ -92,6 +105,15 @@ export function createSidebarSectionsStore(
         commit({
           projectSectionByWorkspaceKey,
           expandedBySectionId: { ...get().expandedBySectionId, [sectionId]: true },
+        });
+      },
+      setProjectPinned(projectId, pinned) {
+        const pinnedProjectIds = get().pinnedProjectIds;
+        if (pinnedProjectIds.includes(projectId) === pinned) return;
+        commit({
+          pinnedProjectIds: pinned
+            ? [...pinnedProjectIds, projectId]
+            : pinnedProjectIds.filter((id) => id !== projectId),
         });
       },
       migrateProjectKey(projectId, legacyWorkspaceKeys) {

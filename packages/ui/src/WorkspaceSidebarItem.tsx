@@ -22,6 +22,8 @@ import {
   LoaderCircle,
   RefreshCwIcon,
   MessageCirclePlus,
+  Pin,
+  PinOff,
   Settings2,
   XIcon,
 } from "lucide-react";
@@ -291,6 +293,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   const createSection = useSidebarSectionsStore((state) => state.createSection);
   const sectionWorkspaceKey =
     tab.project?.id ?? (tab.workspaceIdentity?.trim() || tab.workspacePath);
+  const isProjectPinned = useSidebarSectionsStore((state) =>
+    state.pinnedProjectIds.includes(sectionWorkspaceKey),
+  );
+  const setProjectPinned = useSidebarSectionsStore((state) => state.setProjectPinned);
+  const handleToggleProjectPin = () => setProjectPinned(sectionWorkspaceKey, !isProjectPinned);
+  const ProjectPinIcon = isProjectPinned ? PinOff : Pin;
   const handleCreateSection = useCallback(() => setCreateSectionDialogOpen(true), []);
   const [isHoverNone] = useState(
     () =>
@@ -1004,6 +1012,15 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
                               </DropdownMenuTrigger>
                             </ControlHintTooltip>
                             <DropdownMenuContent align="end" onClick={handleActionMenuClick}>
+                              <DropdownMenuItem
+                                data-testid="project-pin-toggle"
+                                onSelect={handleToggleProjectPin}
+                              >
+                                <ProjectPinIcon className="size-4" />
+                                {intl.formatMessage({
+                                  id: isProjectPinned ? "project.unpin" : "project.pin",
+                                })}
+                              </DropdownMenuItem>
                               {tab.project ? (
                                 <DropdownMenuItem onSelect={() => setEditProjectDialogOpen(true)}>
                                   <Settings2 className="size-4" />
@@ -1209,6 +1226,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
                 </CollapsibleTrigger>
               </ContextMenuTrigger>
               <ContextMenuContent>
+                <ContextMenuItem onSelect={handleToggleProjectPin}>
+                  <ProjectPinIcon className="size-4" />
+                  {intl.formatMessage({
+                    id: isProjectPinned ? "project.unpin" : "project.pin",
+                  })}
+                </ContextMenuItem>
                 {tab.project ? (
                   <ContextMenuItem onSelect={() => setEditProjectDialogOpen(true)}>
                     <Settings2 className="size-4" />

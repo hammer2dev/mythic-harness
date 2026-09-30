@@ -1501,6 +1501,8 @@ const zhCN: Record<string, string> = {
   "workspaceSidebar.closeTaskSearch": "关闭任务搜索",
   "workspaceSidebar.remove": "移除",
   "project.edit": "编辑项目",
+  "project.pin": "置顶项目",
+  "project.unpin": "取消置顶项目",
   "project.name": "项目名称",
   "project.taskCount": "{count} 个任务",
   "project.sourceFolders": "源文件夹",
