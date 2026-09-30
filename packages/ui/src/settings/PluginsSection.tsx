@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- 共享能力外壳聚合 Scope，并承载 Plugin tabs 与独立 Commands 入口。 */
+/* eslint-disable max-lines -- 管理页保留共享 Scope 与搜索外壳，按 mode 互斥展示现有资源管理界面。 */
 import { PluginAddMenu } from "@/settings/PluginAddMenu.js";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -18,7 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { Switch } from "@/components/ui/switch.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { TID_PLUGIN_STORE_BROWSE } from "@zcode/shared";
@@ -91,25 +90,11 @@ import {
   useRemoteSyncDialogIntent,
 } from "@/settings/RemoteSyncActions.js";
 
-type PluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
-type PluginTab = Exclude<PluginTabTarget, "commands">;
-
-function normalizePluginTab(tab: PluginTabTarget): PluginTab {
-  return tab === "commands" ? "plugins" : tab;
-}
-
-function getPluginTabCountClass(tab: PluginTabTarget, selectedTab: PluginTabTarget): string {
-  return tab === selectedTab
-    ? "text-ui-sm text-foreground-subtle"
-    : "text-ui-sm text-foreground-subtlest";
-}
-
 type PluginScope =
   | { kind: "user"; key: "user" }
   | { kind: "workspace"; key: string; tab: WorkspaceTabState };
 
 interface PluginsSectionProps {
-  initialTab?: PluginTabTarget;
   initialScopeKey?: string;
   mode?: "plugin" | "mcp" | "skill" | "command";
   workspacePath?: string | null;
@@ -882,7 +867,6 @@ function EmptyState({ message }: { message: string }) {
 }
 
 export function PluginsSection({
-  initialTab = "plugins",
   initialScopeKey,
   mode = "plugin",
   workspacePath,
@@ -939,35 +923,16 @@ export function PluginsSection({
   );
   const [pickedScopeKey, setPickedScopeKey] = useState(() => initialScopeKey?.trim() || "user");
   const selectedScopeKey = pickedScopeKey;
-  const fixedTab: PluginTabTarget | null =
-    mode === "mcp" ? "mcps" : mode === "skill" ? "skills" : mode === "command" ? "commands" : null;
-  const [interactiveTab, setInteractiveTab] = useState<PluginTab>(() =>
-    normalizePluginTab(initialTab),
-  );
-  useEffect(() => setInteractiveTab(normalizePluginTab(initialTab)), [initialTab]);
   useEffect(() => {
     setPickedScopeKey(initialScopeKey?.trim() || "user");
   }, [initialScopeKey]);
-  const selectedTab = fixedTab ?? interactiveTab;
-  const [searchQueries, setSearchQueries] = useState<Record<PluginTabTarget, string>>({
-    plugins: "",
-    mcps: "",
-    skills: "",
-    commands: "",
-  });
-  const [capabilityCounts, setCapabilityCounts] = useState<Record<PluginTabTarget, number>>({
-    plugins: 0,
-    mcps: 0,
-    skills: 0,
-    commands: 0,
-  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(0);
   const [mcpEditorOpen, setMcpEditorOpen] = useState(false);
-  const [skillDetailOpen, setSkillDetailOpen] = useState(false);
   const [mcpFormScopeKey, setMcpFormScopeKey] = useState<string | null>(null);
   const [pluginDetailOpen, setPluginDetailOpen] = useState(false);
   const [commandEditorOpen, setCommandEditorOpen] = useState(false);
   const [commandFormScopeKey, setCommandFormScopeKey] = useState<string | null>(null);
-  const activeSearchQuery = searchQueries[selectedTab];
   const selectedScope: PluginScope = useMemo(() => {
     const tab = workspaceTabs.find((candidate) => workspaceKey(candidate) === selectedScopeKey);
     return tab ? { kind: "workspace", key: workspaceKey(tab), tab } : { kind: "user", key: "user" };
@@ -1035,295 +1000,150 @@ export function PluginsSection({
       );
     }
   }, [intl, pickedScopeKey, workspaceTabs]);
-  const selectedTargetKey = target ? workspaceKey(target) : "";
-
-  const updatePluginCount = useCallback(
-    (count: number) => {
-      setCapabilityCounts((current) =>
-        current.plugins === count ? current : { ...current, plugins: count },
-      );
-    },
-    [selectedScope.key, selectedTargetKey],
-  );
-  const updateMcpCount = useCallback(
-    (count: number) => {
-      setCapabilityCounts((current) =>
-        current.mcps === count ? current : { ...current, mcps: count },
-      );
-    },
-    [selectedScope.key, selectedTargetKey],
-  );
-  const updateSkillCount = useCallback(
-    (count: number) => {
-      setCapabilityCounts((current) =>
-        current.skills === count ? current : { ...current, skills: count },
-      );
-    },
-    [selectedScope.key, selectedTargetKey],
-  );
-  const updateCommandCount = useCallback(
-    (count: number) => {
-      setCapabilityCounts((current) =>
-        current.commands === count ? current : { ...current, commands: count },
-      );
-    },
-    [selectedScope.key, selectedTargetKey],
-  );
   const handleMcpEditorOpenChange = useCallback((open: boolean) => {
     setMcpEditorOpen(open);
     if (!open) setMcpFormScopeKey(null);
   }, []);
 
   return (
-    <div className="space-y-6">
-      {mode === "plugin" &&
-      showMarketplaceBreadcrumb &&
-      !pluginDetailOpen &&
-      !mcpEditorOpen &&
-      !skillDetailOpen ? (
+    <div className="space-y-6" data-plugin-management-mode={mode}>
+      {mode === "plugin" && showMarketplaceBreadcrumb && !pluginDetailOpen ? (
         <SettingsBreadcrumbReporter
           items={[
             {
-              label: intl.formatMessage({
-                id: "settings.plugins.title",
-              }),
+              label: intl.formatMessage({ id: "settings.plugins.title" }),
             },
           ]}
           onSectionSelect={openPluginStoreForSelectedScope}
         />
       ) : null}
-      <Tabs
-        value={selectedTab}
-        onValueChange={(value) => {
-          if (mode === "plugin") {
-            setInteractiveTab(normalizePluginTab(value as PluginTabTarget));
-          }
-        }}
-      >
-        {!mcpEditorOpen && !pluginDetailOpen && !commandEditorOpen ? (
+      {!mcpEditorOpen && !pluginDetailOpen && !commandEditorOpen ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <PluginScopeMenu
-                align="start"
-                selectedScopeKey={selectedScopeKey}
-                triggerTestId="plugin-settings-scope-trigger"
-                userOptionTestId="plugin-settings-scope-user-option"
-                workspaceOptionTestIdPrefix="plugin-settings-scope-option"
-                workspaceTabs={workspaceTabs}
-                onScopeKeyChange={setPickedScopeKey}
-              />
-              <div className="hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
-              {mode === "plugin" ? (
-                <TabsList variant="line" className="h-7 max-w-full gap-1 overflow-x-auto p-0">
-                  <TabsTrigger
-                    value="plugins"
-                    className="h-7 flex-none rounded-full px-3 hover:bg-hover data-active:!bg-selected data-active:hover:!bg-hover after:hidden"
-                  >
-                    {intl.formatMessage({
-                      id: "settings.plugin.tab.plugins",
-                    })}
-                    <span className={getPluginTabCountClass("plugins", selectedTab)}>
-                      {capabilityCounts.plugins}
-                    </span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="mcps"
-                    className="h-7 flex-none rounded-full px-3 hover:bg-hover data-active:!bg-selected data-active:hover:!bg-hover after:hidden"
-                  >
-                    {intl.formatMessage({
-                      id: "settings.plugin.tab.mcps",
-                    })}
-                    <span className={getPluginTabCountClass("mcps", selectedTab)}>
-                      {capabilityCounts.mcps}
-                    </span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="skills"
-                    className="h-7 flex-none rounded-full px-3 hover:bg-hover data-active:!bg-selected data-active:hover:!bg-hover after:hidden"
-                  >
-                    {intl.formatMessage({
-                      id: "settings.plugin.tab.skills",
-                    })}
-                    <span className={getPluginTabCountClass("skills", selectedTab)}>
-                      {capabilityCounts.skills}
-                    </span>
-                  </TabsTrigger>
-                </TabsList>
-              ) : (
-                <div
-                  data-independent-capability-count="true"
-                  className="flex h-7 items-center gap-1 px-3 text-ui-base font-medium text-foreground"
-                >
-                  <span>
-                    {intl.formatMessage({
-                      id:
-                        mode === "mcp"
-                          ? "settings.plugin.tab.mcps"
-                          : mode === "skill"
-                            ? "settings.plugin.tab.skills"
-                            : "settings.plugin.tab.commands",
-                    })}
-                  </span>
-                  <span className="text-ui-sm text-foreground-subtle">
-                    {mode === "mcp"
-                      ? capabilityCounts.mcps
-                      : mode === "skill"
-                        ? capabilityCounts.skills
-                        : capabilityCounts.commands}
-                  </span>
-                </div>
-              )}
+            <PluginScopeMenu
+              align="start"
+              selectedScopeKey={selectedScopeKey}
+              triggerTestId="plugin-settings-scope-trigger"
+              userOptionTestId="plugin-settings-scope-user-option"
+              workspaceOptionTestIdPrefix="plugin-settings-scope-option"
+              workspaceTabs={workspaceTabs}
+              onScopeKeyChange={setPickedScopeKey}
+            />
+            <div className="hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
+            <div
+              data-independent-capability-count="true"
+              className="flex h-7 items-center gap-1 px-3 text-ui-base font-medium text-foreground"
+            >
+              <span>
+                {intl.formatMessage({
+                  id:
+                    mode === "plugin"
+                      ? "settings.plugin.tab.plugins"
+                      : mode === "mcp"
+                        ? "settings.plugin.tab.mcps"
+                        : mode === "skill"
+                          ? "settings.plugin.tab.skills"
+                          : "settings.plugin.tab.commands",
+                })}
+              </span>
+              <span className="text-ui-sm text-foreground-subtle">{visibleCount}</span>
             </div>
-            <SettingsSearchInput
-              data-testid="plugin-settings-search"
-              containerClassName="w-full sm:ml-auto sm:w-64"
-              clearLabel={intl.formatMessage({ id: "settings.search.clear" })}
-              value={activeSearchQuery}
-              onClear={() => {
-                setSearchQueries((current) => ({
-                  ...current,
-                  [selectedTab]: "",
-                }));
-              }}
-              onChange={(event) => {
-                const value = event.target.value;
-                setSearchQueries((current) => ({
-                  ...current,
-                  [selectedTab]: value,
-                }));
-              }}
-              placeholder={intl.formatMessage({
-                id:
-                  selectedTab === "plugins"
-                    ? "settings.plugin.plugins.searchPlaceholder"
-                    : selectedTab === "mcps"
-                      ? "settings.mcp.searchPlaceholder"
-                      : selectedTab === "skills"
-                        ? "settings.skills.searchPlaceholder"
-                        : "settings.commands.searchPlaceholder",
-              })}
-            />
           </div>
-        ) : null}
-        {mode === "plugin" ? (
-          <TabsContent
-            forceMount
-            value="plugins"
-            className={
-              pluginDetailOpen
-                ? "data-[state=inactive]:hidden"
-                : "mt-6 data-[state=inactive]:hidden"
+          <SettingsSearchInput
+            data-testid="plugin-settings-search"
+            containerClassName="w-full sm:ml-auto sm:w-64"
+            clearLabel={intl.formatMessage({ id: "settings.search.clear" })}
+            value={searchQuery}
+            onClear={() => setSearchQuery("")}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={intl.formatMessage({
+              id:
+                mode === "plugin"
+                  ? "settings.plugin.plugins.searchPlaceholder"
+                  : mode === "mcp"
+                    ? "settings.mcp.searchPlaceholder"
+                    : mode === "skill"
+                      ? "settings.skills.searchPlaceholder"
+                      : "settings.commands.searchPlaceholder",
+            })}
+          />
+        </div>
+      ) : null}
+      {/* 各入口互斥挂载，避免隐藏页用不同 Scope 初始化同一个插件 store。 */}
+      {mode === "plugin" ? (
+        <PluginList
+          target={target}
+          configScope={selectedScope.kind === "user" ? "user" : "workspace"}
+          searchQuery={searchQuery}
+          onAdd={selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined}
+          onCreateTask={onCreateTask}
+          onDetailOpenChange={setPluginDetailOpen}
+          onOpenPluginStore={openPluginStoreForSelectedScope}
+          showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
+          onVisibleCountChange={setVisibleCount}
+        />
+      ) : null}
+      {mode === "mcp" ? (
+        mcpTarget ? (
+          <McpSettingsSection
+            workspacePath={mcpTarget.workspacePath}
+            workspaceIdentity={mcpTarget.workspaceIdentity}
+            remoteSessionId={mcpTarget.remoteSessionId}
+            remoteTarget={mcpTarget.remoteTarget}
+            localWorkspacePath={mcpTarget.localWorkspacePath}
+            scopeFilter={effectiveMcpScopeKey === "user" ? "user" : "workspace"}
+            parentScopeKey={selectedScopeKey}
+            workspaceTabs={workspaceTabs}
+            searchQuery={searchQuery}
+            onVisibleCountChange={setVisibleCount}
+            onEditorOpenChange={handleMcpEditorOpenChange}
+            onFormScopeKeyChange={setMcpFormScopeKey}
+            onOpenPluginStore={
+              selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
             }
-          >
-            <PluginList
-              target={target}
-              configScope={selectedScope.kind === "user" ? "user" : "workspace"}
-              searchQuery={searchQueries.plugins}
-              onAdd={selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined}
-              onCreateTask={onCreateTask}
-              onDetailOpenChange={setPluginDetailOpen}
-              onOpenPluginStore={openPluginStoreForSelectedScope}
-              showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
-              onVisibleCountChange={updatePluginCount}
-            />
-          </TabsContent>
-        ) : null}
-        {mode === "plugin" || mode === "mcp" ? (
-          <TabsContent
-            forceMount
-            value="mcps"
-            className={
-              mcpEditorOpen ? "data-[state=inactive]:hidden" : "mt-6 data-[state=inactive]:hidden"
+            showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
+          />
+        ) : (
+          <EmptyState message={intl.formatMessage({ id: "settings.plugin.noWorkspace" })} />
+        )
+      ) : null}
+      {mode === "skill" ? (
+        target ? (
+          <SkillsSection
+            workspacePath={target.workspacePath}
+            workspaceIdentity={target.workspaceIdentity}
+            remoteSessionId={target.remoteSessionId}
+            remoteTarget={target.remoteTarget}
+            scopeFilter={selectedScope.kind === "user" ? "user" : "workspace"}
+            searchQuery={searchQuery}
+            onCreateTask={onCreateTask}
+            onOpenPluginStore={
+              selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
             }
-          >
-            {mcpTarget ? (
-              <McpSettingsSection
-                workspacePath={mcpTarget.workspacePath}
-                workspaceIdentity={mcpTarget.workspaceIdentity}
-                remoteSessionId={mcpTarget.remoteSessionId}
-                remoteTarget={mcpTarget.remoteTarget}
-                localWorkspacePath={mcpTarget.localWorkspacePath}
-                scopeFilter={effectiveMcpScopeKey === "user" ? "user" : "workspace"}
-                parentScopeKey={selectedScopeKey}
-                workspaceTabs={workspaceTabs}
-                searchQuery={searchQueries.mcps}
-                onVisibleCountChange={updateMcpCount}
-                onEditorOpenChange={handleMcpEditorOpenChange}
-                onFormScopeKeyChange={setMcpFormScopeKey}
-                onOpenPluginStore={
-                  selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
-                }
-                showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
-              />
-            ) : (
-              <EmptyState
-                message={intl.formatMessage({
-                  id: "settings.plugin.noWorkspace",
-                })}
-              />
-            )}
-          </TabsContent>
-        ) : null}
-        {mode === "plugin" || mode === "skill" ? (
-          <TabsContent forceMount value="skills" className="mt-6 data-[state=inactive]:hidden">
-            {target ? (
-              <SkillsSection
-                workspacePath={target.workspacePath}
-                workspaceIdentity={target.workspaceIdentity}
-                remoteSessionId={target.remoteSessionId}
-                remoteTarget={target.remoteTarget}
-                scopeFilter={selectedScope.kind === "user" ? "user" : "workspace"}
-                searchQuery={searchQueries.skills}
-                onCreateTask={onCreateTask}
-                onDetailOpenChange={setSkillDetailOpen}
-                onOpenPluginStore={
-                  selectedScope.kind === "user" ? openPluginStoreForSelectedScope : undefined
-                }
-                showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
-                reportDetailBreadcrumb={mode === "plugin"}
-                onVisibleCountChange={updateSkillCount}
-              />
-            ) : (
-              <EmptyState
-                message={intl.formatMessage({
-                  id: "settings.plugin.noWorkspace",
-                })}
-              />
-            )}
-          </TabsContent>
-        ) : null}
-        {mode === "command" ? (
-          <TabsContent
-            forceMount
-            value="commands"
-            className={
-              commandEditorOpen
-                ? "data-[state=inactive]:hidden"
-                : "mt-6 data-[state=inactive]:hidden"
-            }
-          >
-            {commandTarget ? (
-              <CommandsSection
-                workspacePath={commandTarget.workspacePath}
-                workspaceIdentity={commandTarget.workspaceIdentity}
-                scopeFilter={effectiveCommandScopeKey === "user" ? "user" : "workspace"}
-                parentScopeKey={selectedScopeKey}
-                workspaceTabs={workspaceTabs}
-                searchQuery={searchQueries.commands}
-                onVisibleCountChange={updateCommandCount}
-                onEditorOpenChange={setCommandEditorOpen}
-                onFormScopeKeyChange={setCommandFormScopeKey}
-              />
-            ) : (
-              <EmptyState
-                message={intl.formatMessage({
-                  id: "settings.plugin.noWorkspace",
-                })}
-              />
-            )}
-          </TabsContent>
-        ) : null}
-      </Tabs>
+            showMarketplaceBreadcrumb={showMarketplaceBreadcrumb}
+            onVisibleCountChange={setVisibleCount}
+          />
+        ) : (
+          <EmptyState message={intl.formatMessage({ id: "settings.plugin.noWorkspace" })} />
+        )
+      ) : null}
+      {mode === "command" ? (
+        commandTarget ? (
+          <CommandsSection
+            workspacePath={commandTarget.workspacePath}
+            workspaceIdentity={commandTarget.workspaceIdentity}
+            scopeFilter={effectiveCommandScopeKey === "user" ? "user" : "workspace"}
+            parentScopeKey={selectedScopeKey}
+            workspaceTabs={workspaceTabs}
+            searchQuery={searchQuery}
+            onVisibleCountChange={setVisibleCount}
+            onEditorOpenChange={setCommandEditorOpen}
+            onFormScopeKeyChange={setCommandFormScopeKey}
+          />
+        ) : (
+          <EmptyState message={intl.formatMessage({ id: "settings.plugin.noWorkspace" })} />
+        )
+      ) : null}
     </div>
   );
 }

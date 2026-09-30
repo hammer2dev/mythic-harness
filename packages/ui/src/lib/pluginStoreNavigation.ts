@@ -1,6 +1,8 @@
 const OPEN_PLUGIN_STORE_EVENT = "zcode:open-plugin-store";
 
 export interface PluginStoreOpenTarget {
+  page?: "browse" | "installed" | "mcp" | "skill";
+  scopeKey?: string;
   pluginId?: string;
   intent?: "add-marketplace";
   returnScopeKey?: string;
@@ -8,7 +10,7 @@ export interface PluginStoreOpenTarget {
 
 let pendingTarget: PluginStoreOpenTarget | null = null;
 
-/** 统一承载 Store 入口的目标插件与 Settings 返回位置。Marketplace 只允许返回 User 视图。 */
+/** 市场是浏览与能力管理的统一入口；scopeKey 仅指定管理页的配置范围。 */
 export function requestPluginStoreOpen(value?: string | PluginStoreOpenTarget): void {
   const normalized = typeof value === "string" ? value.trim() : undefined;
   pendingTarget =

@@ -8,7 +8,6 @@ import type {
 } from "@zcode/shared";
 import {
   sortPluginStoreEntries,
-  compareDocumentPluginPriority,
   resolvePluginStoreCategory as resolveStoreCategory,
   FALLBACK_PLUGIN_STORE_CATEGORY as FALLBACK_CATEGORY,
   isPublicStoreMarketplaceId,
@@ -65,6 +64,12 @@ export interface StorePluginItem {
   /** 运行时信息（仅已发现的已安装插件有）：启用态、组件、manifest 回退字段。 */
   info?: ZCodePluginInfo;
   installedMeta?: ZCodeInstalledPluginSummary;
+}
+
+/** 列表与分类导航共享退役条目规则；详情与管理仍使用原始目录。 */
+export function selectVisibleStoreItems(items: StorePluginItem[]): StorePluginItem[] {
+  const retiredId = `restore-legacy-sessions@${ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID}`;
+  return items.filter((item) => item.id !== retiredId);
 }
 
 export type PluginUpdateStatus = NonNullable<ZCodeInstalledPluginSummary["updateStatus"]>;
@@ -358,34 +363,4 @@ export function storeItemMatches(item: StorePluginItem, keyword: string, locale:
     ],
     [item.name, item.listing?.displayName, ...Object.values(item.listing?.displayNameI18n ?? {})],
   );
-}
-
-/**
- * 已安装图标条排序：官方文档插件优先，其余内置/inline 按名称稳定排序；
- * 市场安装插件随后按安装时间倒序，同一时间再按名称排序。
- */
-export function sortInstalledStripItems(
-  items: StorePluginItem[],
-  locale: string,
-): StorePluginItem[] {
-  return items.toSorted((left, right) => {
-    const documentPriority = compareDocumentPluginPriority(left.id, right.id);
-    if (documentPriority !== 0) return documentPriority;
-
-    const leftIsBuiltin = Boolean(left.info && left.info.source !== "cache");
-    const rightIsBuiltin = Boolean(right.info && right.info.source !== "cache");
-    if (leftIsBuiltin !== rightIsBuiltin) return leftIsBuiltin ? -1 : 1;
-
-    const compareByName = () =>
-      resolveItemDisplayName(left, locale).localeCompare(
-        resolveItemDisplayName(right, locale),
-        locale,
-      );
-    if (leftIsBuiltin) return compareByName();
-
-    const leftAt = left.installedMeta?.installedAt ?? "";
-    const rightAt = right.installedMeta?.installedAt ?? "";
-    if (leftAt !== rightAt) return rightAt.localeCompare(leftAt);
-    return compareByName();
-  });
 }

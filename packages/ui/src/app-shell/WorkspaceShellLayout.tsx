@@ -1,5 +1,13 @@
 /* eslint-disable max-lines -- workspace shell 当前集中编排 sidebar、chat、terminal 和 browser pane 的布局联动，先保持单文件收口，避免为满足行数限制打散关键布局状态。*/
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -47,6 +55,10 @@ import { PluginStorePage } from "@/settings/PluginStorePage.js";
 import { TaskFindDialog } from "@/quickpick/TaskFindDialog.js";
 import { WorkspaceHeader } from "@/WorkspaceHeader.js";
 import { WorkspaceSidebar, type SidebarFileTreeOpenRequest } from "@/WorkspaceSidebar.js";
+import {
+  WorkspacePrimaryNavigation,
+  WORKSPACE_NAVIGATION_RAIL_WIDTH_PX,
+} from "@/WorkspacePrimaryNavigation.js";
 import { AnimatedSidePanePanel } from "@/app-shell/AnimatedSidePanePanel.js";
 import {
   findScreenshotSurfaceTabForRender,
@@ -85,7 +97,7 @@ import {
   areWorkspaceFilePathsEqual,
   isWorkspaceFilePathInside,
 } from "@/workspace-file-tree/model.js";
-import type { WorkspaceShellLayoutProps } from "@/app-shell/types.js";
+import type { WorkspaceMainView, WorkspaceShellLayoutProps } from "@/app-shell/types.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 
 const WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX = 264;
@@ -108,6 +120,17 @@ const EMPTY_REMOTE_WORKSPACE_SESSIONS: NonNullable<
 > = [];
 const CONVERSATION_AUTO_COLLAPSE_SIDEBAR_WIDTH_PX = 360;
 const CONVERSATION_AUTO_COLLAPSE_RESIZE_IDLE_MS = 300;
+const NARROW_NAVIGATION_QUERY = "(max-width: 767px)";
+
+function subscribeToNarrowNavigation(onChange: () => void) {
+  const media = window.matchMedia(NARROW_NAVIGATION_QUERY);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function readNarrowNavigation() {
+  return window.matchMedia(NARROW_NAVIGATION_QUERY).matches;
+}
 // 性能修复：ResizablePanelGroup 收到深相等的新 panelIds 数组，
 // 会跟随 chat streaming render 重算布局上下文；固定数组语义上不会随消息变化。
 const WORKSPACE_BODY_PANEL_IDS = ["conversation-column", "browser"];
@@ -190,7 +213,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   onOpenAutomationConsumed,
   handleOpenAutomations,
   handleOpenPluginStore,
-  handleManageInstalledPlugins,
   onConnectRemote,
   onSelectRemoteProject,
   onCancelRemoteProject,
@@ -326,6 +348,16 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   taskFindDialogProps,
 }: WorkspaceShellLayoutProps) {
   const { intl } = useZCodeIntl();
+  const isNarrowNavigation = useSyncExternalStore(
+    subscribeToNarrowNavigation,
+    readNarrowNavigation,
+    () => false,
+  );
+  const [secondaryNavigationContainer, setSecondaryNavigationContainer] =
+    useState<HTMLDivElement | null>(null);
+  const [navigationFooterContainer, setNavigationFooterContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
   const baseServices = useBaseWorkspaceServices();
   const tabStoreApi = useTabStoreApi();
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
@@ -389,6 +421,18 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     );
   }, [openWorkspaceKeys]);
   const isSidebarPanelVisible = isSidebarVisible;
+  const closeNarrowNavigation = useCallback(() => {
+    if (isNarrowNavigation && isSidebarVisible) handleToggleSidebar();
+  }, [handleToggleSidebar, isNarrowNavigation, isSidebarVisible]);
+  useEffect(() => {
+    // 设置页展示时工作区仍可能保活，隐藏抽屉不能消费设置页的 Escape。
+    if (!isWorkspaceVisible || !isNarrowNavigation || !isSidebarVisible) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) handleToggleSidebar();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleToggleSidebar, isNarrowNavigation, isSidebarVisible, isWorkspaceVisible]);
   const {
     panelRef: terminalPanelRef,
     panelElementRef: terminalPanelElementRef,
@@ -431,7 +475,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   }, [handleToggleSidebar, handleToggleSidePane, isSidebarVisible, isSidePaneOpen, workspaceKey]);
 
   useEffect(() => {
-    if (workspaceMainView !== "chat") {
+    if (workspaceMainView !== "chat" || isNarrowNavigation) {
       return;
     }
 
@@ -516,7 +560,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       }
       window.removeEventListener("resize", handleWindowResize);
     };
-  }, [workspaceMainView]);
+  }, [isNarrowNavigation, workspaceMainView]);
 
   useEffect(() => {
     workspaceSidebarPanelWidthPxRef.current = workspaceSidebarPanelWidthPx;
@@ -803,9 +847,30 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const showChatMainView = useCallback(() => {
     onWorkspaceMainViewChange("chat");
   }, [onWorkspaceMainViewChange]);
-  const primaryNavigationBack =
-    workspaceMainView === "plugin-store" ? handleManageInstalledPlugins : handleTaskNavBack;
-  const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
+  const primaryNavigationBack = handleTaskNavBack;
+  const canPrimaryNavigationBack = canTaskNavBack;
+  const handleSelectPrimaryNavigation = useCallback(
+    (view: WorkspaceMainView) => {
+      if (!isSidebarVisible) handleToggleSidebar();
+      if (view === workspaceMainView) return;
+      if (view === "automations") handleOpenAutomations();
+      else if (view === "plugin-store") handleOpenPluginStore();
+      else if (activeTaskId) handleSelectTask(workspaceAbsPath, activeTaskId, workspaceIdentity);
+      else showChatMainView();
+    },
+    [
+      activeTaskId,
+      handleOpenAutomations,
+      handleOpenPluginStore,
+      handleSelectTask,
+      handleToggleSidebar,
+      isSidebarVisible,
+      showChatMainView,
+      workspaceAbsPath,
+      workspaceIdentity,
+      workspaceMainView,
+    ],
+  );
   const handleCreateTaskInChat = useCallback(
     (request?: Parameters<typeof onCreateTask>[0]) => {
       // workspaceReadOnlyReason 判定的是活动 workspace；当 request 显式带 targetWorkspace 时
@@ -818,8 +883,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       }
       showChatMainView();
       onCreateTask(request);
+      closeNarrowNavigation();
     },
-    [onCreateTask, showChatMainView, workspaceReadOnlyReason],
+    [closeNarrowNavigation, onCreateTask, showChatMainView, workspaceReadOnlyReason],
   );
   const shellWorkbenchBinding = useMemo<WorkbenchSessionBinding | null>(
     () =>
@@ -905,8 +971,17 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       } else {
         handleSelectTask(targetWorkspacePath, taskId, targetWorkspaceIdentity);
       }
+      closeNarrowNavigation();
     },
-    [handleSelectTask, intl, shellWorkbenchBinding, showChatMainView, tabStoreApi, workspaceTabs],
+    [
+      closeNarrowNavigation,
+      handleSelectTask,
+      intl,
+      shellWorkbenchBinding,
+      showChatMainView,
+      tabStoreApi,
+      workspaceTabs,
+    ],
   );
   // 中枢直接启动 accepted 后切到新会话（run 卡已在顶部）：复用运行历史那条导航，
   // target 恒带工作流所属项目坐标（不变式 7），remoteSessionId 决定连接 endpoint。
@@ -1086,9 +1161,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     [handleStartDraftInWorkspace, showChatMainView],
   );
   const handleCreateProjectDraft = useCallback(
-    (path: string, identity?: string) =>
-      handleStartDraftInWorkspaceInChat(path, identity, undefined, "project"),
-    [handleStartDraftInWorkspaceInChat],
+    (path: string, identity?: string) => {
+      handleStartDraftInWorkspaceInChat(path, identity, undefined, "project");
+      closeNarrowNavigation();
+    },
+    [closeNarrowNavigation, handleStartDraftInWorkspaceInChat],
   );
   const activeWorkspacePurpose =
     workspaceTabs.find(
@@ -1479,13 +1556,33 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           // CSS 变量驱动的专用 split，普通窗口 resize 只走浏览器布局，不触发 React 状态。
         )}
       >
+        <WorkspacePrimaryNavigation
+          activeView={workspaceMainView}
+          onSelect={handleSelectPrimaryNavigation}
+          appLogoUrl={appLogoUrl}
+          hideLogo={isMacDesktop && !isMacFullscreen}
+          footerRef={setNavigationFooterContainer}
+        />
+        {isNarrowNavigation && isSidebarPanelVisible ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={intl.formatMessage({ id: "workspaceSidebar.toggleSidebar" })}
+            data-testid="workspace-navigation-backdrop"
+            className="absolute inset-0 left-14 z-10 bg-background/60"
+            onClick={handleToggleSidebar}
+          />
+        ) : null}
         <div
           ref={workspaceSidebarPanelElementRef}
           data-panel=""
           data-workspace-sidebar-panel="true"
           id="sidebar"
           className={cn(
-            "w-[var(--workspace-sidebar-panel-width)] max-w-[50%] flex-none overflow-hidden duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
+            "flex-none overflow-hidden bg-sidebar duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
+            isNarrowNavigation
+              ? "absolute inset-y-0 left-14 z-20 w-[var(--workspace-sidebar-panel-width)] max-w-[calc(100%-3.5rem)] border-r border-border"
+              : "w-[var(--workspace-sidebar-panel-width)] max-w-[50%]",
             // 拖动侧栏宽度时如果继续过渡 width，会让指针移动和实际宽度之间产生滞后。
             // 拖拽 active 通过 DOM 标记切 transition，避免 pointerdown/up 为了切 class 重渲染整棵 workspace。
             isSidebarPanelVisible ? "opacity-100" : "pointer-events-none opacity-0",
@@ -1495,6 +1592,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             ref={sidebarContainerRef}
             className="h-full overflow-hidden select-none"
             aria-hidden={!isSidebarPanelVisible}
+            inert={!isSidebarPanelVisible}
+            data-testid="workspace-secondary-navigation"
           >
             <ScopedErrorBoundary
               scope="workspace-sidebar"
@@ -1509,50 +1608,56 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                 onOpenSession={handleOpenSessionInSplitPane}
               >
                 <WorkflowRunOpenProvider onOpenRun={handleOpenSidebarWorkflowRun}>
-                  <WorkspaceSidebar
-                    workspacePath={workspaceAbsPath}
-                    workspaceRemoteSessionId={workspaceRemoteSessionId}
-                    activePreviewPath={activePreviewPath}
-                    onSelectTask={handleSelectTaskInChat}
-                    onStartDraftInWorkspace={handleCreateProjectDraft}
-                    onOpenCodeViewer={handleOpenCodeViewer}
-                    onOpenBrowserUrl={handleOpenBrowserUrl}
-                    fileTreeOpenRequest={fileTreeOpenRequest}
-                    onCreateTask={handleCreateTaskInChat}
-                    onCreateConversationTask={onCreateConversationTask ?? handleCreateTaskInChat}
-                    onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
-                    onOpenRemoteWorkspace={onOpenRemoteWorkspace}
-                    theme={theme}
-                    onConnectRemote={onConnectRemote}
-                    onSelectRemoteProject={onSelectRemoteProject}
-                    onCancelRemoteProject={onCancelRemoteProject}
-                    onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
-                    reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-                    remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-                    reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-                      reconnectingRemoteWorkspaceLogsByWorkspaceKey
-                    }
-                    onLogout={onLogout}
-                    onLogin={onLogin}
-                    user={user}
-                    isDesktop={isDesktop}
-                    isMacDesktop={isMacDesktop}
-                    isWindowsDesktop={isWindowsDesktop}
-                    isSidebarVisible={isSidebarVisible}
-                    onToggleSidebar={handleToggleSidebar}
-                    toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
-                    canGoBack={canPrimaryNavigationBack}
-                    canGoForward={canTaskNavForward}
-                    onGoBack={primaryNavigationBack}
-                    onGoForward={handleTaskNavForward}
-                    goBackShortcutLabel={goBackShortcutLabel}
-                    goForwardShortcutLabel={goForwardShortcutLabel}
-                    onOpenCommandCenter={handleOpenCommandCenter}
-                    onOpenAutomations={handleOpenAutomations}
-                    automationsActive={workspaceMainView === "automations"}
-                    onOpenPluginStore={handleOpenPluginStore}
-                    pluginStoreActive={workspaceMainView === "plugin-store"}
-                    onFileTreeOpenChange={setIsSidebarFileTreeOpen}
+                  <div className={cn("h-full", workspaceMainView !== "chat" && "hidden")}>
+                    <WorkspaceSidebar
+                      workspacePath={workspaceAbsPath}
+                      workspaceRemoteSessionId={workspaceRemoteSessionId}
+                      activePreviewPath={activePreviewPath}
+                      onSelectTask={handleSelectTaskInChat}
+                      onStartDraftInWorkspace={handleCreateProjectDraft}
+                      onOpenCodeViewer={handleOpenCodeViewer}
+                      onOpenBrowserUrl={handleOpenBrowserUrl}
+                      fileTreeOpenRequest={fileTreeOpenRequest}
+                      onCreateTask={handleCreateTaskInChat}
+                      onCreateConversationTask={onCreateConversationTask ?? handleCreateTaskInChat}
+                      onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
+                      onOpenRemoteWorkspace={onOpenRemoteWorkspace}
+                      theme={theme}
+                      onConnectRemote={onConnectRemote}
+                      onSelectRemoteProject={onSelectRemoteProject}
+                      onCancelRemoteProject={onCancelRemoteProject}
+                      onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
+                      reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
+                      remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
+                      reconnectingRemoteWorkspaceLogsByWorkspaceKey={
+                        reconnectingRemoteWorkspaceLogsByWorkspaceKey
+                      }
+                      onLogout={onLogout}
+                      onLogin={onLogin}
+                      user={user}
+                      isDesktop={isDesktop}
+                      isMacDesktop={isMacDesktop}
+                      isWindowsDesktop={isWindowsDesktop}
+                      isSidebarVisible={isSidebarVisible}
+                      onToggleSidebar={handleToggleSidebar}
+                      toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
+                      canGoBack={canPrimaryNavigationBack}
+                      canGoForward={canTaskNavForward}
+                      onGoBack={primaryNavigationBack}
+                      onGoForward={handleTaskNavForward}
+                      goBackShortcutLabel={goBackShortcutLabel}
+                      goForwardShortcutLabel={goForwardShortcutLabel}
+                      onOpenCommandCenter={handleOpenCommandCenter}
+                      navigationFooterContainer={navigationFooterContainer}
+                      onFileTreeOpenChange={setIsSidebarFileTreeOpen}
+                    />
+                  </div>
+                  <div
+                    ref={setSecondaryNavigationContainer}
+                    className={cn(
+                      "h-full min-h-0 flex-col overflow-hidden pt-14",
+                      workspaceMainView === "chat" ? "hidden" : "flex",
+                    )}
                   />
                 </WorkflowRunOpenProvider>
               </V4SplitPaneEntryProvider>
@@ -1560,7 +1665,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           </aside>
         </div>
 
-        {isSidebarVisible ? (
+        {isSidebarVisible && !isNarrowNavigation ? (
           <div
             role="separator"
             tabIndex={0}
@@ -1589,7 +1694,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         <div
           data-panel=""
           id="content"
-          className="flex min-w-[320px] flex-1 flex-col bg-background"
+          inert={isNarrowNavigation && isSidebarPanelVisible}
+          className="flex min-w-0 flex-1 flex-col bg-background"
         >
           {/* macOS 原生窗控仍需要顶部安全区；底色跟随正文，不再显示装饰灰带。 */}
           {isMacDesktop ? <div className="h-1 w-full shrink-0 [app-region:drag]" /> : null}
@@ -1621,7 +1727,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                       "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border-border bg-background",
                       isSidePaneVisible && "border-r",
                       isTerminalVisible && "border-b",
-                      !isSidebarVisible && "border-l",
+                      (!isSidebarVisible || isNarrowNavigation) && "border-l",
                     )}
                   >
                     {shouldRenderWorkspaceHeader ? (
@@ -1691,8 +1797,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                         >
                           <AutomationsMainBreadcrumbFrame
                             isDesktop={Boolean(isDesktop)}
+                            reserveNavigationSpace={!isSidebarVisible || isNarrowNavigation}
                             sectionLabel={intl.formatMessage({
-                              id: "settings.automations.title",
+                              id: "workspaceNavigation.scheduledTasks",
                             })}
                             ariaLabel={intl.formatMessage({
                               id: "automations.breadcrumbLabel",
@@ -1711,6 +1818,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                               >
                                 <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-4 md:px-6 md:py-6">
                                   <AutomationsSection
+                                    navigationContainer={secondaryNavigationContainer}
                                     workspacePath={workspaceAbsPath}
                                     workspaceIdentity={workspaceIdentity}
                                     onCreateViaChat={handleCreateAutomationInChat}
@@ -1741,6 +1849,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                         <main className="flex h-full min-h-0 flex-1 flex-col bg-background">
                           <AutomationsMainBreadcrumbFrame
                             isDesktop={Boolean(isDesktop)}
+                            reserveNavigationSpace={!isSidebarVisible || isNarrowNavigation}
                             sectionLabel={intl.formatMessage({
                               id: "workspace.openPluginsSettings",
                             })}
@@ -1751,11 +1860,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                             <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
                               <div className="mx-auto flex w-full max-w-4xl flex-col px-4 py-4 md:px-6 md:py-6">
                                 <PluginStorePage
+                                  navigationContainer={secondaryNavigationContainer}
                                   key={`plugin-store:${pluginStoreOpenVersion}`}
                                   workspacePath={workspaceAbsPath}
                                   workspaceIdentity={workspaceIdentity}
                                   onCreateTask={handleCreateTaskInChat}
-                                  onManageInstalled={handleManageInstalledPlugins}
                                 />
                               </div>
                             </div>
@@ -1844,7 +1953,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     frameClassName={cn(
                       "border-t border-border",
                       isSidePaneVisible && "border-r",
-                      !isSidebarVisible && "border-l",
+                      (!isSidebarVisible || isNarrowNavigation) && "border-l",
                     )}
                     services={services}
                     workspaceAbsPath={workspaceAbsPath}
@@ -1871,6 +1980,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           variant="silent"
         >
           <DesktopTopOverlay
+            navigationRailWidthPx={WORKSPACE_NAVIGATION_RAIL_WIDTH_PX}
             newTaskDisabledReason={workspaceReadOnlyReason}
             workspaceAbsPath={workspaceAbsPath}
             isMacDesktop={isMacDesktop}

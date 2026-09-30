@@ -1599,6 +1599,8 @@ const enUS: Record<string, string> = {
   "workspaceSidebar.expandAllProjects": "Expand all",
   "workspaceSidebar.collapseAllProjects": "Collapse all",
   "workspaceSidebar.projectsSection": "Projects",
+  "workspaceNavigation.label": "Main navigation",
+  "workspaceNavigation.scheduledTasks": "Scheduled tasks",
   "workspaceSidebar.newConversation": "New task",
   "workspaceSidebar.reorderSection": "Move {section} section",
   "workspaceSidebar.addProject": "Add project",
@@ -3941,8 +3943,17 @@ const enUS: Record<string, string> = {
   "settings.plugins.store.searchPlaceholder": "Search plugins",
   "settings.plugins.store.searchResults": "Search results ({count})",
   "settings.plugins.store.searchEmpty": "No plugins match your search",
-  "settings.plugins.store.installedStrip": "Installed",
-  "settings.plugins.store.manageInstalled": "Manage installed",
+  "settings.plugins.store.discover": "Discover",
+  "settings.plugins.store.manage": "Manage",
+  "settings.plugins.store.browse": "Public marketplace",
+  "settings.plugins.store.personalSources": "Personal sources",
+  "settings.plugins.store.installedPage": "Installed plugins",
+  "settings.plugins.store.installedDescription":
+    "Manage plugin activation, configuration, and updates.",
+  "settings.plugins.store.mcpDescription":
+    "Connect and manage MCP servers for tools and data access.",
+  "settings.plugins.store.skillDescription":
+    "Manage available skills and their activation for your user or project.",
   "settings.plugins.store.segment.public": "Public",
   "settings.plugins.store.segment.personal": "Personal",
   "settings.plugins.store.featured": "Featured",

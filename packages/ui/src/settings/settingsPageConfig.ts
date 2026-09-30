@@ -12,10 +12,7 @@ import {
   AlarmClock,
   Anchor,
   Brain,
-  Blocks,
   Globe2,
-  Cable,
-  WandSparkles,
   Keyboard,
   FileSearch,
 } from "lucide-react";
@@ -83,24 +80,6 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "subagents",
     icon: Bot,
     titleId: "settings.subagents.title",
-    groupId: "agentCapabilities",
-  },
-  {
-    id: "plugin",
-    icon: Blocks,
-    titleId: "settings.plugins.title",
-    groupId: "agentCapabilities",
-  },
-  {
-    id: "mcp",
-    icon: Cable,
-    titleId: "settings.mcpTitle",
-    groupId: "agentCapabilities",
-  },
-  {
-    id: "skill",
-    icon: WandSparkles,
-    titleId: "settings.skills.title",
     groupId: "agentCapabilities",
   },
   {

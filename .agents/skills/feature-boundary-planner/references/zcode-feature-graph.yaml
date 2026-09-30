@@ -382,7 +382,48 @@ nodes:
     codeSeeds:
       - file: packages/ui/src/lib/sidebarPurposeSectionPreferences.ts
         symbol: readSidebarSectionPreferences
+  - id: capability.workspace-two-level-navigation
+    kind: capability
+    label: Primary module rail and page-owned secondary navigation
+    aliases:
+      - two-level navigation
+      - 两层导航
+      - 一级栏
+      - 二级栏
+    codeSeeds:
+      - file: packages/ui/src/app-shell/WorkspaceShellLayout.tsx
+        symbol: WorkspaceShellLayout
+    invariants:
+      - The rail derives its active module from App.workspaceMainView; clicking the active module only expands the sidebar.
+      - Secondary navigation is rendered by each page through a portal, without copying business state to the shell.
+      - Plugin marketplace secondary navigation contains public/personal discovery and management entries, with sources at the bottom; catalog category groups remain in the public page body, without a category menu.
+  - id: state.workspace-navigation
+    kind: state-owner
+    label: App main view and page-local selection
+    codeSeeds:
+      - file: packages/ui/src/App.tsx
+        symbol: App
+      - file: packages/ui/src/settings/AutomationsSection.tsx
+        symbol: AutomationsSection
+      - file: packages/ui/src/settings/PluginStorePage.tsx
+        symbol: PluginStorePage
+      - file: packages/ui/src/settings/PluginStoreBrowsePage.tsx
+        symbol: PluginStoreBrowsePage
+      - file: packages/ui/src/settings/PluginsSection.tsx
+        symbol: PluginsSection
+    invariants:
+      - AutomationsSection owns view/tab/pageTab; PluginStorePage owns the selected browse or management page.
+      - PluginStoreBrowsePage owns segment/query/detail and no category selection state; PluginsSection owns management scope and editor state. Browse and management mount exclusively to avoid conflicting inventory initialization.
+      - useAppPanels owns sidebar visibility; narrow and wide navigation share this state.
 edges:
+  - from: capability.workspace-two-level-navigation
+    to: state.workspace-navigation
+    type: owned-by
+    rank: must-inspect
+  - from: capability.sidebar-project-sections
+    to: capability.workspace-two-level-navigation
+    type: renders-in
+    rank: should-inspect
   - from: capability.sidebar-project-sections
     to: state.sidebar-project-sections
     type: owned-by

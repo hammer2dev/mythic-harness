@@ -4,11 +4,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ComponentType,
+  type ReactNode,
   type SVGProps,
 } from "react";
+import { createPortal } from "react-dom";
 import { CircleCheck, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   AUTOMATION_CREATE_LIMIT,
@@ -143,8 +144,14 @@ import {
   type SavedWorkflowsOpenTarget,
 } from "@/settings/saved-workflows/SavedWorkflowsSection.js";
 import { AutomationTemplateSkeletonGrid } from "@/settings/AutomationTemplateSkeletonGrid.js";
+import {
+  AutomationsSecondaryNavigation,
+  resolveAutomationTemplateVisibility,
+} from "@/settings/AutomationsSecondaryNavigation.js";
 
 interface AutomationsSectionProps {
+  /** undefined 保留页内导航；null 表示外部二级栏插槽尚未挂载。 */
+  navigationContainer?: HTMLElement | null;
   workspacePath?: string | null;
   workspaceIdentity?: string;
   /** 「Create via chat」:切到会话让 agent 用 CronCreate 创建;缺省则回退到手动创建整页。
@@ -271,27 +278,6 @@ function resolveAutomationTabNavigation({
   return {
     status: "settled",
     tab: visibleTabs.includes(requestedTab) ? requestedTab : "scheduled",
-  };
-}
-
-function resolveAutomationTemplateVisibility({
-  hasAnyTasks,
-  offPeakCreationEnabled,
-  tab,
-}: {
-  hasAnyTasks: boolean;
-  offPeakCreationEnabled: boolean;
-  tab: AutomationsTab;
-}): {
-  showOffPeakTemplates: boolean;
-  showScheduledTemplates: boolean;
-} {
-  // 移除 All tab 后空首页仍默认落在 Scheduled，导致闲时模板被 tab 条件误隐藏。
-  // 无任务时恢复两类模板并列展示；有任务后继续由 Scheduled / Idle tab 分流。
-  const showAllTemplates = !hasAnyTasks;
-  return {
-    showOffPeakTemplates: offPeakCreationEnabled && (showAllTemplates || tab === "idle"),
-    showScheduledTemplates: showAllTemplates || tab === "scheduled",
   };
 }
 
@@ -512,6 +498,7 @@ function AutomationStatusFilterEmpty() {
 }
 
 export function AutomationsSection({
+  navigationContainer,
   workspacePath,
   workspaceIdentity,
   onCreateViaChat,
@@ -525,6 +512,7 @@ export function AutomationsSection({
   onOpenWorkflowConsumed,
   onOpenSession,
 }: AutomationsSectionProps) {
+  const hasSecondaryNavigation = navigationContainer !== undefined;
   const { intl, locale } = useZCodeIntl();
   const platform = usePlatform();
   const { clientScenesService, offPeakTaskService, zcodeAgentService } = useServices();
@@ -540,6 +528,7 @@ export function AutomationsSection({
   const automations = useAutomationManagementStore((state) => state.automations);
   const automationCreateLimitReached = automations.length >= AUTOMATION_CREATE_LIMIT;
   const loading = useAutomationManagementStore((state) => state.loading);
+  const error = useAutomationManagementStore((state) => state.error);
   const operationId = useAutomationManagementStore((state) => state.operationId);
   const runsCache = useAutomationManagementStore((state) => state.runsCache);
   const initialize = useAutomationManagementStore((state) => state.initialize);
@@ -556,6 +545,7 @@ export function AutomationsSection({
   const automationTemplates = useAutomationTemplates(clientScenesService);
   const offPeakTasks = useOffPeakTaskStore((state) => state.tasks);
   const offPeakStoreLoading = useOffPeakTaskStore((state) => state.loading);
+  const offPeakError = useOffPeakTaskStore((state) => state.error);
   const offPeakGrayConfig = useOffPeakTaskStore((state) => state.grayConfig);
   const offPeakCodingPlanSupport = useOffPeakTaskStore((state) => state.codingPlanSupport);
   const offPeakTakeNumberAvailability = useOffPeakTaskStore(
@@ -639,6 +629,8 @@ export function AutomationsSection({
     hasAnyTasks,
     offPeakVisible,
   });
+  // 旧空首页把闲时创建放在定时空卡内；分类独立后，闲时空态需要保留自己的创建入口。
+  const showTaskToolbar = visibleTabs.length > 0 || (hasSecondaryNavigation && tab === "idle");
   const hasVisibleTaskCards =
     tab === "scheduled" ? automations.length > 0 : offPeakTasks.length > 0;
   const visibleAutomations = filterAutomationsByStatus(automations, statusFilter);
@@ -647,6 +639,7 @@ export function AutomationsSection({
     hasAnyTasks,
     offPeakCreationEnabled,
     tab,
+    hasSecondaryNavigation,
   });
   const hasVisibleTemplates = showOffPeakTemplates || showScheduledTemplates;
   const showTaskTemplateSeparator = hasVisibleTaskCards && hasVisibleTemplates;
@@ -1233,11 +1226,25 @@ export function AutomationsSection({
     [onOpenSession],
   );
 
-  const handleOffPeakOpen = useCallback((task: ZCodeOffPeakTask) => {
-    // 有 session 的卡片主点击不能直接跳会话：会使 Settings/History
-    // 无法稳定到达。卡片主路径始终进入任务详情，会话只保留为显式次级动作。
-    setView({ mode: "offpeak-edit", task });
-  }, []);
+  const handleOpenAutomation = useCallback(
+    (automation: ZCodeAutomation) => {
+      setPageTab("automation");
+      setTab("scheduled");
+      setView({ mode: "edit", automation });
+    },
+    [setPageTab, setTab],
+  );
+
+  const handleOffPeakOpen = useCallback(
+    (task: ZCodeOffPeakTask) => {
+      // 有 session 的卡片主点击不能直接跳会话：会使 Settings/History
+      // 无法稳定到达。卡片与二级栏主路径统一进入任务详情。
+      setPageTab("automation");
+      setTab("idle");
+      setView({ mode: "offpeak-edit", task });
+    },
+    [setPageTab, setTab],
+  );
 
   const handleOffPeakCancel = useCallback(
     async (task: ZCodeOffPeakTask) => {
@@ -1360,11 +1367,89 @@ export function AutomationsSection({
     ],
   );
 
+  const navigationTab: AutomationsNavigationTab =
+    view.mode === "offpeak-create" || view.mode === "offpeak-edit"
+      ? "idle"
+      : view.mode === "create" || view.mode === "edit"
+        ? "scheduled"
+        : pageTab === "workflow"
+          ? "workflow"
+          : tab;
+  const navigation = navigationContainer
+    ? createPortal(
+        <AutomationsSecondaryNavigation
+          title={intl.formatMessage({ id: "workspaceNavigation.scheduledTasks" })}
+          tabs={[
+            { id: "scheduled", label: intl.formatMessage({ id: "offPeak.tabs.scheduled" }) },
+            ...(offPeakVisible
+              ? [{ id: "idle" as const, label: intl.formatMessage({ id: "offPeak.tabs.idle" }) }]
+              : []),
+            ...(dynamicWorkflowEnabled
+              ? [
+                  {
+                    id: "workflow" as const,
+                    label: intl.formatMessage({ id: "automations.pageTab.workflow" }),
+                  },
+                ]
+              : []),
+          ]}
+          activeTab={navigationTab}
+          onTabChange={(next) => {
+            // 编辑页先于列表分支返回；切分类时必须同步退出编辑，正文才会跟随二级栏。
+            setView({ mode: "list" });
+            setPageTab(next === "workflow" ? "workflow" : "automation");
+            if (next !== "workflow") setTab(next);
+          }}
+          onTaskSelect={(id) => {
+            if (navigationTab === "idle") {
+              const task = offPeakTasks.find((candidate) => candidate.offPeakTaskId === id);
+              if (task) handleOffPeakOpen(task);
+            } else {
+              const automation = automations.find((candidate) => candidate.automationId === id);
+              if (automation) handleOpenAutomation(automation);
+            }
+          }}
+          taskList={
+            navigationTab === "workflow"
+              ? null
+              : navigationTab === "idle"
+                ? {
+                    items: offPeakTasks
+                      .toSorted((left, right) => right.createdAt - left.createdAt)
+                      .map((task) => ({ id: task.offPeakTaskId, title: task.title })),
+                    selectedId: view.mode === "offpeak-edit" ? view.task.offPeakTaskId : null,
+                    loading: offPeakStoreLoading,
+                    error: offPeakError,
+                    emptyLabel: intl.formatMessage({ id: "offPeak.list.empty" }),
+                  }
+                : {
+                    items: automations.map((automation) => ({
+                      id: automation.automationId,
+                      title: automation.title,
+                    })),
+                    selectedId: view.mode === "edit" ? view.automation.automationId : null,
+                    loading,
+                    error,
+                    emptyLabel: intl.formatMessage({ id: "automations.empty.title" }),
+                  }
+          }
+        />,
+        navigationContainer,
+      )
+    : null;
+  // portal 与所有正文分支同时渲染，详情和创建页面也保留分类与任务入口。
+  const withNavigation = (content: ReactNode) => (
+    <>
+      {navigation}
+      {content}
+    </>
+  );
+
   if (!workspacePath) {
-    return (
+    return withNavigation(
       <div className="rounded-lg border border-card-border bg-card px-3 py-2 text-ui-base text-foreground-subtle">
         {intl.formatMessage({ id: "automations.noWorkspace" })}
-      </div>
+      </div>,
     );
   }
 
@@ -1374,7 +1459,7 @@ export function AutomationsSection({
       view.mode === "offpeak-edit"
         ? (offPeakTasks.find((task) => task.offPeakTaskId === view.task.offPeakTaskId) ?? view.task)
         : null;
-    return (
+    return withNavigation(
       <>
         <OffPeakEditView
           editing={editingTask}
@@ -1400,13 +1485,13 @@ export function AutomationsSection({
           onContinue={(task) => void offPeakContinue(task.offPeakTaskId, offPeakTaskService)}
           showToast={toast}
         />
-      </>
+      </>,
     );
   }
 
   // 创建/编辑整页(带 Settings/History tab)。
   if (view.mode !== "list") {
-    return (
+    return withNavigation(
       <>
         <AutomationEditView
           editing={view.mode === "edit" ? view.automation : null}
@@ -1447,7 +1532,7 @@ export function AutomationsSection({
               : undefined
           }
         />
-      </>
+      </>,
     );
   }
 
@@ -1455,11 +1540,19 @@ export function AutomationsSection({
   // 并排，30/34 沿用 h1 的页面标题层级；副标题随标签换。
   const pageHeader = (
     <div className="flex flex-col gap-3">
-      <AutomationsPageTitle
-        workflowTabEnabled={dynamicWorkflowEnabled}
-        value={pageTab}
-        onValueChange={setPageTab}
-      />
+      {hasSecondaryNavigation ? (
+        <h1 className="text-ui-xl font-medium text-foreground">
+          {intl.formatMessage({
+            id: pageTab === "workflow" ? "automations.pageTab.workflow" : `offPeak.tabs.${tab}`,
+          })}
+        </h1>
+      ) : (
+        <AutomationsPageTitle
+          workflowTabEnabled={dynamicWorkflowEnabled}
+          value={pageTab}
+          onValueChange={setPageTab}
+        />
+      )}
       <p className="text-ui-base leading-5 text-foreground-subtlest">
         {intl.formatMessage({
           id:
@@ -1474,7 +1567,7 @@ export function AutomationsSection({
   );
 
   if (pageTab === "workflow") {
-    return (
+    return withNavigation(
       <SavedWorkflowsSection
         header={pageHeader}
         workspacePath={workspacePath}
@@ -1485,37 +1578,44 @@ export function AutomationsSection({
         onOpenWorkflowArtifact={onOpenWorkflowArtifact}
         openWorkflow={openWorkflow}
         onOpenWorkflowConsumed={onOpenWorkflowConsumed}
-      />
+      />,
     );
   }
 
-  return (
+  return withNavigation(
     <div data-automations-content className={cn(SETTINGS_FRAME_CONTENT_CLASSNAME, "flex flex-col")}>
       {pageHeader}
 
       {/* Tab：Scheduled 常驻；Idle 仅在灰度命中或有闲时存量时出现，不再提供 All 混排视图。
          有任务时右上对齐创建（4866-1735）；空态创建入口在大卡内（4889-2013），不重复顶栏按钮。 */}
-      {visibleTabs.length > 0 ? (
-        <div className="mt-8 flex items-center justify-between">
+      {showTaskToolbar ? (
+        <div
+          className={cn(
+            "mt-8 flex items-center",
+            hasSecondaryNavigation ? "justify-end" : "justify-between",
+          )}
+        >
           {/* tab 曾与右侧操作组共用 12px 间距，未体现最新设计要求的 8px 紧凑节奏。*/}
-          <div className="flex items-center gap-2" data-testid={TID_OFFPEAK_TAB}>
-            {/* 未选中态不强制显示 surface 背景，以便与 hover、选中态形成层级。*/}
-            {visibleTabs.map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={cn(
-                  "rounded-full px-3 py-1 text-ui-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused",
-                  tab === key
-                    ? "bg-selected text-foreground"
-                    : "text-foreground-subtle hover:bg-hover hover:text-foreground",
-                )}
-                onClick={() => setTab(key)}
-              >
-                {intl.formatMessage({ id: `offPeak.tabs.${key}` })}
-              </button>
-            ))}
-          </div>
+          {!hasSecondaryNavigation ? (
+            <div className="flex items-center gap-2" data-testid={TID_OFFPEAK_TAB}>
+              {/* 未选中态不强制显示 surface 背景，以便与 hover、选中态形成层级。*/}
+              {visibleTabs.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={cn(
+                    "rounded-full px-3 py-1 text-ui-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused",
+                    tab === key
+                      ? "bg-selected text-foreground"
+                      : "text-foreground-subtle hover:bg-hover hover:text-foreground",
+                  )}
+                  onClick={() => setTab(key)}
+                >
+                  {intl.formatMessage({ id: `offPeak.tabs.${key}` })}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="flex items-center gap-3">
             <ControlHintTooltip
               title={intl.formatMessage({
@@ -1695,11 +1795,11 @@ export function AutomationsSection({
                             data-testid={TID_AUTOMATION_CARD}
                             role="button"
                             tabIndex={0}
-                            onClick={() => setView({ mode: "edit", automation })}
+                            onClick={() => handleOpenAutomation(automation)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                setView({ mode: "edit", automation });
+                                handleOpenAutomation(automation);
                               }
                             }}
                             className={cn(
@@ -1810,7 +1910,7 @@ export function AutomationsSection({
                                 canRestart={canRestart}
                                 canToggle={canToggle}
                                 onRunNow={handleRunNow}
-                                onEdit={(target) => setView({ mode: "edit", automation: target })}
+                                onEdit={handleOpenAutomation}
                                 onToggle={handleToggle}
                                 onRestart={handleRestart}
                                 onDelete={handleDelete}
@@ -1838,7 +1938,9 @@ export function AutomationsSection({
                         onManually={handleCreateManually}
                       />
                       {/* 有闲时任务时右上已有创建入口，空卡不再重复（4866-1735 vs 4889-2013）。 */}
-                      {offPeakCreationEnabled && offPeakTasks.length === 0 ? (
+                      {!hasSecondaryNavigation &&
+                      offPeakCreationEnabled &&
+                      offPeakTasks.length === 0 ? (
                         <OffPeakCreateButton
                           greyReason={offPeakCreateGrey.reason}
                           greyTooltip={offPeakCreateGrey.tooltip}
@@ -2035,6 +2137,6 @@ export function AutomationsSection({
           ) : null}
         </div>
       )}
-    </div>
+    </div>,
   );
 }

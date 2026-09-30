@@ -17,10 +17,7 @@ import { isWorkspaceReadOnly, isWorkspaceTab } from "@/store/tabStore.js";
 import type { TaskChatMessage as TestChatMessage } from "@/lib/taskChatMessageTypes.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { getPathLeaf } from "@/lib/path.js";
-import {
-  addPluginStoreOpenListener,
-  type PluginStoreOpenTarget,
-} from "@/lib/pluginStoreNavigation.js";
+import { addPluginStoreOpenListener, requestPluginStoreOpen } from "@/lib/pluginStoreNavigation.js";
 import { resolveWorkspaceSwitchDraftProvider } from "@/lib/workspaceDraftProvider.js";
 import { useTestActions } from "@/test-actions.js";
 import type { TestActions } from "@/test-actions.js";
@@ -39,11 +36,6 @@ import {
   resolveQuickPickConversationNavigation,
   selectQuickPickConversationTaskIds,
 } from "@/lib/quickPickConversationNavigation.js";
-import {
-  setPendingSettingsPluginIntent,
-  setPendingSettingsSection,
-  type SettingsSectionId,
-} from "@/lib/settingsNavigation.js";
 import { runWorkspaceVisibleCommand } from "@/lib/workspaceVisibleCommand.js";
 import { ZCODE_PRODUCT_DOCS_URL } from "@/lib/productDocs.js";
 import appLogoUrl from "@/assets/app-logo.png";
@@ -685,13 +677,6 @@ export function App({
   const handleSwitchTheme = useCallback(() => {
     setTheme(themeTarget);
   }, [setTheme, themeTarget]);
-  const handleOpenSettingsSection = useCallback(
-    (section: SettingsSectionId) => {
-      setPendingSettingsSection(section);
-      openSettingsTab();
-    },
-    [openSettingsTab],
-  );
   const { reloadSessionPending, handleReloadSession } = useWorkspaceSessionReload({
     intl,
     services,
@@ -803,7 +788,6 @@ export function App({
   const [openAutomationTab, setOpenAutomationTab] = useState<NonNullable<
     AutomationsNavigationTarget["automationTab"]
   > | null>(null);
-  const [pluginStoreReturnScopeKey, setPluginStoreReturnScopeKey] = useState("user");
   const [pluginStoreOpenVersion, setPluginStoreOpenVersion] = useState(0);
   const handleNavigateToTaskMain = useCallback(() => {
     setWorkspaceMainView("chat");
@@ -819,9 +803,6 @@ export function App({
     setWorkspaceMainView("automations");
   }, []);
   const handleNavigateToPluginStoreMain = useCallback(() => {
-    // 通用入口没有 scope 上下文，默认回到 User；Settings 显式带 scope 的入口会在
-    // 导航完成后覆盖这次默认值，避免沿用上一次 Workspace scope。
-    setPluginStoreReturnScopeKey("user");
     setPluginStoreOpenVersion((version) => version + 1);
     preserveNextSettingsExit();
     setWorkspaceMainView("plugin-store");
@@ -849,24 +830,26 @@ export function App({
     onNavigateToAutomations: handleNavigateToAutomationsMain,
     onNavigateToPluginStore: handleNavigateToPluginStoreMain,
   });
-  const handleOpenPluginStoreForScope = useCallback(
-    (_target: PluginStoreOpenTarget = {}) => {
-      // Workspace Marketplace 已收敛为全局入口。兼容旧事件中的 Workspace key，但返回
-      // 目标统一归一为 User，避免旧 sessionStorage/同窗口事件把设置页带回失效 scope。
-      const returnScopeKey = "user";
-      if (workspaceMainView === "plugin-store") {
-        setPluginStoreReturnScopeKey(returnScopeKey);
-        setPluginStoreOpenVersion((version) => version + 1);
-        return;
-      }
-      handleOpenPluginStore();
-      setPluginStoreReturnScopeKey(returnScopeKey);
-    },
-    [handleOpenPluginStore, workspaceMainView],
-  );
+  const handleOpenPluginStoreRequest = useCallback(() => {
+    // 管理页移入市场后，直达入口需要同时退出设置覆盖层，并保留这次显式导航。
+    preserveNextSettingsExit();
+    activateTabByPath(workspaceAbsPath, { workspaceIdentity });
+    if (workspaceMainView === "plugin-store") {
+      setPluginStoreOpenVersion((version) => version + 1);
+      return;
+    }
+    handleOpenPluginStore();
+  }, [
+    activateTabByPath,
+    handleOpenPluginStore,
+    preserveNextSettingsExit,
+    workspaceAbsPath,
+    workspaceIdentity,
+    workspaceMainView,
+  ]);
   useEffect(
-    () => addPluginStoreOpenListener(handleOpenPluginStoreForScope),
-    [handleOpenPluginStoreForScope],
+    () => addPluginStoreOpenListener(handleOpenPluginStoreRequest),
+    [handleOpenPluginStoreRequest],
   );
   const handleSelectAdjacentConversation = useCallback(
     (direction: "previous" | "next") => {
@@ -912,16 +895,9 @@ export function App({
   const handleSelectNextConversation = useCallback(() => {
     handleSelectAdjacentConversation("next");
   }, [handleSelectAdjacentConversation]);
-  const handleManageInstalledPlugins = useCallback(() => {
-    setPendingSettingsPluginIntent("plugins", {
-      origin: "plugin-store",
-      scopeKey: pluginStoreReturnScopeKey,
-    });
-    openSettingsTab();
-  }, [openSettingsTab, pluginStoreReturnScopeKey]);
-  const handlePrimaryNavigationBack =
-    workspaceMainView === "plugin-store" ? handleManageInstalledPlugins : handleTaskNavBack;
-  const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
+  // 一级导航进入插件市场也会记录历史；后退必须消费同一历史，不能跳到安装管理。
+  const handlePrimaryNavigationBack = handleTaskNavBack;
+  const canPrimaryNavigationBack = canTaskNavBack;
   const shellPanelIds = useMemo(() => ["sidebar", "content"], []);
 
   useAppKeyboard({
@@ -989,14 +965,8 @@ export function App({
           createTask: () => runVisibleWorkspaceCommand(() => handleCreateTaskIfWritable()),
           openWorkspace: () => runVisibleWorkspaceCommand(onOpenWorkspace),
           openSettings: openSettingsTab,
-          openSkillsSettings: () => {
-            setPendingSettingsPluginIntent("skills");
-            openSettingsTab();
-          },
-          openMcpSettings: () => {
-            setPendingSettingsPluginIntent("mcps");
-            openSettingsTab();
-          },
+          openSkillsSettings: () => requestPluginStoreOpen({ page: "skill" }),
+          openMcpSettings: () => requestPluginStoreOpen({ page: "mcp" }),
           switchTheme: handleSwitchTheme,
           openFeedback: handleOpenFeedback,
           openCommunity: handleOpenCommunity,
@@ -1017,7 +987,6 @@ export function App({
       handleOpenCommunity,
       handleOpenFeedback,
       handleOpenProductDocs,
-      handleOpenSettingsSection,
       handleSwitchTheme,
       handleOpenBrowserTab,
       handleOpenGitIfWritable,
@@ -1106,8 +1075,7 @@ export function App({
         onWorkspaceMainViewChange={setWorkspaceMainView}
         onOpenAutomationConsumed={handleOpenAutomationConsumed}
         handleOpenAutomations={handleOpenAutomations}
-        handleOpenPluginStore={handleOpenPluginStoreForScope}
-        handleManageInstalledPlugins={handleManageInstalledPlugins}
+        handleOpenPluginStore={handleOpenPluginStoreRequest}
         onConnectRemote={onConnectRemote}
         onSelectRemoteProject={onSelectRemoteProject}
         onCancelRemoteProject={onCancelRemoteProject}

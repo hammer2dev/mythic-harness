@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- 设置导航意图集中管理 sessionStorage、事件桥接和解析校验，拆分会让一次性意图消费顺序更难保证。 */
 import { logger } from "@/logger.js";
+import { requestPluginStoreOpen, type PluginStoreOpenTarget } from "@/lib/pluginStoreNavigation.js";
 
 export type SettingsSectionId =
   | "general"
@@ -22,7 +23,6 @@ export type SettingsSectionId =
 
 type SettingsUsageTabTarget = "app" | "codingPlan";
 type SettingsPluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
-type SettingsPluginNavigationOrigin = "plugin-store";
 
 const SETTINGS_SECTION_INTENT_KEY = "zcode-settings-section-intent",
   SETTINGS_USAGE_TAB_INTENT_KEY = "zcode-settings-usage-tab-intent",
@@ -36,8 +36,11 @@ const HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionId>([
   // 产品语义：定时任务是 workspace 主视图，不能再作为设置页分区出现。
   // 注意：hooks 已是正式设置页分区，不在此列。
   "automations",
-  // 旧插件市场已迁出设置页；保留 id 只用于迁移历史偏好和旧调用。
+  // 插件、MCP 与技能统一由市场承接；旧 id 仅用于识别迁移请求。
   "plugins",
+  "plugin",
+  "mcp",
+  "skill",
   // 工作区搜索（.zcodeignore）设置入口先隐藏：规则文件仍生效并可手动编辑，
   // 编辑页代码保留，放开时从这里移除即可。
   "workspaceFileSearch",
@@ -46,7 +49,6 @@ const HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionId>([
 interface SettingsSectionIntentEventDetail {
   section: SettingsSectionId;
   pluginTab?: SettingsPluginTabTarget;
-  pluginOrigin?: SettingsPluginNavigationOrigin;
   pluginScopeKey?: string;
   usageTab?: SettingsUsageTabTarget;
   modelProviderId?: string;
@@ -86,8 +88,27 @@ export function resolveSettingsSection(
   section: SettingsSectionId,
   fallbackSection: SettingsSectionId = "general",
 ): SettingsSectionId {
-  if (section === "plugins") return "plugin";
   return isSettingsSectionEnabled(section) ? section : fallbackSection;
+}
+
+function resolveSettingsPluginStoreTarget(
+  section: string,
+  options: { pluginTab?: string; pluginScopeKey?: string } = {},
+): PluginStoreOpenTarget | null {
+  const page =
+    section === "mcp" ||
+    ((section === "plugin" || section === "plugins") && options.pluginTab === "mcps")
+      ? "mcp"
+      : section === "skill" ||
+          section === "skills" ||
+          ((section === "plugin" || section === "plugins") && options.pluginTab === "skills")
+        ? "skill"
+        : section === "plugin" || section === "plugins"
+          ? "installed"
+          : null;
+  if (!page) return null;
+  const scopeKey = options.pluginScopeKey?.trim();
+  return { page, ...(scopeKey ? { scopeKey } : {}) };
 }
 
 function getLocalStorage(): Storage | null {
@@ -116,15 +137,10 @@ function readLastSettingsSectionPreference(
 
   try {
     const raw = storage.getItem(SETTINGS_LAST_SECTION_STORAGE_KEY);
-    // 旧 section id 已并入 plugin；迁移持久化值，避免继续传播历史路由语义。
-    if (raw === "plugins") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "plugin");
-      setPendingPluginTab("plugins");
-      return "plugin";
-    }
-    if (raw === "skills") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "skill");
-      return "skill";
+    // 已移出的设置分区不能作为设置页的最后停留位置。
+    if (raw && resolveSettingsPluginStoreTarget(raw)) {
+      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, fallbackSection);
+      return fallbackSection;
     }
     // 旧版“代码预览”已并入“外观”，保留用户上次停留位置的迁移语义。
     if (raw === "codePreview") {
@@ -190,7 +206,6 @@ export function setPendingSettingsUsageCodingPlanIntent(): void {
 export function setPendingSettingsPluginIntent(
   tab: SettingsPluginTabTarget,
   options: {
-    origin?: SettingsPluginNavigationOrigin;
     scopeKey?: string;
   } = {},
 ): void {
@@ -204,7 +219,6 @@ export function setPendingSettingsPluginIntent(
           : "plugin";
   setPendingSettingsSectionIntent(section, {
     pluginTab: tab === "plugins" ? tab : undefined,
-    pluginOrigin: options.origin,
     pluginScopeKey: options.scopeKey,
   });
 }
@@ -213,34 +227,23 @@ export function setPendingSettingsSectionIntent(
   section: SettingsSectionId,
   options: {
     pluginTab?: SettingsPluginTabTarget;
-    pluginOrigin?: SettingsPluginNavigationOrigin;
     pluginScopeKey?: string;
     modelProviderId?: string;
     usageTab?: SettingsUsageTabTarget;
   } = {},
 ): void {
+  const pluginStoreTarget = resolveSettingsPluginStoreTarget(section, options);
+  if (pluginStoreTarget) {
+    clearPendingSettingsSectionIntent();
+    requestPluginStoreOpen(pluginStoreTarget);
+    return;
+  }
   if (typeof window === "undefined") {
     return;
   }
 
   try {
     window.sessionStorage.setItem(SETTINGS_SECTION_INTENT_KEY, section);
-    if (options.pluginTab) {
-      window.sessionStorage.setItem(SETTINGS_PLUGIN_TAB_INTENT_KEY, options.pluginTab);
-    } else {
-      window.sessionStorage.removeItem(SETTINGS_PLUGIN_TAB_INTENT_KEY);
-    }
-    if (options.pluginOrigin) {
-      window.sessionStorage.setItem(SETTINGS_PLUGIN_ORIGIN_INTENT_KEY, options.pluginOrigin);
-    } else {
-      window.sessionStorage.removeItem(SETTINGS_PLUGIN_ORIGIN_INTENT_KEY);
-    }
-    const normalizedPluginScopeKey = options.pluginScopeKey?.trim();
-    if (normalizedPluginScopeKey) {
-      window.sessionStorage.setItem(SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY, normalizedPluginScopeKey);
-    } else {
-      window.sessionStorage.removeItem(SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY);
-    }
     if (options.usageTab) {
       window.sessionStorage.setItem(SETTINGS_USAGE_TAB_INTENT_KEY, options.usageTab);
     }
@@ -260,7 +263,6 @@ export function setPendingSettingsSectionIntent(
       detail: {
         section,
         pluginTab: options.pluginTab,
-        pluginOrigin: options.pluginOrigin,
         pluginScopeKey: options.pluginScopeKey?.trim() || undefined,
         usageTab: options.usageTab,
         modelProviderId: options.modelProviderId,
@@ -295,14 +297,12 @@ function consumePendingSettingsSection(
 
   try {
     const raw = window.sessionStorage.getItem(SETTINGS_SECTION_INTENT_KEY);
+    // 旧版本遗留的能力管理请求由挂载后的 effect 转交市场，避免在 render 中导航。
+    if (raw && resolveSettingsPluginStoreTarget(raw)) return fallbackSection;
     if (raw !== null) {
       window.sessionStorage.removeItem(SETTINGS_SECTION_INTENT_KEY);
     }
 
-    if (raw === "skills") {
-      // 旧 Skills 使用复数 id；迁移到当前独立 skill 分区。
-      return "skill";
-    }
     if (raw && isSettingsSectionId(raw)) {
       return resolveSettingsSection(raw, fallbackSection);
     }
@@ -313,61 +313,20 @@ function consumePendingSettingsSection(
   return fallbackSection;
 }
 
-function setPendingPluginTab(tab: SettingsPluginTabTarget): void {
-  if (typeof window === "undefined") return;
+export function consumePendingSettingsPluginStoreTarget(): PluginStoreOpenTarget | null {
+  if (typeof window === "undefined") return null;
   try {
-    window.sessionStorage.setItem(SETTINGS_PLUGIN_TAB_INTENT_KEY, tab);
+    const section = window.sessionStorage.getItem(SETTINGS_SECTION_INTENT_KEY);
+    if (!section) return null;
+    const target = resolveSettingsPluginStoreTarget(section, {
+      pluginTab: window.sessionStorage.getItem(SETTINGS_PLUGIN_TAB_INTENT_KEY) ?? undefined,
+      pluginScopeKey:
+        window.sessionStorage.getItem(SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY) ?? undefined,
+    });
+    if (target) clearPendingSettingsSectionIntent();
+    return target;
   } catch {
-    // 忽略浏览器存储异常，不影响设置页打开。
-  }
-}
-
-export function consumePendingSettingsPluginTab(): SettingsPluginTabTarget | undefined {
-  if (typeof window === "undefined") return undefined;
-  try {
-    const raw = window.sessionStorage.getItem(SETTINGS_PLUGIN_TAB_INTENT_KEY);
-    window.sessionStorage.removeItem(SETTINGS_PLUGIN_TAB_INTENT_KEY);
-    return raw === "plugins" || raw === "mcps" || raw === "skills" ? raw : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function consumePendingSettingsPluginOrigin(): SettingsPluginNavigationOrigin | undefined {
-  if (typeof window === "undefined") return undefined;
-  try {
-    const raw = window.sessionStorage.getItem(SETTINGS_PLUGIN_ORIGIN_INTENT_KEY);
-    return raw === "plugin-store" ? raw : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function consumePendingSettingsPluginScopeKey(): string | undefined {
-  if (typeof window === "undefined") return undefined;
-  try {
-    const raw = window.sessionStorage.getItem(SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY);
-    return raw?.trim() || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function clearPendingSettingsPluginScopeKey(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.removeItem(SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY);
-  } catch {
-    // 忽略浏览器存储异常，不影响主流程。
-  }
-}
-
-export function clearPendingSettingsPluginOrigin(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.removeItem(SETTINGS_PLUGIN_ORIGIN_INTENT_KEY);
-  } catch {
-    // 忽略浏览器存储异常，不影响设置页打开。
+    return null;
   }
 }
 
@@ -445,7 +404,9 @@ export function addPendingSettingsSectionListener(
       // 这里同步清掉 sessionStorage，避免用户随后切到别的分区并退出后，
       // 下次挂载又被陈旧 pending 意图覆盖“上次停留分区”。
       clearPendingSettingsSectionIntent();
-      listener(detail.section, detail);
+      const target = resolveSettingsPluginStoreTarget(detail.section, detail);
+      if (target) requestPluginStoreOpen(target);
+      else listener(detail.section, detail);
     }
   };
 

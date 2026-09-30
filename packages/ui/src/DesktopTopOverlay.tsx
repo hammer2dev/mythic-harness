@@ -43,6 +43,7 @@ interface DesktopTopOverlayProps {
   onGoForward: () => void;
   hideTaskNavigationButtons?: boolean;
   newTaskDisabledReason?: string;
+  navigationRailWidthPx?: number;
 }
 
 export function DesktopTopOverlay({
@@ -73,6 +74,7 @@ export function DesktopTopOverlay({
   onGoForward,
   hideTaskNavigationButtons = false,
   newTaskDisabledReason,
+  navigationRailWidthPx = 0,
 }: DesktopTopOverlayProps) {
   const { intl } = useZCodeIntl();
   const SidebarToggleIcon = isSidebarVisible ? PanelLeftClose : PanelLeftOpen;
@@ -87,7 +89,9 @@ export function DesktopTopOverlay({
   const isNewTaskButtonVisible = showNewTaskButton ?? !isSidebarVisible;
   const macTopOverlayPaddingStyle =
     isMacDesktop && !isMacFullscreen && Number.isFinite(macWindowControlsLeftPaddingPx)
-      ? { paddingLeft: `${Math.round(macWindowControlsLeftPaddingPx ?? 96)}px` }
+      ? {
+          paddingLeft: `${Math.max(0, Math.round(macWindowControlsLeftPaddingPx ?? 96) - navigationRailWidthPx)}px`,
+        }
       : undefined;
   const windowsTopOverlayPaddingStyle = isWindowsDesktop
     ? {
@@ -101,8 +105,8 @@ export function DesktopTopOverlay({
 
   return (
     <div
-      style={topOverlayWidthStyle}
-      className="@container/topoverlayer pointer-events-none absolute h-14 flex left-0 top-0 z-20 w-fit"
+      style={{ ...topOverlayWidthStyle, left: navigationRailWidthPx }}
+      className="@container/topoverlayer pointer-events-none absolute h-14 flex top-0 z-30 w-fit"
     >
       <div
         style={{
@@ -127,7 +131,7 @@ export function DesktopTopOverlay({
             "pointer-events-auto flex items-center gap-1 shrink-0 [app-region:no-drag]",
           )}
         >
-          {usesCustomCaptionArea && (
+          {usesCustomCaptionArea && !navigationRailWidthPx && (
             <DesktopTopOverlayActionButton
               title={toggleSidebarTitle}
               shortcut={toggleSidebarShortcutLabel}
@@ -147,7 +151,7 @@ export function DesktopTopOverlay({
 
           {/* 普通 Web 缺少可触摸的侧栏入口，窄屏自动收起后无法再打开。
               macOS 与 Web 共用现有切换按钮，沿用同一侧栏状态和动作。 */}
-          {!usesCustomCaptionArea && (
+          {(!usesCustomCaptionArea || navigationRailWidthPx > 0) && (
             <DesktopTopOverlayActionButton
               title={toggleSidebarTitle}
               shortcut={toggleSidebarShortcutLabel}

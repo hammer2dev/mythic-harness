@@ -99,6 +99,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   workspaceRemoteSessionId,
   activeTaskId,
   isDesktop = false,
+  layout = "default",
   className,
 }: {
   theme: Theme;
@@ -119,6 +120,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   workspaceRemoteSessionId?: string;
   activeTaskId?: string | null;
   isDesktop?: boolean;
+  layout?: "default" | "rail";
   className?: string;
 }) {
   const { intl } = useZCodeIntl();
@@ -156,7 +158,9 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
           )}
         </AvatarFallback>
       </Avatar>
-      <div className="min-w-0 flex-1 overflow-hidden text-left">
+      <div
+        className={cn("min-w-0 flex-1 overflow-hidden text-left", layout === "rail" && "sr-only")}
+      >
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 truncate text-ui-base font-semibold text-foreground">
             {profileBadge}
@@ -211,8 +215,16 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
 
   return (
     // footer 被 Settings 复用，页面专属边距由调用方传入，避免修改共享默认样式。
-    <footer className={cn("flex shrink-0 flex-col gap-2.5 px-4 pt-2 pb-4", className)}>
-      <div className="flex min-w-0 gap-2">
+    <footer
+      className={cn(
+        "flex shrink-0 flex-col gap-2.5 pt-2 pb-4",
+        layout === "rail" ? "px-1" : "px-4",
+        className,
+      )}
+    >
+      <div
+        className={cn("flex min-w-0 gap-2", layout === "rail" && "flex-col-reverse items-center")}
+      >
         <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
           <DropdownMenuTrigger asChild>
             {/* 头像和 Login 之前直接绑定到登录动作，导致用户无法从这里打开偏好设置。
@@ -220,8 +232,13 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
             <Button
               type="button"
               variant="ghost"
-              size={"lg"}
-              className="min-w-0 flex-1 justify-start gap-2 overflow-hidden rounded-tl-2xl rounded-bl-2xl border-0 pl-0"
+              size={layout === "rail" ? "icon-lg" : "lg"}
+              className={cn(
+                "min-w-0 gap-2 overflow-hidden border-0",
+                layout === "rail"
+                  ? "shrink-0"
+                  : "flex-1 justify-start rounded-tl-2xl rounded-bl-2xl pl-0",
+              )}
               data-testid={TID_LOGIN_TRIGGER}
               aria-label={profileBadge}
             >
@@ -231,7 +248,12 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
             </Button>
           </DropdownMenuTrigger>
           {/* 菜单内容保持挂载，避免每次点击头像菜单都重建 footer 内部状态。*/}
-          <DropdownMenuContent align="start" className="w-max min-w-50" forceMount>
+          <DropdownMenuContent
+            side={layout === "rail" ? "right" : "top"}
+            align={layout === "rail" ? "end" : "start"}
+            className="w-max min-w-50"
+            forceMount
+          >
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Globe className="size-4" />
@@ -346,7 +368,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
             ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className={cn("flex shrink-0 items-center gap-1.5", layout === "rail" && "flex-col")}>
           {isDesktop && workspacePath ? (
             <WorkspaceWebRemoteControlTrigger
               workspacePath={workspacePath}

@@ -11,8 +11,6 @@ import {
 } from "react";
 import {
   Archive,
-  Blocks,
-  CalendarClock,
   Clock3,
   Cloud,
   Folder,
@@ -45,7 +43,6 @@ import type { Locale, RemoteTarget, UserInfo, ZCodeTaskMeta } from "@zcode/share
 import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
-  TID_AUTOMATIONS_OPEN,
   TID_PROJECT_SECTION,
   TID_SIDEBAR,
   TID_WORKSPACE_LIST,
@@ -225,10 +222,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   goBackShortcutLabel: _goBackShortcutLabel,
   goForwardShortcutLabel: _goForwardShortcutLabel,
   onOpenCommandCenter,
-  onOpenAutomations,
-  onOpenPluginStore,
-  automationsActive = false,
-  pluginStoreActive = false,
+  navigationFooterContainer,
   onFileTreeOpenChange,
 }: {
   workspacePath: string;
@@ -277,10 +271,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   goBackShortcutLabel?: string;
   goForwardShortcutLabel?: string;
   onOpenCommandCenter: () => void;
-  onOpenAutomations?: () => void;
-  onOpenPluginStore?: () => void;
-  automationsActive?: boolean;
-  pluginStoreActive?: boolean;
+  navigationFooterContainer?: HTMLElement | null;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
@@ -582,12 +573,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     [setLocalePreference],
   );
 
-  const handleOpenPluginStoreMain = useCallback(() => {
-    onOpenPluginStore?.();
-  }, [onOpenPluginStore]);
-  const handleOpenAutomationsMain = useCallback(() => {
-    onOpenAutomations?.();
-  }, [onOpenAutomations]);
   const handleOpenCodingPlanUpgrade = useCallback(
     (
       providerId: string,
@@ -839,13 +824,34 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     ],
   );
 
+  const footer = (
+    <WorkspaceSidebarFooter
+      layout={navigationFooterContainer !== undefined ? "rail" : "default"}
+      theme={theme}
+      localeMenuValue={localeMenuValue}
+      onLocaleChange={handleLocaleChange}
+      onThemeChange={handleThemeChange}
+      onSettingsButtonClick={openSettingsTab}
+      onUsageClick={openSettingsTab}
+      onUpgradeClick={handleOpenCodingPlanUpgrade}
+      onLogin={onLogin}
+      onLogout={onLogout}
+      user={user}
+      workspacePath={workspacePath}
+      workspaceIdentity={workspaceIdentity}
+      workspaceRemoteSessionId={workspaceRemoteSessionId}
+      activeTaskId={activeTaskId}
+      isDesktop={isDesktop}
+    />
+  );
+
   return (
     <aside
       data-testid={TID_SIDEBAR}
       // 这里用设计系统的结构面 token 固定侧栏层级，避免不同合成器把左侧容器混成异常灰块。
       className="flex h-full flex-col overflow-hidden"
     >
-      <div className="h-12 [app-region:drag]"></div>
+      <div className="h-14 shrink-0 [app-region:drag]" />
       <div className="relative flex-1 min-h-0 overflow-hidden">
         <div
           className={cn(
@@ -855,6 +861,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
           aria-hidden={isFileTreeOpen}
         >
           <div className={cn("flex flex-col gap-1 px-2", isWindowsDesktop ? "py-2" : "py-3")}>
+            <h2 className="px-2 pb-2 text-ui-lg font-semibold text-foreground">
+              {intl.formatMessage({ id: "workspaceSidebar.projectsSection" })}
+            </h2>
             <WorkspaceNewTaskTooltip disabledReason={workspaceReadOnlyReason}>
               <NewTaskButtonGroup
                 disabled={workspaceReadOnly}
@@ -880,54 +889,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               <span className="ml-auto shrink-0 text-ui-xs font-normal text-foreground-subtlest">
                 {commandCenterShortcutLabel}
               </span>
-            </Button>
-            {/* 远程入口展示策略统一走 useRemoteConnectionEntryVisibility，避免与其他入口出现分叉。*/}
-            {/* {showRemoteConnectionEntry ? (
-              <SSHDialog
-                onConnect={onConnectRemote}
-                onSelectProject={onSelectRemoteProject}
-                onCancelSession={onCancelRemoteProject}
-                isWindowsDesktop={isWindowsDesktop}
-                triggerVariant="ghost"
-                triggerSize="lg"
-                triggerClassName="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
-                trigger={
-                  <>
-                    <Cloud className="size-4" />
-                    <span>{intl.formatMessage({ id: "remote.trigger" })}</span>
-                  </>
-                }
-              />
-            ) : null} */}
-            <Button
-              variant="ghost"
-              onClick={handleOpenAutomationsMain}
-              data-icon="inline-start"
-              data-testid={TID_AUTOMATIONS_OPEN}
-              size="lg"
-              aria-pressed={automationsActive}
-              className={cn(
-                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                automationsActive && "bg-selected text-foreground",
-              )}
-            >
-              <CalendarClock className="size-4" />
-              {intl.formatMessage({ id: "workspace.openScheduledSettings" })}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={handleOpenPluginStoreMain}
-              data-icon="inline-start"
-              data-testid="plugin-store-sidebar-open"
-              size="lg"
-              aria-pressed={pluginStoreActive}
-              className={cn(
-                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                pluginStoreActive && "bg-selected text-foreground",
-              )}
-            >
-              <Blocks className="size-4" />
-              {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
             </Button>
           </div>
 
@@ -1180,24 +1141,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             </div>
           </div>
 
-          <WorkspaceSidebarFooter
-            className="pr-3"
-            theme={theme}
-            localeMenuValue={localeMenuValue}
-            onLocaleChange={handleLocaleChange}
-            onThemeChange={handleThemeChange}
-            onSettingsButtonClick={openSettingsTab}
-            onUsageClick={openSettingsTab}
-            onUpgradeClick={handleOpenCodingPlanUpgrade}
-            onLogin={onLogin}
-            onLogout={onLogout}
-            user={user}
-            workspacePath={workspacePath}
-            workspaceIdentity={workspaceIdentity}
-            workspaceRemoteSessionId={workspaceRemoteSessionId}
-            activeTaskId={activeTaskId}
-            isDesktop={isDesktop}
-          />
+          {navigationFooterContainer
+            ? createPortal(footer, navigationFooterContainer)
+            : navigationFooterContainer === undefined
+              ? footer
+              : null}
         </div>
         <div
           className={cn(

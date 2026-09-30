@@ -1,24 +1,19 @@
-/* eslint-disable max-lines -- 商店列表页把标题/搜索/已安装条/公开-个人分段/Featured/分类折叠聚合成一个连贯浏览面，拆散反而难以维持 1:1 布局。 */
+/* eslint-disable max-lines -- 商店列表页把搜索/公开-个人分段/Featured/分类折叠聚合成一个连贯浏览面，拆散反而难以维持 1:1 布局。 */
 import { useMemo, useState } from "react";
-import { Download, Loader2, Settings2 } from "lucide-react";
 import type { PluginStoreOrder, ZCodePluginMarketplaceSummary } from "@zcode/shared";
-import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID } from "@zcode/shared";
-import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { PluginStoreAvatar } from "@/settings/PluginStoreAvatar.js";
 import { PluginStoreCard, type PluginStoreActions } from "@/settings/PluginStoreCard.js";
 import { SettingsSearchInput } from "@/settings/SettingsSearchInput.js";
 import {
   FALLBACK_CATEGORY,
   KNOWN_CATEGORY_LABEL_IDS,
-  canUpdatePluginItem,
   groupItemsByCategory,
   isPublicStoreMarketplaceId,
   resolveItemDisplayName,
   selectFeaturedItems,
-  sortInstalledStripItems,
+  selectVisibleStoreItems,
   sortPersonalMarketplaceGroups,
   storeItemMatches,
   type PersonalMarketplaceGroup,
@@ -28,7 +23,6 @@ import { resolveMarketplaceDisplayName } from "@/settings/pluginSourceLabel.js";
 
 // 分类/市场分组手动收起后的展示数量；默认完整展示，避免较少的插件又被自动隐藏。
 const CATEGORY_VISIBLE_LIMIT = 6;
-const RETIRED_STORE_PLUGIN_ID = `restore-legacy-sessions@${ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID}`;
 
 export type PluginStoreSegment = "public" | "personal";
 
@@ -41,8 +35,8 @@ export function PluginStoreListView({
   query,
   onQueryChange,
   segment,
+  showNavigation = true,
   onSegmentChange,
-  onOpenManage,
 }: {
   items: StorePluginItem[];
   order?: PluginStoreOrder | null;
@@ -52,8 +46,8 @@ export function PluginStoreListView({
   query: string;
   onQueryChange: (query: string) => void;
   segment: PluginStoreSegment;
+  showNavigation?: boolean;
   onSegmentChange: (segment: PluginStoreSegment) => void;
-  onOpenManage: () => void;
 }) {
   const { intl, locale } = useZCodeIntl();
   const modeOrder = order?.code;
@@ -61,19 +55,8 @@ export function PluginStoreListView({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   // 旧版会话恢复入口退出市场；统一过滤所有浏览投影，旧缓存/精选也不能重新露出。
   // 完整 ID 只命中官方插件，插件管理页继续使用原始条目管理已有安装。
-  const items = useMemo(
-    () => allItems.filter((item) => item.id !== RETIRED_STORE_PLUGIN_ID),
-    [allItems],
-  );
+  const items = useMemo(() => selectVisibleStoreItems(allItems), [allItems]);
 
-  const installedItems = useMemo(
-    () =>
-      sortInstalledStripItems(
-        items.filter((item) => item.installed),
-        locale,
-      ),
-    [items, locale],
-  );
   const publicItems = useMemo(
     () => items.filter((item) => isPublicStoreMarketplaceId(item.marketplace)),
     [items],
@@ -151,101 +134,27 @@ export function PluginStoreListView({
         })}
       />
 
-      {/* 已安装条：图标点击进详情，齿轮进「管理已安装」视图。 */}
-      {installedItems.length > 0 ? (
-        <section data-testid="plugin-store-installed-strip">
-          <div className="flex items-center justify-between border-b border-border pb-2">
-            <h2 className="text-ui-lg font-semibold text-foreground">
-              {intl.formatMessage({
-                id: "settings.plugins.store.installedStrip",
-              })}
-            </h2>
-            <ControlHintTooltip
-              title={intl.formatMessage({
-                id: "settings.plugins.store.manageInstalled",
-              })}
-            >
-              <Button
-                type="button"
-                data-testid="plugin-store-manage-open"
-                variant="outline"
-                size="icon-lg"
-                aria-label={intl.formatMessage({
-                  id: "settings.plugins.store.manageInstalled",
-                })}
-                onClick={onOpenManage}
-              >
-                <Settings2 className="size-4" aria-hidden="true" />
-              </Button>
-            </ControlHintTooltip>
-          </div>
-          {/* 横向滚动也会裁切纵向溢出；预留角标、缩放和焦点环空间。
-              窄屏不补偿负外边距，避免滚动容器越过页面右边界。 */}
-          <div className="mt-1 flex items-center gap-3 overflow-x-auto px-2 pt-2 pb-1 sm:-mx-2">
-            {installedItems.map((item) => {
-              const displayName = resolveItemDisplayName(item, locale);
-              const updating = actions.operationId === `plugin:update:${item.id}`;
-              return (
-                <ControlHintTooltip key={item.id} title={displayName} side="top" sideOffset={8}>
-                  <div className="relative shrink-0">
-                    <button
-                      type="button"
-                      data-testid="plugin-store-installed-item"
-                      data-plugin-id={item.id}
-                      aria-label={displayName}
-                      className="shrink-0 rounded-xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused"
-                      onClick={() => actions.onOpenDetail(item.id)}
-                    >
-                      {/* Installed Strip 只表达已安装集合，启用态统一在管理视图展示，避免用透明度误伤品牌图标。 */}
-                      <PluginStoreAvatar item={item} className="size-10" />
-                    </button>
-                    {canUpdatePluginItem(item) ? (
-                      <button
-                        type="button"
-                        data-testid="plugin-store-installed-item-update"
-                        data-plugin-id={item.id}
-                        aria-label={intl.formatMessage({ id: "settings.plugins.detail.update" })}
-                        className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-success text-success-foreground shadow-sm transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused disabled:opacity-60"
-                        disabled={actions.operationId !== null}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          actions.onUpdate(item.id);
-                        }}
-                      >
-                        {updating ? (
-                          <Loader2 className="size-2.5 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Download className="size-2.5" aria-hidden="true" />
-                        )}
-                      </button>
-                    ) : null}
-                  </div>
-                </ControlHintTooltip>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
       {/* 公开 / 个人分段。 */}
-      <div className="flex items-center gap-1.5">
-        <SegmentPill
-          active={segment === "public"}
-          testId="plugin-store-segment-public"
-          label={intl.formatMessage({
-            id: "settings.plugins.store.segment.public",
-          })}
-          onClick={() => onSegmentChange("public")}
-        />
-        <SegmentPill
-          active={segment === "personal"}
-          testId="plugin-store-segment-personal"
-          label={intl.formatMessage({
-            id: "settings.plugins.store.segment.personal",
-          })}
-          onClick={() => onSegmentChange("personal")}
-        />
-      </div>
+      {showNavigation ? (
+        <div className="flex items-center gap-1.5">
+          <SegmentPill
+            active={segment === "public"}
+            testId="plugin-store-segment-public"
+            label={intl.formatMessage({
+              id: "settings.plugins.store.segment.public",
+            })}
+            onClick={() => onSegmentChange("public")}
+          />
+          <SegmentPill
+            active={segment === "personal"}
+            testId="plugin-store-segment-personal"
+            label={intl.formatMessage({
+              id: "settings.plugins.store.segment.personal",
+            })}
+            onClick={() => onSegmentChange("personal")}
+          />
+        </div>
+      ) : null}
 
       {keyword ? (
         <StoreSection

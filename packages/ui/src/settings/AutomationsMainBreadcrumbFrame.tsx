@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { cn } from "@/components/lib/utils.js";
 import {
   SettingsBreadcrumbProvider,
   SettingsHeaderBreadcrumb,
@@ -14,25 +15,29 @@ export function AutomationsMainBreadcrumbFrame({
   children,
   isDesktop,
   sectionLabel,
+  reserveNavigationSpace = false,
 }: {
   ariaLabel: string;
   children: ReactNode;
   isDesktop: boolean;
   sectionLabel: string;
+  reserveNavigationSpace?: boolean;
 }) {
   const [items, setItems] = useState<readonly SettingsBreadcrumbItem[]>([]);
 
   return (
     <SettingsBreadcrumbProvider onItemsChange={setItems} sectionLabel={sectionLabel}>
       <div className="flex min-h-0 flex-1 flex-col">
-        {isDesktop ? (
-          <div
-            className="h-12 shrink-0 [app-region:drag]"
-            data-testid="automations-main-drag-region"
-          >
-            <SettingsHeaderBreadcrumb ariaLabel={ariaLabel} items={items} />
-          </div>
-        ) : null}
+        <div
+          className={cn(
+            "shrink-0 [app-region:drag]",
+            isDesktop ? "h-12" : "h-14",
+            reserveNavigationSpace && "pl-38",
+          )}
+          data-testid="automations-main-drag-region"
+        >
+          <SettingsHeaderBreadcrumb ariaLabel={ariaLabel} items={items} />
+        </div>
         {children}
       </div>
     </SettingsBreadcrumbProvider>
