@@ -1935,9 +1935,10 @@ export class ProductProjection {
     // success；子 Agent 的真实终态随后只作为 model-only task-notification 开新轮。
     // V4 过去没有按 tool-use-id 消费这条权威事实，因此 429 后卡片会永久停在 completed。
     const deltas: ConversationDelta[] = this.applyBackgroundTaskNotification(fact);
+    // 批量恢复与累积器共享快照；直接替换引用会使运行状态脱节，丢弃后续助手内容。
+    // 项目和共享上下文状态统一由 state.updated 增量提交。
     if (fact.projectWorkspace && this.snapshot.meta.projectId !== fact.projectWorkspace.projectId) {
       const meta = { ...this.snapshot.meta, projectId: fact.projectWorkspace.projectId };
-      this.snapshot = { ...this.snapshot, meta };
       deltas.push({ op: "state.updated", patch: { meta } });
     }
     const sharedContextRef = fact.sharedContextRefs?.[0];
@@ -1953,7 +1954,6 @@ export class ProductProjection {
         ...this.snapshot.sharedContextImport,
         status: "attached" as const,
       };
-      this.snapshot = { ...this.snapshot, sharedContextImport };
       deltas.push({ op: "state.updated", patch: { sharedContextImport } });
     }
     // marker 时机：只有当
