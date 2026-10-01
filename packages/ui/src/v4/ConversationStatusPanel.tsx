@@ -388,6 +388,8 @@ function GitStatusSection({
   const repositoryIdentity = workspaceIdentity
     ? (replaceRemoteWorkspaceIdentityPath(workspaceIdentity, repositoryPath) ?? workspaceIdentity)
     : undefined;
+  // 两个同级控件之前共享 key，刷新时 React 可能错误复用节点并残留重复分支按钮。
+  const repositoryKey = repositoryIdentity?.trim() || repositoryPath;
 
   return (
     <StatusSection
@@ -441,7 +443,7 @@ function GitStatusSection({
           </span>
         </button>
         <GitBranchSwitcher
-          key={repositoryIdentity ?? repositoryPath}
+          key={`branch:${repositoryKey}`}
           workspacePath={repositoryPath}
           gitSummary={gitSummary}
           dirtyFileCount={git.dirtyFileCount}
@@ -454,7 +456,7 @@ function GitStatusSection({
           showFooterActions
         />
         <GitActionMenu
-          key={repositoryIdentity ?? repositoryPath}
+          key={`actions:${repositoryKey}`}
           workspacePath={repositoryPath}
           workspaceIdentity={repositoryIdentity}
           gitSummary={gitSummary}
