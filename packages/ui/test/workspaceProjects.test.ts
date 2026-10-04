@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { appSettingsSchema, buildRemoteWorkspaceIdentity } from "@zcode/shared";
 import { createTabStore, isWorkspaceTab } from "../src/store/tabStore.js";
+import {
+  createWorkspaceProject,
+  updateWorkspaceProjectDefinition,
+} from "../src/lib/workspaceProject.js";
 import { buildPersistedWorkspaceSessionEntries } from "../src/lib/remoteWorkspaceHistory.js";
 import { restorePersistedRemoteWorkspaceSessions } from "../src/root/remoteWorkspaceSessionPersistence.js";
 import { createSidebarSectionsStore } from "../src/store/sidebarSectionsStore.js";
@@ -13,6 +17,24 @@ function workspace(store: ReturnType<typeof createTabStore>) {
   assert.ok(tab?.project);
   return tab;
 }
+
+test("创建项目提交后保留多目录配置并打开主要目录", () => {
+  const store = createTabStore(null);
+  const initialProject = createWorkspaceProject({ workspacePath: "/app" }, "产品");
+  const project = updateWorkspaceProjectDefinition(initialProject, {
+    name: "产品项目",
+    folders: [...initialProject.folders, { id: "docs", workspacePath: "/docs" }],
+    primaryFolderId: "docs",
+  });
+
+  const tabId = store.getState().addTab("/docs", { project });
+  const tab = store.getState().tabs.find((candidate) => candidate.id === tabId);
+  assert.ok(tab && isWorkspaceTab(tab));
+  assert.equal(tab.label, "产品项目");
+  assert.equal(tab.workspacePath, "/docs");
+  assert.equal(tab.project?.folders.length, 2);
+  assert.equal(store.getState().activeWorkspacePath, "/docs");
+});
 
 test("旧项目迁移并切换主目录后，保留项目身份和历史任务执行目录", () => {
   const store = createTabStore(null);

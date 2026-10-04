@@ -39,7 +39,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import type { Locale, RemoteTarget, UserInfo, ZCodeTaskMeta } from "@zcode/shared";
+import { type Locale, type RemoteTarget, type UserInfo, type ZCodeTaskMeta } from "@zcode/shared";
 import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
@@ -73,9 +73,18 @@ import {
 } from "@/lib/sidebarTaskPreferences.js";
 import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
 import { ProjectSectionHeaderActions } from "@/WorkspaceSidebar/ProjectSectionHeaderActions.js";
+import {
+  ProjectCreateDialog,
+  type ProjectCreateDraft,
+} from "@/WorkspaceSidebar/ProjectCreateDialog.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
-import { getWorkspaceProjectKey } from "@/lib/workspaceProject.js";
+import {
+  createWorkspaceProject,
+  getWorkspaceProjectKey,
+  getWorkspaceProjectPrimaryFolder,
+  updateWorkspaceProjectDefinition,
+} from "@/lib/workspaceProject.js";
 import {
   increaseWorkspaceTaskVisibleLimit,
   resolveVisibleWorkspaceTaskKeys,
@@ -198,7 +207,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   fileTreeOpenRequest,
   onCreateTask,
   onCreateConversationTask,
-  onOpenFolderFromWorkspaceMenu,
   onOpenRemoteWorkspace,
   theme,
   onConnectRemote: _onConnectRemote,
@@ -243,7 +251,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   fileTreeOpenRequest?: SidebarFileTreeOpenRequest | null;
   onCreateTask: (request?: CreateTaskRequest) => void;
   onCreateConversationTask: () => void;
-  onOpenFolderFromWorkspaceMenu: () => void;
   onOpenRemoteWorkspace?: () => void;
   theme: Theme;
   onConnectRemote: (options: RemoteTarget, requestId?: string) => Promise<string>;
@@ -320,6 +327,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const setTheme = useZCodeStore((state) => state.setTheme);
   const commandCenterShortcutLabel = useShortcutCommandLabel("openCommandCenter");
   const tabs = useTabStore((state) => state.tabs);
+  const addTab = useTabStore((state) => state.addTab);
   const activeTabId = useTabStore((state) => state.activeTabId);
   const activateTab = useTabStore((state) => state.activateTab);
   const closeTab = useTabStore((state) => state.closeTab);
@@ -329,6 +337,24 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const reorderWorkspaceTabs = useTabStore((state) => state.reorderWorkspaceTabs);
   const expandAllWorkspaceTabs = useTabStore((state) => state.expandAllWorkspaceTabs);
   const collapseAllWorkspaceTabs = useTabStore((state) => state.collapseAllWorkspaceTabs);
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = useState(false);
+
+  const handleCreateProject = useCallback(
+    (draft: ProjectCreateDraft) => {
+      const firstFolder = draft.folders[0];
+      if (!firstFolder) {
+        return;
+      }
+
+      const initialProject = createWorkspaceProject(firstFolder, draft.name);
+      const project = updateWorkspaceProjectDefinition(initialProject, draft);
+      const primary = getWorkspaceProjectPrimaryFolder(project);
+      addTab(primary.workspacePath, { project });
+      onStartDraftInWorkspace(primary.workspacePath, primary.workspaceIdentity);
+      setCreateProjectDialogOpen(false);
+    },
+    [addTab, onStartDraftInWorkspace],
+  );
 
   const workspaceTabs = useMemo(() => tabs.filter(isWorkspaceTab), [tabs]);
   const { conversationWorkspaceTabs, projectWorkspaceTabs } = useMemo(
@@ -1065,7 +1091,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                               action={
                                 <ProjectSectionHeaderActions
                                   sectionId={sectionId}
-                                  onOpenFolder={onOpenFolderFromWorkspaceMenu}
+                                  onCreateProject={() => setCreateProjectDialogOpen(true)}
                                   onOpenRemote={onOpenRemoteWorkspace}
                                 />
                               }
@@ -1194,6 +1220,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             />
           ) : null}
         </div>
+        {createProjectDialogOpen ? (
+          <ProjectCreateDialog
+            onClose={() => setCreateProjectDialogOpen(false)}
+            onCreate={handleCreateProject}
+          />
+        ) : null}
       </div>
     </aside>
   );

@@ -1,4 +1,4 @@
-import { Cloud, FolderOpen, Plus } from "lucide-react";
+import { Cloud, FolderPlus, Plus } from "lucide-react";
 import { TID_PROJECT_ADD } from "@zcode/shared";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
@@ -13,11 +13,11 @@ import { SidebarSectionActions } from "./SidebarSectionActions.js";
 
 export function ProjectSectionHeaderActions({
   sectionId,
-  onOpenFolder,
+  onCreateProject,
   onOpenRemote,
 }: {
   sectionId: string;
-  onOpenFolder: () => void;
+  onCreateProject: () => void;
   onOpenRemote?: () => void;
 }) {
   const { intl } = useZCodeIntl();
@@ -41,9 +41,9 @@ export function ProjectSectionHeaderActions({
             </DropdownMenuTrigger>
           </ControlHintTooltip>
           <DropdownMenuContent align="end" className="min-w-44">
-            <DropdownMenuItem onSelect={onOpenFolder}>
-              <FolderOpen className="size-4" />
-              {intl.formatMessage({ id: "workspace.openFolder" })}
+            <DropdownMenuItem onSelect={onCreateProject}>
+              <FolderPlus className="size-4" />
+              {intl.formatMessage({ id: "project.create" })}
             </DropdownMenuItem>
             {onOpenRemote ? (
               <DropdownMenuItem onSelect={onOpenRemote}>

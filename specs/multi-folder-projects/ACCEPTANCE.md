@@ -55,3 +55,12 @@ pnpm -r --filter @zcode/contracts --filter @zcode/core --filter @zcode/adapters 
 - Desktop continuous 与手机 replayable 继续复用既有 owner/lease、序列和恢复链路；未新增 Host 或客户端接受队列。
 - 修改涉及 UI、共享协议、任务索引服务及 CLI 合同、运行时和存储适配器；架构检查未发现新增越界依赖。
 - 相对当前 HEAD，源码及测试共 104 个文件，新增 2,821 行、删除 463 行，净增加 2,358 行；不包含 spec 和功能图谱。
+
+## 创建项目入口变更验证（2026-10-04）
+
+- `pnpm typecheck`：通过。
+- `pnpm lint`：0 errors，60 warnings；警告为仓库既有问题。
+- `pnpm architecture:check --changed`：通过，violations 0 / baseline 0 / new 0。
+- `pnpm exec tsx --tsconfig packages/ui/tsconfig.json --test packages/ui/test/workspaceProjects.test.ts`：6/6 通过，包含创建多目录项目并打开主要目录的回归用例。
+- 相关文件 `oxfmt --check` 与 `git diff --check`：通过。
+- 本轮未执行桌面 E2E：仓库当前没有可直接调用的项目级 E2E 命令；交互验收仍需在桌面开发环境中确认创建、取消和重复目录提示。
