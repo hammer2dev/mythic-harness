@@ -1,5 +1,5 @@
 /* oxlint-disable eslint(max-lines) */
-import { ArrowLeft, Rocket, type LucideIcon } from "lucide-react";
+import { ArrowLeft, PanelLeft, Rocket, type LucideIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -8,6 +8,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import type {
   AppSettings,
   IntegratedTerminalShellOption,
@@ -110,6 +111,7 @@ function SettingsSidebarButton({
   icon: Icon,
   label,
   active,
+  compactOnNarrow = true,
   children,
   className,
   ...buttonProps
@@ -117,6 +119,7 @@ function SettingsSidebarButton({
   icon: LucideIcon;
   label: string;
   active?: boolean;
+  compactOnNarrow?: boolean;
   children?: ReactNode;
   className?: string;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -128,9 +131,9 @@ function SettingsSidebarButton({
         aria-label={label}
         className={cn(
           "flex h-8 w-full items-center gap-2 rounded-xl px-2.5 text-left transition-colors",
-          "max-lg:mx-auto max-lg:size-10 max-lg:justify-center max-lg:px-0",
+          compactOnNarrow && "max-lg:mx-auto max-lg:size-10 max-lg:justify-center max-lg:px-0",
           active
-            ? "bg-surface-hover text-foreground"
+            ? "bg-selected text-foreground"
             : "text-foreground-subtle hover:bg-surface-hover hover:text-foreground",
           className,
         )}
@@ -138,7 +141,7 @@ function SettingsSidebarButton({
         <span className="flex size-4 shrink-0 items-center justify-center text-current">
           <Icon className="size-4 text-foreground" />
         </span>
-        <span className="min-w-0 flex-1 max-lg:sr-only">
+        <span className={cn("min-w-0 flex-1", compactOnNarrow && "max-lg:sr-only")}>
           {children ?? <span className="truncate text-ui-base text-foreground">{label}</span>}
         </span>
       </button>
@@ -154,7 +157,15 @@ export function SettingsPage({
   captionWorkspacePath,
   onBack,
   onCreateTask,
+  navigationContainer,
+  navigationCollapsed = false,
+  onToggleNavigation,
+  onNavigationSelect,
 }: {
+  navigationContainer?: HTMLElement | null;
+  navigationCollapsed?: boolean;
+  onToggleNavigation?: () => void;
+  onNavigationSelect?: () => void;
   isDesktop?: boolean;
   isWindowsDesktop?: boolean;
   isMacDesktop?: boolean;
@@ -166,6 +177,7 @@ export function SettingsPage({
   allowOpenWorkspace?: boolean;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  const embedded = navigationContainer !== undefined;
   const { settingsSectionGroups, settingsSections } = useMemo(() => createSettingsPageConfig(), []);
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesInlineWindowControls = Boolean(isWindowsDesktop || isLinuxDesktop);
@@ -922,521 +934,576 @@ export function SettingsPage({
   const hasVisibleSettingsBreadcrumb = visibleSettingsBreadcrumbItems.length >= 2;
   const showActiveSectionTitle = !hasVisibleSettingsBreadcrumb;
 
-  return (
-    <>
-      <DesktopWindowFrame
-        title={intl.formatMessage({ id: "settings.title" })}
-        isDesktop={isDesktop}
-        isMacDesktop={isMacDesktop}
-        isWindowsDesktop={isWindowsDesktop}
-      >
+  const navigation = (
+    // Portal 的根节点必须约束在壳层高度内，否则矮窗口会裁掉分类而无法滚动。
+    <aside className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div
-          data-testid={TID_SETTINGS_PAGE}
-          data-active-section={activeSection}
-          // 隐式 auto 行会按 Memory viewer 的内容高度撑出窗口，随后被 DesktopWindowFrame 裁切且没有滚动条。
-          // 固定为单个 minmax(0, 1fr) 行，让普通设置页和内部滚动 viewer 都以窗口剩余高度为边界。
-          className="relative grid h-screen min-h-full w-full grid-cols-[68px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] lg:grid-cols-[268px_minmax(0,1fr)]"
+          className={cn(
+            "shrink-0 [app-region:drag]",
+            embedded ? "flex h-14 items-center gap-2 px-3" : "h-12",
+          )}
         >
-          {isWindowsDesktop ? <WindowsTopLeftLogo /> : null}
-
-          {usesInlineWindowControls ? (
-            <div className="absolute right-1 top-1 z-30 mt-px mr-px flex h-12 items-center gap-0.5 px-2 pointer-events-auto [app-region:no-drag]">
-              {/* Windows/Linux 设置页仍保留旧 caption 下箭头，与主界面和 macOS 的帮助入口不一致。
-                  统一复用问号帮助按钮，并让它在普通 flex 流中紧邻自绘窗控。
-                  Settings 的独立标题层还需计入 4px 外层留白和 1px 边框，才能与 Workspace 控制组对齐。 */}
-              <WorkspaceHelpMenuButton isDesktop={Boolean(isDesktop)} />
-              <DesktopWindowControls />
-            </div>
-          ) : null}
-          <aside className="min-w-0">
-            <div className="flex h-full flex-col">
-              <div className="h-12 [app-region:drag]"></div>
-              <div className="px-2 pb-3 pt-3">
-                {onBack ? (
-                  <ControlHintTooltip
-                    title={intl.formatMessage({
-                      id: "workspace.backToWorkspace",
-                    })}
-                    side="right"
-                    align="center"
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="lg"
-                      data-testid={TID_SETTINGS_BACK_BUTTON}
-                      aria-label={intl.formatMessage({
-                        id: "workspace.backToWorkspace",
-                      })}
-                      className="m-1 w-[calc(100%-0.5rem)] justify-start gap-2 rounded-xl px-1.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground max-lg:m-1 max-lg:size-10 max-lg:justify-center max-lg:px-0"
-                      onClick={() => {
-                        runUserAction({
-                          input: {
-                            featureId: "settings.navigation",
-                            action: "back_to_workspace",
-                            trigger: "button",
-                          },
-                          operation: () => {
-                            onBack?.();
-                          },
-                          completed: { resultSource: "local_commit" },
-                          failureStage: "navigation_commit",
-                        });
-                      }}
-                    >
-                      <ArrowLeft className="size-4" />
-                      <span className="max-lg:sr-only">
-                        {intl.formatMessage({
-                          id: "workspace.backToWorkspace",
-                        })}
-                      </span>
-                    </Button>
-                  </ControlHintTooltip>
-                ) : null}
-
-                {/* <div className={onBack ? "mt-5" : "pt-2"}>
-                    <h1 className="flex items-center gap-2 px-2.5 text-ui-lg font-medium text-foreground-subtle">
-                      {intl.formatMessage({ id: "settings.title" })}
-                    </h1>
-                  </div> */}
-              </div>
-
-              <nav
-                aria-label={intl.formatMessage({ id: "settings.navLabel" })}
-                className="flex-1 overflow-y-auto px-2 pb-3"
+          {embedded ? (
+            <>
+              <ControlHintTooltip
+                title={intl.formatMessage({ id: "workspaceSidebar.toggleSidebar" })}
               >
-                <div className="space-y-4">
-                  {settingsSectionGroups.map((group, groupIndex) => {
-                    const groupLabel = intl.formatMessage({
-                      id: group.titleId,
-                    });
-                    const groupLabelId = `settings-sidebar-group-${group.id}`;
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={intl.formatMessage({ id: "workspaceSidebar.toggleSidebar" })}
+                  onClick={onToggleNavigation}
+                  className="[app-region:no-drag]"
+                >
+                  <PanelLeft className="size-4" />
+                </Button>
+              </ControlHintTooltip>
+              <h1 className="text-ui-lg font-semibold">
+                {intl.formatMessage({ id: "settings.title" })}
+              </h1>
+            </>
+          ) : null}
+        </div>
+        <div className={cn("px-2", !embedded && "pb-3 pt-3")}>
+          {!embedded && onBack ? (
+            <ControlHintTooltip
+              title={intl.formatMessage({
+                id: "workspace.backToWorkspace",
+              })}
+              side="right"
+              align="center"
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="lg"
+                data-testid={TID_SETTINGS_BACK_BUTTON}
+                aria-label={intl.formatMessage({
+                  id: "workspace.backToWorkspace",
+                })}
+                className="m-1 w-[calc(100%-0.5rem)] justify-start gap-2 rounded-xl px-1.5 text-foreground-subtle hover:bg-surface-hover hover:text-foreground max-lg:m-1 max-lg:size-10 max-lg:justify-center max-lg:px-0"
+                onClick={() => {
+                  runUserAction({
+                    input: {
+                      featureId: "settings.navigation",
+                      action: "back_to_workspace",
+                      trigger: "button",
+                    },
+                    operation: () => {
+                      onBack?.();
+                    },
+                    completed: { resultSource: "local_commit" },
+                    failureStage: "navigation_commit",
+                  });
+                }}
+              >
+                <ArrowLeft className="size-4" />
+                <span className="max-lg:sr-only">
+                  {intl.formatMessage({
+                    id: "workspace.backToWorkspace",
+                  })}
+                </span>
+              </Button>
+            </ControlHintTooltip>
+          ) : null}
+        </div>
+
+        <nav
+          aria-label={intl.formatMessage({ id: "settings.navLabel" })}
+          className="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
+        >
+          <div className="space-y-4">
+            {settingsSectionGroups.map((group, groupIndex) => {
+              const groupLabel = intl.formatMessage({
+                id: group.titleId,
+              });
+              const groupLabelId = `settings-sidebar-group-${group.id}`;
+
+              return (
+                <div
+                  key={group.id}
+                  role="group"
+                  aria-labelledby={groupLabelId}
+                  className={cn(
+                    "space-y-1",
+                    !embedded &&
+                      groupIndex > 0 &&
+                      "max-lg:border-t max-lg:border-border max-lg:pt-3",
+                  )}
+                >
+                  <div
+                    id={groupLabelId}
+                    className={cn(
+                      "px-2.5 pb-1 text-ui-sm font-medium text-foreground-subtlest",
+                      !embedded && "max-lg:sr-only",
+                    )}
+                  >
+                    {groupLabel}
+                  </div>
+                  {group.sections.map(({ id, icon: Icon, titleId }) => {
+                    const isActive = activeSection === id;
+                    const label = intl.formatMessage({ id: titleId });
 
                     return (
-                      <div
-                        key={group.id}
-                        role="group"
-                        aria-labelledby={groupLabelId}
-                        className={cn(
-                          "space-y-1",
-                          groupIndex > 0 && "max-lg:border-t max-lg:border-border max-lg:pt-3",
-                        )}
+                      <SettingsSidebarButton
+                        compactOnNarrow={!embedded}
+                        key={id}
+                        icon={Icon}
+                        label={label}
+                        active={isActive}
+                        aria-current={isActive ? "page" : undefined}
+                        data-testid={testId(TID_SETTINGS_SECTION_NAV, id)}
+                        onClick={() => {
+                          runUserAction({
+                            input: {
+                              featureId: "settings.navigation",
+                              action: "open_section",
+                              trigger: "button",
+                            },
+                            operation: () => {
+                              setActiveSettingsSection(id);
+                              onNavigationSelect?.();
+                            },
+                            completed: { resultSource: "local_commit", sectionId: id },
+                            failureStage: "navigation_commit",
+                          });
+                        }}
                       >
-                        <div
-                          id={groupLabelId}
-                          className="px-2.5 pb-1 text-ui-sm font-medium text-foreground-subtlest max-lg:sr-only"
-                        >
-                          {groupLabel}
-                        </div>
-                        {group.sections.map(({ id, icon: Icon, titleId }) => {
-                          const isActive = activeSection === id;
-                          const label = intl.formatMessage({ id: titleId });
-
-                          return (
-                            <SettingsSidebarButton
-                              key={id}
-                              icon={Icon}
-                              label={label}
-                              active={isActive}
-                              aria-current={isActive ? "page" : undefined}
-                              data-testid={testId(TID_SETTINGS_SECTION_NAV, id)}
-                              onClick={() => {
-                                runUserAction({
-                                  input: {
-                                    featureId: "settings.navigation",
-                                    action: "open_section",
-                                    trigger: "button",
-                                  },
-                                  operation: () => {
-                                    setActiveSettingsSection(id);
-                                  },
-                                  completed: { resultSource: "local_commit", sectionId: id },
-                                  failureStage: "navigation_commit",
-                                });
-                              }}
-                            >
-                              <span className="truncate text-ui-base text-foreground">{label}</span>
-                            </SettingsSidebarButton>
-                          );
-                        })}
-                      </div>
+                        <span className="truncate text-ui-base text-foreground">{label}</span>
+                      </SettingsSidebarButton>
                     );
                   })}
                 </div>
+              );
+            })}
+          </div>
 
-                <SettingsSidebarButton
-                  icon={Rocket}
-                  label={intl.formatMessage({ id: "settings.onboarding" })}
-                  className="mt-4 border border-dashed border-border hover:border-border-hover"
-                  onClick={() => {
-                    runUserAction({
-                      input: {
-                        featureId: "settings.navigation",
-                        action: "open_onboarding",
-                        trigger: "button",
-                      },
-                      operation: requestOnboardingDialog,
-                      completed: { resultSource: "local_commit" },
-                      failureStage: "dialog_open",
-                    });
-                  }}
-                >
-                  <span className="text-ui-base text-foreground">
-                    {intl.formatMessage({ id: "settings.onboarding" })}
-                  </span>
-                </SettingsSidebarButton>
-              </nav>
+          <SettingsSidebarButton
+            compactOnNarrow={!embedded}
+            icon={Rocket}
+            label={intl.formatMessage({ id: "settings.onboarding" })}
+            className="mt-4 border border-dashed border-border hover:border-border-hover"
+            onClick={() => {
+              runUserAction({
+                input: {
+                  featureId: "settings.navigation",
+                  action: "open_onboarding",
+                  trigger: "button",
+                },
+                operation: requestOnboardingDialog,
+                completed: { resultSource: "local_commit" },
+                failureStage: "dialog_open",
+              });
+            }}
+          >
+            <span className="text-ui-base text-foreground">
+              {intl.formatMessage({ id: "settings.onboarding" })}
+            </span>
+          </SettingsSidebarButton>
+        </nav>
 
-              <div className="max-lg:hidden">
-                <WorkspaceSidebarFooter
-                  onSettingsButtonClick={onBack}
-                  settingsButtonMode="back"
-                  // 头像菜单是 WorkspaceSidebarFooter 的共享菜单，Settings 场景不能丢失桌面平台能力。
-                  // 之前这里没透传 isDesktop，导致同一个头像菜单在设置页缺少界面缩放入口。
-                  isDesktop={isDesktop}
+        {!embedded ? (
+          <div className="max-lg:hidden">
+            <WorkspaceSidebarFooter
+              onSettingsButtonClick={onBack}
+              settingsButtonMode="back"
+              // 头像菜单是 WorkspaceSidebarFooter 的共享菜单，Settings 场景不能丢失桌面平台能力。
+              // 之前这里没透传 isDesktop，导致同一个头像菜单在设置页缺少界面缩放入口。
+              isDesktop={isDesktop}
+            />
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+
+  const page = (
+    <div
+      data-testid={TID_SETTINGS_PAGE}
+      data-active-section={activeSection}
+      // 隐式 auto 行会按 Memory viewer 的内容高度撑出窗口，随后被 DesktopWindowFrame 裁切且没有滚动条。
+      // 固定为单个 minmax(0, 1fr) 行，让普通设置页和内部滚动 viewer 都以窗口剩余高度为边界。
+      className={cn(
+        "relative min-h-0 w-full",
+        embedded
+          ? "flex h-full"
+          : "grid h-screen min-h-full grid-cols-[68px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] lg:grid-cols-[268px_minmax(0,1fr)]",
+      )}
+    >
+      {!embedded && isWindowsDesktop ? <WindowsTopLeftLogo /> : null}
+
+      {usesInlineWindowControls ? (
+        <div className="absolute right-1 top-1 z-30 mt-px mr-px flex h-12 items-center gap-0.5 px-2 pointer-events-auto [app-region:no-drag]">
+          {/* Windows/Linux 设置页仍保留旧 caption 下箭头，与主界面和 macOS 的帮助入口不一致。
+                  统一复用问号帮助按钮，并让它在普通 flex 流中紧邻自绘窗控。
+                  Settings 的独立标题层还需计入 4px 外层留白和 1px 边框，才能与 Workspace 控制组对齐。 */}
+          <WorkspaceHelpMenuButton isDesktop={Boolean(isDesktop)} />
+          <DesktopWindowControls />
+        </div>
+      ) : null}
+      {embedded
+        ? navigationContainer
+          ? createPortal(navigation, navigationContainer)
+          : null
+        : navigation}
+
+      <section
+        data-settings-content-frame="true"
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          // 桌面平台统一复用主工作区的面板 inset；左侧仍与导航相接，顶部由独立拖拽留白承接。
+          !embedded && isDesktop ? "p-1 pl-0 pt-0" : "p-0",
+        )}
+      >
+        <div
+          data-settings-top-inset={isDesktop ? "true" : undefined}
+          className={cn("[app-region:drag]", isDesktop && "h-1", isMacDesktop && "max-lg:h-16")}
+        />
+        <div
+          data-settings-panel-frame="true"
+          className={cn(
+            "relative flex flex-col min-h-0 h-full bg-background",
+            // Windows 设置页已有 4px 外层留白，不再承担系统窗口外沿；圆角与主工作区统一为 5px。
+            !embedded &&
+              (isWindowsDesktop
+                ? "rounded-[5px] border border-border"
+                : "rounded-xl border border-border"),
+          )}
+        >
+          {!usesInlineWindowControls ? (
+            <div
+              className={cn(
+                // Settings 使用和 new task 一致的问号定位：在内容面板内定位，外层让出自绘窗口按钮区，内层保持 top-2.5/right-2.5。
+                "absolute top-0 z-50 h-10 w-10 pointer-events-auto [app-region:no-drag]",
+                "right-0",
+              )}
+            >
+              <div className="absolute right-2.5 top-2.5 pointer-events-auto [app-region:no-drag]">
+                <WorkspaceHelpMenuButton
+                  className="relative z-50 [app-region:no-drag]"
+                  isDesktop={Boolean(isDesktop)}
                 />
               </div>
             </div>
-          </aside>
-
-          <section
-            data-settings-content-frame="true"
-            className={cn(
-              "flex min-h-0 flex-col",
-              // 桌面平台统一复用主工作区的面板 inset；左侧仍与导航相接，顶部由独立拖拽留白承接。
-              isDesktop ? "p-1 pl-0 pt-0" : "p-0",
-            )}
+          ) : null}
+          <SettingsBreadcrumbProvider
+            onItemsChange={setSettingsBreadcrumbItems}
+            sectionLabel={settingsBreadcrumbSectionLabel}
           >
-            <div
-              data-settings-top-inset={isDesktop ? "true" : undefined}
-              className={cn("[app-region:drag]", isDesktop && "h-1", isMacDesktop && "max-lg:h-16")}
-            />
-            <div
-              data-settings-panel-frame="true"
-              className={cn(
-                "relative flex flex-col min-h-0 h-full border border-border bg-background",
-                // Windows 设置页已有 4px 外层留白，不再承担系统窗口外沿；圆角与主工作区统一为 5px。
-                isWindowsDesktop ? "rounded-[5px]" : "rounded-xl",
-              )}
-            >
-              {!usesInlineWindowControls ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex h-12 shrink-0">
+                {embedded && navigationCollapsed ? (
+                  <ControlHintTooltip
+                    title={intl.formatMessage({ id: "workspaceSidebar.toggleSidebar" })}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={intl.formatMessage({ id: "workspaceSidebar.toggleSidebar" })}
+                      onClick={onToggleNavigation}
+                      className="ml-3 mt-2 [app-region:no-drag]"
+                    >
+                      <PanelLeft className="size-4" />
+                    </Button>
+                  </ControlHintTooltip>
+                ) : null}
                 <div
+                  // Settings 窄布局会像左侧导航一样在 max-lg 收成 icon rail。
+                  // 此时外层已经提供 max-lg:h-16 的顶部拖拽/避让区，内层 h-10 再保留会把内容额外压低。
+                  // Electron 的 drag 区不能和右上角帮助/窗口按钮命中区域重叠；
+                  // 这里把右侧按钮区域从拖拽条里让出来，避免真实鼠标点击被标题栏拖拽吞掉。
+                  // Windows/Linux 设置页共同避开右上角菜单与内联窗控组。
+
                   className={cn(
-                    // Settings 使用和 new task 一致的问号定位：在内容面板内定位，外层让出自绘窗口按钮区，内层保持 top-2.5/right-2.5。
-                    "absolute top-0 z-50 h-10 w-10 pointer-events-auto [app-region:no-drag]",
-                    "right-0",
+                    "min-w-0 flex-1 [app-region:drag]",
+                    // 四个 28px 按钮、组内 2px 间距和左右 8px padding，共 134px。
+                    usesInlineWindowControls ? "mr-[134px]" : "mr-12",
                   )}
                 >
-                  <div className="absolute right-2.5 top-2.5 pointer-events-auto [app-region:no-drag]">
-                    <WorkspaceHelpMenuButton
-                      className="relative z-50 [app-region:no-drag]"
-                      isDesktop={Boolean(isDesktop)}
-                    />
-                  </div>
+                  <SettingsHeaderBreadcrumb
+                    ariaLabel={intl.formatMessage({
+                      id: "settings.breadcrumbLabel",
+                    })}
+                    items={visibleSettingsBreadcrumbItems}
+                  />
                 </div>
-              ) : null}
-              <SettingsBreadcrumbProvider
-                onItemsChange={setSettingsBreadcrumbItems}
-                sectionLabel={settingsBreadcrumbSectionLabel}
-              >
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="flex h-12 shrink-0">
-                    <div
-                      // Settings 窄布局会像左侧导航一样在 max-lg 收成 icon rail。
-                      // 此时外层已经提供 max-lg:h-16 的顶部拖拽/避让区，内层 h-10 再保留会把内容额外压低。
-                      // Electron 的 drag 区不能和右上角帮助/窗口按钮命中区域重叠；
-                      // 这里把右侧按钮区域从拖拽条里让出来，避免真实鼠标点击被标题栏拖拽吞掉。
-                      // Windows/Linux 设置页共同避开右上角菜单与内联窗控组。
-
-                      className={cn(
-                        "min-w-0 flex-1 [app-region:drag]",
-                        // 四个 28px 按钮、组内 2px 间距和左右 8px padding，共 134px。
-                        usesInlineWindowControls ? "mr-[134px]" : "mr-12",
-                      )}
-                    >
-                      <SettingsHeaderBreadcrumb
-                        ariaLabel={intl.formatMessage({
-                          id: "settings.breadcrumbLabel",
-                        })}
-                        items={visibleSettingsBreadcrumbItems}
+              </div>
+              <main className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+                <div
+                  className={cn(
+                    SETTINGS_FRAME_CONTENT_CLASSNAME,
+                    "flex flex-col gap-8",
+                    isMacDesktop && "pt-0",
+                    // isWindowsDesktop && "pt-12",
+                  )}
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        {showActiveSectionTitle ? (
+                          <h2 className="text-2xl font-semibold tracking-tight text-foreground lg:text-3xl">
+                            {activeSectionLabel}
+                          </h2>
+                        ) : null}
+                        {!hasVisibleSettingsBreadcrumb && activeSectionMeta.titleBadgeId ? (
+                          <span className="inline-flex h-6 items-center rounded-full border border-sky-500 px-2 text-ui-xs font-semibold tracking-normal text-sky-500 dark:border-sky-400 dark:text-sky-400">
+                            {intl.formatMessage({
+                              id: activeSectionMeta.titleBadgeId,
+                            })}
+                          </span>
+                        ) : null}
+                        {null}
+                      </div>
+                    </div>
+                    {activeSection === "general" ? (
+                      <GeneralSectionHeader localePreference={localePreference} />
+                    ) : null}
+                  </div>
+                  <div className="space-y-8">
+                    {activeSection === "general" ? (
+                      <GeneralSectionContent
+                        localePreference={localePreference}
+                        isDesktop={isDesktop}
+                        isWindowsDesktop={isWindowsDesktop}
+                        platform={platform}
+                        notificationEnabled={notificationEnabled}
+                        notificationSoundEnabled={notificationSoundEnabled}
+                        closeToTrayOnWindows={closeToTrayOnWindows}
+                        keepAwakeWhileRunning={sharedSettings?.keepAwakeWhileRunning ?? false}
+                        desktopChromiumHardwareAccelerationEnabled={
+                          desktopChromiumHardwareAccelerationEnabled
+                        }
+                        receivePreviewUpdates={receivePreviewUpdates}
+                        autoDownloadAndInstallUpdates={autoDownloadAndInstallUpdates}
+                        dataBaseDir={dataBaseDir}
+                        terminalInheritSystemProfile={terminalInheritSystemProfile}
+                        terminalFontFamily={terminalFontFamily}
+                        integratedTerminalShell={integratedTerminalShell}
+                        integratedTerminalShellOptions={integratedTerminalShellOptions}
+                        nativeSearchEnhancementsEnabled={nativeSearchEnhancementsEnabled}
+                        httpProxy={httpProxy}
+                        httpProxyNoProxy={httpProxyNoProxy}
+                        httpProxyCaCertPath={httpProxyCaCertPath}
+                        defaultHomeDir={defaultHomeDir}
+                        showIntegratedTerminalShell={hostPlatform === "win32"}
+                        setLocalePreference={handleFooterLocaleChange}
+                        setNotificationEnabled={(enabled) =>
+                          runUserAction({
+                            input: {
+                              featureId: "settings.notification",
+                              action: "toggle_notification",
+                              trigger: "switch",
+                            },
+                            operation: () => setNotificationEnabled(enabled),
+                            completed: {
+                              resultSource: "local_commit",
+                              stateAfter: enabled ? "enabled" : "disabled",
+                            },
+                            failureStage: "local_commit",
+                          })
+                        }
+                        setNotificationSoundEnabled={(enabled) =>
+                          runUserAction({
+                            input: {
+                              featureId: "settings.notification",
+                              action: "toggle_notification_sound",
+                              trigger: "switch",
+                            },
+                            operation: () => setNotificationSoundEnabled(enabled),
+                            completed: {
+                              resultSource: "local_commit",
+                              stateAfter: enabled ? "enabled" : "disabled",
+                            },
+                            failureStage: "local_commit",
+                          })
+                        }
+                        taskAutoArchiveEnabled={taskAutoArchiveEnabled}
+                        taskAutoArchiveOlderThanDays={taskAutoArchiveOlderThanDays}
+                        messageStreamShowReasoning={messageStreamShowReasoning}
+                        messageStreamShowTodos={messageStreamShowTodos}
+                        toolGroupingExploreEnabled={toolGroupingExploreEnabled}
+                        toolGroupingTerminalEnabled={toolGroupingTerminalEnabled}
+                        toolGroupingChangesEnabled={toolGroupingChangesEnabled}
+                        zcodeInteractionBehavior={zcodeInteractionBehavior}
+                        askUserQuestionAutoResolutionEnabled={askUserQuestionAutoResolutionEnabled}
+                        modelIoFullRetentionEnabled={modelIoFullRetentionEnabled}
+                        onDataBaseDirChange={handleDataBaseDirChange}
+                        onSelectDataBaseDir={selectDirectory}
+                        onTerminalInheritSystemProfileChange={
+                          handleTerminalInheritSystemProfileChange
+                        }
+                        onTerminalFontFamilyChange={handleTerminalFontFamilyChange}
+                        onIntegratedTerminalShellChange={handleIntegratedTerminalShellChange}
+                        onNativeSearchEnhancementsEnabledChange={
+                          handleNativeSearchEnhancementsEnabledChange
+                        }
+                        onModelIoFullRetentionEnabledChange={
+                          handleModelIoFullRetentionEnabledChange
+                        }
+                        onHttpProxyChange={handleHttpProxyChange}
+                        onHttpProxyNoProxyChange={handleHttpProxyNoProxyChange}
+                        onHttpProxyCaCertPathChange={handleHttpProxyCaCertPathChange}
+                        onTaskAutoArchiveEnabledChange={handleTaskAutoArchiveEnabledChange}
+                        onTaskAutoArchiveOlderThanDaysChange={
+                          handleTaskAutoArchiveOlderThanDaysChange
+                        }
+                        onCloseToTrayOnWindowsChange={handleCloseToTrayOnWindowsChange}
+                        onKeepAwakeWhileRunningChange={handleKeepAwakeWhileRunningChange}
+                        onDesktopChromiumHardwareAccelerationChange={
+                          handleDesktopChromiumHardwareAccelerationChange
+                        }
+                        onReceivePreviewUpdatesChange={handleReceivePreviewUpdatesChange}
+                        onAutoDownloadAndInstallUpdatesChange={
+                          handleAutoDownloadAndInstallUpdatesChange
+                        }
+                        onMessageStreamShowReasoningChange={handleMessageStreamShowReasoningChange}
+                        onMessageStreamShowTodosChange={handleMessageStreamShowTodosChange}
+                        onToolGroupingExploreEnabledChange={handleToolGroupingExploreEnabledChange}
+                        onToolGroupingTerminalEnabledChange={
+                          handleToolGroupingTerminalEnabledChange
+                        }
+                        onToolGroupingChangesEnabledChange={handleToolGroupingChangesEnabledChange}
+                        onZCodeInteractionBehaviorChange={handleZCodeInteractionBehaviorChange}
+                        onAskUserQuestionAutoResolutionEnabledChange={
+                          handleAskUserQuestionAutoResolutionEnabledChange
+                        }
+                        onOpenOnboardingDialog={() =>
+                          runUserAction({
+                            input: {
+                              featureId: "settings.navigation",
+                              action: "open_onboarding",
+                              trigger: "button",
+                            },
+                            operation: requestOnboardingDialog,
+                            completed: { resultSource: "local_commit" },
+                            failureStage: "dialog_open",
+                          })
+                        }
                       />
-                    </div>
+                    ) : activeSection === "appearance" ? (
+                      <AppearanceSectionContent
+                        codePreviewSettings={codePreviewSettings}
+                        setCodePreviewSettings={handleCodePreviewSettingsChange}
+                        theme={theme}
+                        setTheme={(nextTheme) => handleFooterThemeChange(nextTheme)}
+                        uiFontSizePx={uiFontSizePx}
+                        setUiFontSizePx={(fontSizePx) =>
+                          runUserAction({
+                            input: {
+                              featureId: "settings.appearance",
+                              action: "change_ui_font_size",
+                              trigger: "keyboard",
+                            },
+                            operation: () => setUiFontSizePx(fontSizePx),
+                            completed: {
+                              resultSource: "local_commit",
+                              valueAfter: String(fontSizePx),
+                            },
+                            failureStage: "local_commit",
+                          })
+                        }
+                      />
+                    ) : activeSection === "shortcuts" ? (
+                      <ShortcutSettingsSection isDesktop={Boolean(isDesktop)} />
+                    ) : activeSection === "modelProvider" ? (
+                      <ServiceProvider services={localHostServices}>
+                        {/* 模型配置属于本机全局事实源；激活远端 workspace 时也不能注入远端 Host。 */}
+                        <ModelProviderSection
+                          workspacePath={activeWorkspacePath ?? captionWorkspacePath ?? ""}
+                          connectivityWorkspacePath={localModelProviderConnectivityWorkspacePath}
+                          connectivityWorkspaceRequired={isRemoteModelProviderWorkspace}
+                          pendingModelProviderTarget={pendingModelProviderTarget}
+                          onConsumePendingModelProviderTarget={() =>
+                            setPendingModelProviderTarget(undefined)
+                          }
+                        />
+                      </ServiceProvider>
+                    ) : activeSection === "memory" ? (
+                      <ServiceProvider services={localHostServices}>
+                        {/* Memory catalog 始终使用本地 Host，避免远程 workspace 误读本机数据。 */}
+                        <MemorySettingsSection
+                          memoryEnabled={memoryEnabled}
+                          memoryService={localHostServices.memoryService}
+                          onMemoryEnabledChange={handleMemoryEnabledChange}
+                          projectMemoryViewerAvailable={Boolean(isDesktop)}
+                          workspaceDisplayNames={memoryWorkspaceDisplayNames}
+                        />
+                      </ServiceProvider>
+                    ) : activeSection === "migration" ? (
+                      <MigrationSection
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                        isDesktop={isDesktop}
+                      />
+                    ) : activeSection === "usage" ? (
+                      <UsageStatsSection />
+                    ) : activeSection === "subagents" ? (
+                      <SubagentsSection
+                        onManageModels={handleOpenModelProviderSettings}
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                      />
+                    ) : activeSection === "automations" ? (
+                      <AutomationsSection
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                      />
+                    ) : activeSection === "commands" ? (
+                      <PluginsSection
+                        mode="command"
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                        onCreateTask={onCreateTask}
+                        onOpenPluginStore={(_returnScopeKey, intent) => {
+                          // 添加市场与浏览插件都先离开设置层，再显示商店。
+                          requestPluginStoreOpen({ page: "browse", intent });
+                          onBack?.();
+                        }}
+                      />
+                    ) : activeSection === "hooks" ? (
+                      <HooksSection
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                      />
+                    ) : activeSection === "workspaceFileSearch" ? (
+                      <WorkspaceFileSearchSection
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                      />
+                    ) : activeSection === "browser" ? (
+                      <BrowserSettingsSection
+                        isDesktop={Boolean(isDesktop)}
+                        isWindowsDesktop={isWindowsDesktop}
+                        workspacePath={activeWorkspacePath}
+                        workspaceIdentity={activeWorkspaceIdentity}
+                        embeddedBrowserAllowInsecureCertificates={
+                          embeddedBrowserAllowInsecureCertificates
+                        }
+                        onEmbeddedBrowserAllowInsecureCertificatesChange={
+                          handleEmbeddedBrowserAllowInsecureCertificatesChange
+                        }
+                      />
+                    ) : null}
                   </div>
-                  <main className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-                    <div
-                      className={cn(
-                        SETTINGS_FRAME_CONTENT_CLASSNAME,
-                        "flex flex-col gap-8",
-                        isMacDesktop && "pt-0",
-                        // isWindowsDesktop && "pt-12",
-                      )}
-                    >
-                      <div>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex min-w-0 flex-wrap items-center gap-3">
-                            {showActiveSectionTitle ? (
-                              <h2 className="text-2xl font-semibold tracking-tight text-foreground lg:text-3xl">
-                                {activeSectionLabel}
-                              </h2>
-                            ) : null}
-                            {!hasVisibleSettingsBreadcrumb && activeSectionMeta.titleBadgeId ? (
-                              <span className="inline-flex h-6 items-center rounded-full border border-sky-500 px-2 text-ui-xs font-semibold tracking-normal text-sky-500 dark:border-sky-400 dark:text-sky-400">
-                                {intl.formatMessage({
-                                  id: activeSectionMeta.titleBadgeId,
-                                })}
-                              </span>
-                            ) : null}
-                            {null}
-                          </div>
-                        </div>
-                        {activeSection === "general" ? (
-                          <GeneralSectionHeader localePreference={localePreference} />
-                        ) : null}
-                      </div>
-                      <div className="space-y-8">
-                        {activeSection === "general" ? (
-                          <GeneralSectionContent
-                            localePreference={localePreference}
-                            isDesktop={isDesktop}
-                            isWindowsDesktop={isWindowsDesktop}
-                            platform={platform}
-                            notificationEnabled={notificationEnabled}
-                            notificationSoundEnabled={notificationSoundEnabled}
-                            closeToTrayOnWindows={closeToTrayOnWindows}
-                            keepAwakeWhileRunning={sharedSettings?.keepAwakeWhileRunning ?? false}
-                            desktopChromiumHardwareAccelerationEnabled={
-                              desktopChromiumHardwareAccelerationEnabled
-                            }
-                            receivePreviewUpdates={receivePreviewUpdates}
-                            autoDownloadAndInstallUpdates={autoDownloadAndInstallUpdates}
-                            dataBaseDir={dataBaseDir}
-                            terminalInheritSystemProfile={terminalInheritSystemProfile}
-                            terminalFontFamily={terminalFontFamily}
-                            integratedTerminalShell={integratedTerminalShell}
-                            integratedTerminalShellOptions={integratedTerminalShellOptions}
-                            nativeSearchEnhancementsEnabled={nativeSearchEnhancementsEnabled}
-                            httpProxy={httpProxy}
-                            httpProxyNoProxy={httpProxyNoProxy}
-                            httpProxyCaCertPath={httpProxyCaCertPath}
-                            defaultHomeDir={defaultHomeDir}
-                            showIntegratedTerminalShell={hostPlatform === "win32"}
-                            setLocalePreference={handleFooterLocaleChange}
-                            setNotificationEnabled={(enabled) =>
-                              runUserAction({
-                                input: {
-                                  featureId: "settings.notification",
-                                  action: "toggle_notification",
-                                  trigger: "switch",
-                                },
-                                operation: () => setNotificationEnabled(enabled),
-                                completed: {
-                                  resultSource: "local_commit",
-                                  stateAfter: enabled ? "enabled" : "disabled",
-                                },
-                                failureStage: "local_commit",
-                              })
-                            }
-                            setNotificationSoundEnabled={(enabled) =>
-                              runUserAction({
-                                input: {
-                                  featureId: "settings.notification",
-                                  action: "toggle_notification_sound",
-                                  trigger: "switch",
-                                },
-                                operation: () => setNotificationSoundEnabled(enabled),
-                                completed: {
-                                  resultSource: "local_commit",
-                                  stateAfter: enabled ? "enabled" : "disabled",
-                                },
-                                failureStage: "local_commit",
-                              })
-                            }
-                            taskAutoArchiveEnabled={taskAutoArchiveEnabled}
-                            taskAutoArchiveOlderThanDays={taskAutoArchiveOlderThanDays}
-                            messageStreamShowReasoning={messageStreamShowReasoning}
-                            messageStreamShowTodos={messageStreamShowTodos}
-                            toolGroupingExploreEnabled={toolGroupingExploreEnabled}
-                            toolGroupingTerminalEnabled={toolGroupingTerminalEnabled}
-                            toolGroupingChangesEnabled={toolGroupingChangesEnabled}
-                            zcodeInteractionBehavior={zcodeInteractionBehavior}
-                            askUserQuestionAutoResolutionEnabled={
-                              askUserQuestionAutoResolutionEnabled
-                            }
-                            modelIoFullRetentionEnabled={modelIoFullRetentionEnabled}
-                            onDataBaseDirChange={handleDataBaseDirChange}
-                            onSelectDataBaseDir={selectDirectory}
-                            onTerminalInheritSystemProfileChange={
-                              handleTerminalInheritSystemProfileChange
-                            }
-                            onTerminalFontFamilyChange={handleTerminalFontFamilyChange}
-                            onIntegratedTerminalShellChange={handleIntegratedTerminalShellChange}
-                            onNativeSearchEnhancementsEnabledChange={
-                              handleNativeSearchEnhancementsEnabledChange
-                            }
-                            onModelIoFullRetentionEnabledChange={
-                              handleModelIoFullRetentionEnabledChange
-                            }
-                            onHttpProxyChange={handleHttpProxyChange}
-                            onHttpProxyNoProxyChange={handleHttpProxyNoProxyChange}
-                            onHttpProxyCaCertPathChange={handleHttpProxyCaCertPathChange}
-                            onTaskAutoArchiveEnabledChange={handleTaskAutoArchiveEnabledChange}
-                            onTaskAutoArchiveOlderThanDaysChange={
-                              handleTaskAutoArchiveOlderThanDaysChange
-                            }
-                            onCloseToTrayOnWindowsChange={handleCloseToTrayOnWindowsChange}
-                            onKeepAwakeWhileRunningChange={handleKeepAwakeWhileRunningChange}
-                            onDesktopChromiumHardwareAccelerationChange={
-                              handleDesktopChromiumHardwareAccelerationChange
-                            }
-                            onReceivePreviewUpdatesChange={handleReceivePreviewUpdatesChange}
-                            onAutoDownloadAndInstallUpdatesChange={
-                              handleAutoDownloadAndInstallUpdatesChange
-                            }
-                            onMessageStreamShowReasoningChange={
-                              handleMessageStreamShowReasoningChange
-                            }
-                            onMessageStreamShowTodosChange={handleMessageStreamShowTodosChange}
-                            onToolGroupingExploreEnabledChange={
-                              handleToolGroupingExploreEnabledChange
-                            }
-                            onToolGroupingTerminalEnabledChange={
-                              handleToolGroupingTerminalEnabledChange
-                            }
-                            onToolGroupingChangesEnabledChange={
-                              handleToolGroupingChangesEnabledChange
-                            }
-                            onZCodeInteractionBehaviorChange={handleZCodeInteractionBehaviorChange}
-                            onAskUserQuestionAutoResolutionEnabledChange={
-                              handleAskUserQuestionAutoResolutionEnabledChange
-                            }
-                            onOpenOnboardingDialog={() =>
-                              runUserAction({
-                                input: {
-                                  featureId: "settings.navigation",
-                                  action: "open_onboarding",
-                                  trigger: "button",
-                                },
-                                operation: requestOnboardingDialog,
-                                completed: { resultSource: "local_commit" },
-                                failureStage: "dialog_open",
-                              })
-                            }
-                          />
-                        ) : activeSection === "appearance" ? (
-                          <AppearanceSectionContent
-                            codePreviewSettings={codePreviewSettings}
-                            setCodePreviewSettings={handleCodePreviewSettingsChange}
-                            theme={theme}
-                            setTheme={(nextTheme) => handleFooterThemeChange(nextTheme)}
-                            uiFontSizePx={uiFontSizePx}
-                            setUiFontSizePx={(fontSizePx) =>
-                              runUserAction({
-                                input: {
-                                  featureId: "settings.appearance",
-                                  action: "change_ui_font_size",
-                                  trigger: "keyboard",
-                                },
-                                operation: () => setUiFontSizePx(fontSizePx),
-                                completed: {
-                                  resultSource: "local_commit",
-                                  valueAfter: String(fontSizePx),
-                                },
-                                failureStage: "local_commit",
-                              })
-                            }
-                          />
-                        ) : activeSection === "shortcuts" ? (
-                          <ShortcutSettingsSection isDesktop={Boolean(isDesktop)} />
-                        ) : activeSection === "modelProvider" ? (
-                          <ServiceProvider services={localHostServices}>
-                            {/* 模型配置属于本机全局事实源；激活远端 workspace 时也不能注入远端 Host。 */}
-                            <ModelProviderSection
-                              workspacePath={activeWorkspacePath ?? captionWorkspacePath ?? ""}
-                              connectivityWorkspacePath={
-                                localModelProviderConnectivityWorkspacePath
-                              }
-                              connectivityWorkspaceRequired={isRemoteModelProviderWorkspace}
-                              pendingModelProviderTarget={pendingModelProviderTarget}
-                              onConsumePendingModelProviderTarget={() =>
-                                setPendingModelProviderTarget(undefined)
-                              }
-                            />
-                          </ServiceProvider>
-                        ) : activeSection === "memory" ? (
-                          <ServiceProvider services={localHostServices}>
-                            {/* Memory catalog 始终使用本地 Host，避免远程 workspace 误读本机数据。 */}
-                            <MemorySettingsSection
-                              memoryEnabled={memoryEnabled}
-                              memoryService={localHostServices.memoryService}
-                              onMemoryEnabledChange={handleMemoryEnabledChange}
-                              projectMemoryViewerAvailable={Boolean(isDesktop)}
-                              workspaceDisplayNames={memoryWorkspaceDisplayNames}
-                            />
-                          </ServiceProvider>
-                        ) : activeSection === "migration" ? (
-                          <MigrationSection
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                            isDesktop={isDesktop}
-                          />
-                        ) : activeSection === "usage" ? (
-                          <UsageStatsSection />
-                        ) : activeSection === "subagents" ? (
-                          <SubagentsSection
-                            onManageModels={handleOpenModelProviderSettings}
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                          />
-                        ) : activeSection === "automations" ? (
-                          <AutomationsSection
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                          />
-                        ) : activeSection === "commands" ? (
-                          <PluginsSection
-                            mode="command"
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                            onCreateTask={onCreateTask}
-                            onOpenPluginStore={(_returnScopeKey, intent) => {
-                              // 添加市场与浏览插件都先离开设置层，再显示商店。
-                              requestPluginStoreOpen({ page: "browse", intent });
-                              onBack?.();
-                            }}
-                          />
-                        ) : activeSection === "hooks" ? (
-                          <HooksSection
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                          />
-                        ) : activeSection === "workspaceFileSearch" ? (
-                          <WorkspaceFileSearchSection
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                          />
-                        ) : activeSection === "browser" ? (
-                          <BrowserSettingsSection
-                            isDesktop={Boolean(isDesktop)}
-                            isWindowsDesktop={isWindowsDesktop}
-                            workspacePath={activeWorkspacePath}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                            embeddedBrowserAllowInsecureCertificates={
-                              embeddedBrowserAllowInsecureCertificates
-                            }
-                            onEmbeddedBrowserAllowInsecureCertificatesChange={
-                              handleEmbeddedBrowserAllowInsecureCertificatesChange
-                            }
-                          />
-                        ) : null}
-                      </div>
-                    </div>
-                  </main>
                 </div>
-              </SettingsBreadcrumbProvider>
+              </main>
             </div>
-          </section>
+          </SettingsBreadcrumbProvider>
         </div>
-      </DesktopWindowFrame>
-    </>
+      </section>
+    </div>
+  );
+  return embedded ? (
+    page
+  ) : (
+    <DesktopWindowFrame
+      title={intl.formatMessage({ id: "settings.title" })}
+      isDesktop={isDesktop}
+      isMacDesktop={isMacDesktop}
+      isWindowsDesktop={isWindowsDesktop}
+    >
+      {page}
+    </DesktopWindowFrame>
   );
 }

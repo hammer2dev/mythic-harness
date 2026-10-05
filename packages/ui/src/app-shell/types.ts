@@ -111,6 +111,7 @@ export interface GitChangeSummary {
 export type WorkspaceMainView = "chat" | "automations" | "workflows" | "plugin-store";
 
 export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackService"> {
+  onLeaveSettingsForNavigation: () => void;
   workspaceReadOnlyReason?: string;
   workspaceMainView: WorkspaceMainView;
   pluginStoreOpenVersion: number;

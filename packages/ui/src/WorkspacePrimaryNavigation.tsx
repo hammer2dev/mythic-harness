@@ -17,7 +17,7 @@ export const WorkspacePrimaryNavigation = memo(function WorkspacePrimaryNavigati
   hideLogo,
   footerRef,
 }: {
-  activeView: WorkspaceMainView;
+  activeView: WorkspaceMainView | "settings";
   onSelect: (view: WorkspaceMainView) => void;
   appLogoUrl: string;
   hideLogo?: boolean;

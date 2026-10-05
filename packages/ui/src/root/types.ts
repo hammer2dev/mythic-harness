@@ -1,7 +1,6 @@
 import type { IPlatformService } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
 import type { ReactNode } from "react";
-import type { CreateTaskRequest } from "@/app-shell/types.js";
 
 export interface RootProps {
   services: IServiceAccessor;
@@ -38,17 +37,4 @@ export interface RootProps {
   initialWorkspaceLoadingFallback?: ReactNode;
   /** Assistant code-comment 卡片灰度；默认关闭，关闭时保留原始 directive。 */
   assistantCodeCommentCardsEnabled?: boolean;
-}
-
-export interface WorkspaceSettingsLayerProps {
-  workspaceScopedServices?: IServiceAccessor;
-  isDesktop?: boolean;
-  isMacDesktop?: boolean;
-  isWindowsDesktop?: boolean;
-  windowsWindowControlsRightPaddingPx?: number;
-  captionWorkspacePath?: string | null;
-  onBack?: () => void;
-  onCreateTask?: (request?: CreateTaskRequest) => void;
-  onOpenWorkspace?: () => void;
-  allowOpenWorkspace?: RootProps["allowOpenWorkspace"];
 }

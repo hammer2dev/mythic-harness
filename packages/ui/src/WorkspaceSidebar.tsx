@@ -62,7 +62,12 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
-import { isWorkspaceReadOnly, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
+import {
+  isSettingsTab,
+  isWorkspaceReadOnly,
+  isWorkspaceTab,
+  type WorkspaceTabState,
+} from "@/store/tabStore.js";
 import { useWorkspaceTaskLists } from "@/hooks/useWorkspaceTaskLists.js";
 import {
   persistSidebarTaskPreferences,
@@ -317,6 +322,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const activateTab = useTabStore((state) => state.activateTab);
   const closeTab = useTabStore((state) => state.closeTab);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
+  const isSettingsActive = useTabStore((state) =>
+    state.tabs.some((tab) => tab.id === state.activeTabId && isSettingsTab(tab)),
+  );
   const expandedWorkspacePaths = useTabStore((state) => state.expandedWorkspacePaths);
   const toggleWorkspaceExpanded = useTabStore((state) => state.toggleWorkspaceExpanded);
   const reorderWorkspaceTabs = useTabStore((state) => state.reorderWorkspaceTabs);
@@ -886,7 +894,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const footer = (
     <WorkspaceSidebarFooter
       layout={navigationFooterContainer !== undefined ? "rail" : "default"}
-      onSettingsButtonClick={openSettingsTab}
+      active={isSettingsActive}
+      onSettingsButtonClick={() => {
+        openSettingsTab();
+        if (!_isSidebarVisible) _onToggleSidebar?.();
+      }}
       workspacePath={workspacePath}
       workspaceIdentity={workspaceIdentity}
       isDesktop={isDesktop}

@@ -1112,6 +1112,8 @@ export function App({
         workspaceRemoteSessionId={workspaceRemoteSessionId}
         workspaceIdentity={workspaceIdentity}
         isWorkspaceVisible={isWorkspaceVisible}
+        onReturnToWorkspace={onReturnToWorkspace}
+        onLeaveSettingsForNavigation={preserveNextSettingsExit}
         isDesktop={isDesktop}
         isMacDesktop={isMacDesktop}
         isWindowsDesktop={isWindowsDesktop}

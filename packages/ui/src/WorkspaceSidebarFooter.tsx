@@ -13,6 +13,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   workspaceIdentity,
   isDesktop = false,
   layout = "default",
+  active = false,
   className,
 }: {
   onSettingsButtonClick?: () => void;
@@ -21,6 +22,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   workspaceIdentity?: string;
   isDesktop?: boolean;
   layout?: "default" | "rail";
+  active?: boolean;
   className?: string;
 }) {
   const { intl } = useZCodeIntl();
@@ -49,6 +51,8 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
           size="icon-lg"
           data-testid={TID_TASK_SETTINGS_BUTTON}
           aria-label={label}
+          aria-pressed={active}
+          className={cn(active && "bg-selected text-foreground")}
           disabled={!onSettingsButtonClick}
           onClick={onSettingsButtonClick}
         >
