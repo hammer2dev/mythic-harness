@@ -40,7 +40,6 @@ export function createDesktopPlatform(options: {
     canOpenCommunity: (locale) => window.zcode.canOpenCommunity(locale),
     openInFileManager: (path) => window.zcode.openInFileManager(path),
     openExternalFile: (path) => window.zcode.openExternalFile(path),
-    onShareImport: (callback) => window.zcode.onShareImport?.(callback) ?? (() => {}),
     notifyRendererReady: () => window.zcode.notifyRendererReady(),
     reportTelemetryEvent: (payload) => window.zcode.reportTelemetryEvent(payload),
     reportArmsCustomEvent: (payload) => {

@@ -10,13 +10,13 @@
 | Key 与模型       | `packages/services/src/model-provider/providerRuntime.ts`、模型设置服务与 `packages/ui/src/settings/ModelProviderSection.tsx` 保留端点、协议、Key、模型 CRUD、启停、排序与连接测试。四个智谱模板 ID、套餐/标准端点保持，统一 `access.type=api-key`。              |
 | 公共配置         | `packages/services/src/client-config/clientConfigService.ts` 承接匿名 workflow、budget、应用更新策略，不再借账号服务读取；策略读取失败不阻断普通模型执行。                                                                                                        |
 | 账号执行链       | 删除 OAuth 登录、回调、刷新、凭证恢复、Account Provider overlay、账号 gateway、账号身份请求头和专属重试。普通 API 错误仍按供应商响应显示。                                                                                                                        |
-| Desktop 与 Web   | `packages/desktop/src/main/desktopDeepLink.ts` 保留工作区及公开分享 Deep Link；删除 OAuth 注册和 preload callback。Web 删除账号登录和回调路由。                                                                                                         |
+| Desktop 与 Web   | `packages/desktop/src/main/desktopDeepLink.ts` 保留工作区 Deep Link，移除分享 Deep Link；删除 OAuth 注册和 preload callback。Web 删除账号登录和回调路由。                                                                                                         |
 | CLI              | 删除 login/logout、浏览器 OAuth 参数与 `/login`、`/logout`；`apps/zcode-cli/packages/bootstrap/src/auth-api-key.ts` 将手填 Key 写入 personal Provider；`apps/zcode-cli/packages/cli/src/command-center/api-key-setup.ts` 提供 `/apikey`，继续遮罩输入和脱敏历史。 |
 | 侧栏与设置       | 删除四个快捷入口、个人账号、套餐卡、额度提示。侧栏底部保留设置与远控；设置保留模型、外观、浏览器、记忆、Subagent、命令、Hooks、本地使用统计及引导。                                                                                                               |
 | 自动化           | 删除 Off-Peak UI、协议、服务、数据表与 scheduler 分支；保留 Cron。公共推荐按 `on_finish` 的 `NAVIGATE:AUTOMATIONS:OFFPEAK` 动作过滤退役项目，其他推荐匿名加载。                                                                                                   |
 | 插件与 MCP       | 隐藏 `requiresPaidPlan` 和结构化 `auth.type=zcode_official` 专属资源，安装边界拒绝专属依赖。保留公共插件、普通 MCP、环境变量、自定义请求头、通用 MCP OAuth 与 localhost callback。不按名称或描述中的“官方”字样隐藏插件。                                          |
 | MCP 错误协议     | 删除账号专属的 `official_origin_untrusted`、`not_authenticated`、`coding_plan_required`，保留通用 OAuth 授权失败类型。                                                                                                                                            |
-| 分享             | 移除云端发布和私有分享；保留服务端允许匿名读取的公开分享预览及导入，不注入账号 JWT。                                                                                                          |
+| 分享             | 后续范围已调整为完整下线：公开/私有预览、导入、发布、分享链接处理、RPC/IPC、类型和专属存储字段均移除。见 `specs/conversation-share-retirement/SPEC.md`。                                                                                                          |
 | 统计、反馈与遥测 | 统计只聚合本地会话，读取错误不再分类为套餐或 Key 鉴权问题。删除账号额度、订阅、Off-Peak 归因、JWT、用户 loader 和账号 attribution；保留设备标识、本地 feedback ticket 与匿名客户端请求。                                                                          |
 | 同步与存储       | provisioning 仅携带 personalConfig，保留锁、CAS、幂等与回滚。新任务 schema 不含 Off-Peak，删除账号历史迁移，不提供旧 Provider 兼容层，不清空真实用户目录。                                                                                                        |
 
@@ -44,7 +44,7 @@ sequenceDiagram
 
 ## 3. 账号整改阶段的验证记录
 
-以下为账号整改阶段的验证记录。
+以下为账号整改阶段的历史验证记录。分享功能后来完整下线，当前分享整改验证以 `specs/conversation-share-retirement/IMPLEMENTATION.md` 为准。
 
 | 验证                                                         | 实际结果                                                                                                                                |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,7 +52,7 @@ sequenceDiagram
 | `pnpm exec turbo run typecheck --cwd apps/zcode-cli --force` | 通过，27 / 27 个任务成功。                                                                                                              |
 | `pnpm lint`                                                  | 通过，0 errors、17 warnings；未扩展去修复其他领域警告。                                                                                 |
 | `pnpm architecture:check --changed`                          | 通过，baseline 0、new 0、violations 0。                                                                                                 |
-| 核心测试                                                     | 账号整改阶段的临时 fixture 曾通过 10 / 10，覆盖自定义模型、匿名配置、插件过滤和同步边界；临时测试已清理。 |
+| 核心测试                                                     | 账号整改阶段的临时 fixture 曾通过 10 / 10，覆盖自定义模型、匿名配置、插件过滤和同步边界；临时测试已清理，分享测试已由完整下线验收替代。 |
 | Web build                                                    | `pnpm --filter @zcode/web build` 通过；仍有 chunk / dynamic import 警告。                                                               |
 | Desktop build                                                | `pnpm --filter @zcode/desktop exec tsup` 通过，Main、Host、Preload、Scheduler 均成功。                                                  |
 | Desktop Agent                                                | `node scripts/build-desktop-agent-cli.mjs` 通过并更新 Windows bundled Agent。                                                           |
@@ -76,7 +76,7 @@ sequenceDiagram
 - 额外执行 Desktop 独立 `tsconfig.main.json`、`tsconfig.preload.json`、`tsconfig.renderer.json` 的 `tsc --noEmit` 仍失败，分别有 79、3、115 条诊断。不能据根类型检查通过宣称所有 Desktop 配置都通过。
 - 已核对的既有问题包括 Main 的 `rootDir/include` 不含跨目录共享文件、`IStorageService` 既有导出/引用不一致、Preload 引用的窗口类型未在 Shared 根入口导出。Renderer 存在 `window.zcode` 和 CSS 类型声明加载问题。未对全部额外诊断建立基线，其余诊断不统一归类为既有错误；独立配置错误没有扩大成本次账号整改的修复范围。
 - 未验证真实供应商 Key、真实第三方 OAuth、真实 SSH/Bot/手机远控、Cron/Subagent 完整执行或匿名反馈/遥测服务端接收。核心边界测试与桌面 UI 验收不代表这些外部集成都已实测。
-- 公开分享仅保留服务端允许匿名读取的预览与导入；未验证真实服务端的匿名访问许可。
+- 分享功能已在后续整改中完整下线，原匿名分享 fixture 不再适用。
 - 本机 Node 24.19.0，仓库要求 24.14.0。freshness 的 GitHub fetch 受网络限制；验证基于当前本地检出，未宣称远端最新。
 
 ## 5. 复审修复：实际插件配置中的账号资源

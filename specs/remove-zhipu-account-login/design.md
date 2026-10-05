@@ -74,7 +74,7 @@
 
 - 不保留旧 OAuth Token、账号 Provider、旧默认模型和旧历史选择。
 - 不做旧 Provider ID 的只读解析或会话迁移。
-- 下线依赖账号 JWT 的云端发布与私有分享；保留服务端允许匿名读取的公开分享预览和导入。
+- 完整下线会话分享：发布、附件上传、确认、公开/私有预览、导入和分享链接处理均移除；后续重新设计。范围以 `specs/conversation-share-retirement/SPEC.md` 为准。
 - 不因移除账号而删除 `zai-light`、`zai-dark` 主题，它们只是主题品牌。
 - 保留普通动态工作流、定时自动化、Subagent 模型配置、独立 HTTP Token、SSH/Bot Channel 认证和远程恢复链路。
 - 不增加自动清空真实用户目录或整个任务数据库的启动逻辑；开发验证使用明确指定的干净数据目录。
@@ -448,7 +448,7 @@ sequenceDiagram
 - `packages/desktop/src/main/index.ts`
 - `packages/desktop/src/host/remoteWorkspaceServiceCollection.ts` 中的 OAuth、Account Provider、Coding Plan 和账号 Token 注入。
 
-`desktopDeepLink.ts` 保留工作区打开，不能整文件删除。删除 OAuth callback、state map 和账号握手；保留匿名公开分享导入；保留 OS 协议注册、多窗口路由、外部工作区打开确认和 Renderer-ready 排序。同步调整 `startupWorkspaceDeepLinkGate.ts` 等调用者，保留原窗口所有者和原生操作边界。
+`desktopDeepLink.ts` 保留工作区打开，不能整文件删除。删除 OAuth callback、state map、账号握手和分享导入；保留 OS 协议注册、多窗口路由、外部工作区打开确认和 Renderer-ready 排序。同步调整 `startupWorkspaceDeepLinkGate.ts` 等调用者，保留原窗口所有者和原生操作边界。
 
 同步清理构建和环境配置中的 OAuth URL、client ID 和 OAuth callback 注入，包括 `packages/desktop/tsup.config.ts`、desktop runtime env 和 host process；但保留公共插件 CDN、MCP 和其他远程工作区配置。
 
@@ -465,9 +465,9 @@ sequenceDiagram
 - `packages/web/src/main.tsx` 的 OAuth callback 路由。
 - `packages/web/vite.config.ts` 中 Z.ai/BigModel OAuth 环境注入。
 
-下线云端发布、附件上传、确认与私有分享预览；移除分享登录、重认证及账号 JWT 注入。保留匿名公开分享路由、预览、导入和 Desktop 分享 Deep Link。
+会话分享完整下线，后续重新设计。删除 Web 分享路由、公开/私有预览、导入、HTTP 客户端和分享服务，以及 Desktop 的分享 Deep Link、IPC 和平台事件。
 
-公开分享读取沿现有 HTTP 客户端和分享服务，保留 V4 导入、上下文引用、存储与草稿链路。仅服务端允许匿名读取的公开内容可用；不新增匿名认证接口或历史兼容逻辑。
+同步裁剪 V4 分享来源状态、输入上下文引用、分享创建参数、存储接口、`share_url` 建表字段、专属组件、草稿标记、滚动补偿及文案。普通会话、Claude 历史导入和工作区打开保持原有链路；不新增分享认证或历史兼容逻辑。
 
 普通 Web App 当前没有以 Z.ai OAuth 作为 Root 登录依赖；Web OAuth 主要服务分享回调。`packages/ui/src/WebRemoteControlDialog.tsx` 使用 Weixin/Feishu/Lark/Telegram Bot Channel，`packages/server/src/entry-http.ts`、`http.ts` 使用独立 `ZCODE_SERVER_AUTH_TOKEN` 和 `zcode_lite_token`。这些均保留。
 
@@ -672,7 +672,7 @@ OAuth callback、Token refresh、Account Provider overlay、Coding Plan quota �
 4. 在一个完整变更组内同步裁剪 Shared schema/RPC、Services/Host 装配、Core/Contracts 和 UI 账号状态；不保留空的 OAuth Service 或虚假成功返回。
 5. 隐藏账号专属插件并调整安装/manifest 边界、默认启用和 bundle；删除官方账号 MCP。保留普通插件和通用 MCP OAuth。
 6. 收口 Off-Peak 的协议、UI、数据库与 scheduler 分支；保留普通 Cron/工作流。
-7. 裁剪 Desktop 账号 callback，保留工作区及公开分享 Deep Link；下线云端发布和私有分享，保留独立远控认证。
+7. 裁剪 Desktop 账号 callback，保留工作区 Deep Link；完整移除会话分享，保留独立远控认证。
 8. 删除 CLI OAuth login/logout、相关参数和帮助；保留 TUI 手动 Key 配置、无模型执行检查和密钥脱敏。
 9. 删除账号 onboarding、feedback/telemetry loader 和 Provisioning credential/settings 分支，保留各自普通能力。
 10. 更新新建数据 schema 和 fixtures，使用隔离的干净开发数据；清理无用导出、依赖、环境变量、文案、README 和相关技能引用。
@@ -690,7 +690,7 @@ OAuth callback、Token refresh、Account Provider overlay、Coding Plan quota �
 | A4  | 产生本地 usage 并打开统计                                                      | App Usage 数据仍来自 usage/stats；无 Coding Plan tabs、余额或重置请求                                   | 已知数据 fixture + UI             |
 | A5  | 市场含普通插件与 requiresPaidPlan 条目；通过直接 ID 调用专属安装               | 普通插件能安装/启停/卸载；专属条目在列表/搜索/推荐隐藏，直接安装不执行；不影响第三方插件授权            | 市场规则测试 + 插件 E2E           |
 | A6  | 普通 stdio/HTTP MCP 与通用 OAuth fixture；单独加载 zcode_official 配置         | 普通 MCP/OAuth 可用；账号 auth 明确不支持且不触发登录/重试                                              | MCP 核心配置/连接测试             |
-| A7  | 匿名公开分享预览和导入；检查发布与私有分享入口 | 服务端允许的公开内容可读取和导入；发布、私有预览与账号登录入口移除 | HTTP fixture、平台检查 |
+| A7  | 分享契约下线，检查普通输入、历史导入与工作区 Deep Link                         | 分享入口、预览和导入服务消失；新会话表不含分享列；普通会话和工作区打开仍可用                            | 契约与 SQLite 测试、平台检查      |
 | A8  | Desktop 将 personalConfig 同步给远端，再请求模型；普通 Web 尝试 target 写入    | 远端 Key 可用；envelope 无账号凭据；普通 Web 仍无 target 写权限；identity/lease隔离保留                 | 一条远端同步/恢复路径             |
 | A9  | CLI调用OAuth login/logout及TUI手动Key配置，重启应用                            | OAuth命令和参数移除；Key配置仍可用且不进入历史/转录；onboarding不重复出现                               | CLI命令/持久化验证                |
 | A10 | 刷新Provider与启动插件/应用                                                    | 只用bundled，不读取Active/LKG或下载旧feed；普通客户端策略、公共市场、应用更新正常                       | 装配/请求记录与打包烟测           |
@@ -714,13 +714,13 @@ OAuth callback、Token refresh、Account Provider overlay、Coding Plan quota �
 
 ## 10. 确认结果与剩余证据缺口
 
-当前确定范围：账号专属插件隐藏；下线云端发布与私有分享、保留可匿名读取的公开分享；开发版使用整改后的 bundled，停用旧远端内置模型更新。以上均为本设计的确定边界，不再保留互斥选项。
+当前确定范围：账号专属插件隐藏；会话分享完整下线，后续重新添加；开发版使用整改后的 bundled，停用旧远端内置模型更新。以上均为本设计的确定边界，不再保留互斥选项。
 
 以下是实现取证事项，不作为已完成能力：
 
 - Image Search 等插件需检查实际发布/打包 manifest；当前仓库缺失相关 seed，定义注释不能证明匿名可用。按真实账号依赖决定是否保留，不能自动恢复已移除内部包。
 - 匿名反馈/遥测已有客户端路径，但外部服务能否接受匿名请求尚未运行验证；若现有服务强制账号，报告合同缺口并关闭相应账号调用，不虚构匿名接口。
-- 保留的公开分享依赖服务端匿名访问许可，需验证匿名读取契约；不将账号认证接口改写为虚构匿名接口。
+- 会话分享相关客户端、协议和存储字段均已下线，不再依赖分享服务端的匿名访问许可。
 - 新接口、字段、删除后的模块 contract 和实际 E2E runner 需在实现时按受控上下文补齐；本轮无代码变更、无运行时测试。
 
 ## 11. 规划交付状态与图谱候选更新

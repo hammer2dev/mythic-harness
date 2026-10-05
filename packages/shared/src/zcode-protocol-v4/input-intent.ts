@@ -6,7 +6,6 @@ import { timestampSchema } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
 import { modelSelectionSchema } from "../model-selection.js";
 import { submissionModeSchema } from "./submission.js";
-import { sharedContextRefSchema } from "./shared-context-ref.js";
 
 export const conversationInputDeliverySchema = z
   .object({
@@ -51,7 +50,6 @@ export const conversationInputIntentSchema = z
     mode: submissionModeSchema.optional(),
     planEnabled: z.boolean().optional(),
     projectWorkspace: zcodeProjectWorkspaceSchema.optional(),
-    sharedContextRefs: z.array(sharedContextRefSchema).max(1).optional(),
     delivery: conversationInputDeliverySchema,
     order: conversationInputOrderSchema,
     steer: conversationInputSteerSchema,

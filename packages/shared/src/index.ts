@@ -85,7 +85,6 @@ export * from "./zcode-protocol/index.js";
 // re-home：旧协议承重面的幸存文件（消费者继续走 barrel，零感知）
 export * from "./conversation-message-projection-policy.js";
 export * from "./conversation-preview-artifacts.js";
-export * from "./conversation-share.js";
 export * from "./dynamic-workflow-feature.js";
 export * from "./markdown-artifact-images.js";
 export * from "./media-preview.js";

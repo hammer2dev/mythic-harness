@@ -41,8 +41,6 @@ import type {
   V4ConversationFileChangesResult,
 } from "@zcode/shared/zcode-protocol-v4";
 import { logger } from "@/logger.js";
-import { localizeConversationShareUrl } from "@zcode/shared";
-import type { ImportedConversationShare } from "@zcode/services";
 import { toast } from "@/components/ui/toast.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
@@ -103,7 +101,6 @@ import { WorkspaceHookPendingBanner } from "@/v4/WorkspaceHookPendingBanner.js";
 import { ConversationStatusPanel } from "@/v4/ConversationStatusPanel.js";
 import { SessionSubscriptionErrorPanel } from "@/v4/SessionSubscriptionErrorPanel.js";
 import { ConversationTimeline } from "@/v4/ConversationTimeline.js";
-import { ConversationShareImportNotice } from "@/v4/ConversationShareImportNotice.js";
 import { ConversationBottomDockTransition } from "@/v4/ConversationBottomDockTransition.js";
 import { SessionPluginReferenceIconBoundary } from "@/v4/SessionPluginReferenceIconProvider.js";
 import {
@@ -496,9 +493,8 @@ export function SessionPane({
     fileRewindPreview,
   } = useV4Conversation();
   const platform = useOptionalPlatform();
-  const { conversationShareService, modelSelectionService, zcodeSessionService, zcodeTaskService } =
-    useServices();
-  const { intl, locale } = useZCodeIntl();
+  const { modelSelectionService, zcodeSessionService, zcodeTaskService } = useServices();
+  const { intl } = useZCodeIntl();
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
   const workspaceHomePath = useWorkspaceHomePath({
     workspacePath,
@@ -744,9 +740,6 @@ export function SessionPane({
   }, [sessionId, snapshot?.logEpoch, workspaceKey]);
   const composerTextInsertRequest = useZCodeSessionStore(
     (store) => store.getWorkspaceState(workspacePath, workspaceIdentity).composerTextInsertRequest,
-  );
-  const timelineBottomRequest = useZCodeSessionStore(
-    (store) => store.getWorkspaceState(workspacePath, workspaceIdentity).timelineBottomRequest,
   );
   const draftRuntimeInvalidationVersion = useZCodeSessionStore(
     (store) =>
@@ -2082,7 +2075,6 @@ export function SessionPane({
       const heldQueueDisposition = options?.heldQueueDisposition;
       const expectedHeldQueueItemIds = options?.expectedHeldQueueItemIds;
       const readyAttachments = options?.attachments ?? [];
-      const sharedContextRefs = options?.sharedContextRefs;
       const contextAttachmentCount = options?.contextAttachmentCount ?? 0;
       let slashCommand = parseV4VisibleSlashCommand(text, readyAttachments, {
         contextAttachmentCount,
@@ -2280,7 +2272,6 @@ export function SessionPane({
                 text: effectiveText,
                 ...submission,
                 ...(readyAttachments.length > 0 ? { attachments: readyAttachments } : {}),
-                ...(sharedContextRefs?.length ? { context_refs: sharedContextRefs } : {}),
               },
               prewarm.sessionId,
               undefined,
@@ -2319,7 +2310,7 @@ export function SessionPane({
           { ...draftConfigRef.current, modelSelection: submission.modelSelection },
           appFollowupMode,
         );
-        if (readyAttachments.length === 0 && !sharedContextRefs?.length) {
+        if (readyAttachments.length === 0) {
           const ack = await dispatchSubmissionCommand(
             "createSession",
             {
@@ -2366,7 +2357,6 @@ export function SessionPane({
             text: effectiveText,
             attachments: readyAttachments,
             ...submission,
-            ...(sharedContextRefs?.length ? { context_refs: sharedContextRefs } : {}),
           },
           newSessionId,
           undefined,
@@ -2396,7 +2386,6 @@ export function SessionPane({
             : {}),
           ...(heldQueueDisposition ? { heldQueueDisposition } : {}),
           ...(expectedHeldQueueItemIds ? { expectedHeldQueueItemIds } : {}),
-          ...(sharedContextRefs?.length ? { context_refs: sharedContextRefs } : {}),
         },
         sessionId,
         undefined,
@@ -3217,110 +3206,6 @@ export function SessionPane({
     !isDraft && (lease === null || sessionLeaseReady) && snapshot?.sessionId === sessionId
       ? snapshot
       : null;
-  const shareHandoverContext =
-    snapshot?.sharedContextImport && "contextId" in snapshot.sharedContextImport
-      ? snapshot.sharedContextImport
-      : null;
-  // 导入的分享对话：读取落盘的公开 rows 用于会话顶部的只读块。
-  // 分享页可能过期或未上线，所以只读本地副本，不回源。
-  const [importedShare, setImportedShare] = useState<ImportedConversationShare | null>(null);
-  const importedShareContextId =
-    shareHandoverContext && shareHandoverContext.status !== "discarded"
-      ? shareHandoverContext.contextId
-      : null;
-  useEffect(() => {
-    if (!importedShareContextId) {
-      setImportedShare(null);
-      return;
-    }
-    let disposed = false;
-    void conversationShareService
-      .getImportedConversation({
-        workspacePath,
-        contextId: importedShareContextId,
-      })
-      .then((imported) => {
-        if (disposed) return;
-        setImportedShare(imported);
-      })
-      .catch((error: unknown) => {
-        if (disposed) return;
-        // 只读块是增强，读不到就不渲染，不打断会话。
-        logger.warn("[conversation-share] 读取导入的分享对话失败", { error });
-        setImportedShare(null);
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [conversationShareService, importedShareContextId, workspacePath]);
-  // normalizeConversationShareMarkdown 在 artifactNames 里找不到匹配名字时，会把正文里的
-  // 文件引用替换成空字符串（直接删掉）。不接这份映射，只读块里的文件引用会静默消失。
-  const importedShareArtifactNames = useMemo(
-    () =>
-      new Map(
-        (importedShare?.artifacts ?? []).map((artifact) => [
-          artifact.artifactId,
-          artifact.displayName,
-        ]),
-      ),
-    [importedShare],
-  );
-  const importedShareArtifactWorkspaceRelativePaths = useMemo(() => {
-    const entries: Array<[string, string]> = [];
-    for (const artifact of importedShare?.artifacts ?? []) {
-      if (artifact.workspaceRelativePath) {
-        entries.push([artifact.artifactId, artifact.workspaceRelativePath]);
-      }
-    }
-    return new Map(entries);
-  }, [importedShare]);
-  useLayoutEffect(() => {
-    if (
-      !timelineBottomRequest ||
-      timelineBottomRequest.taskId !== sessionId ||
-      !importedShare ||
-      importedShare.contextId !== importedShareContextId
-    ) {
-      return;
-    }
-    // 分享块是异步挂载的；请求保留到目标 task 与本地副本都就绪，再在布局稳定后消费。
-    const scrollToBottom = () => {
-      const action = timelineScrollToBottomRef.current;
-      if (!action) return false;
-      action();
-      return true;
-    };
-    let secondFrame: number | null = null;
-    const firstFrame = window.requestAnimationFrame(() => {
-      scrollToBottom();
-      secondFrame = window.requestAnimationFrame(() => {
-        if (!scrollToBottom()) return;
-        useZCodeSessionStore
-          .getState()
-          .clearTimelineBottomRequest(
-            workspacePath,
-            timelineBottomRequest.requestId,
-            workspaceIdentity,
-          );
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
-    };
-  }, [
-    importedShare,
-    importedShareContextId,
-    sessionId,
-    timelineBottomRequest,
-    workspaceIdentity,
-    workspacePath,
-  ]);
-  const handleOpenImportedShareUrl = useCallback(() => {
-    if (!shareHandoverContext || !onOpenBrowserUrl) return;
-    // 持久化的是规范 /cn/share/ 路径；展示/打开时才按界面语言本地化。
-    onOpenBrowserUrl(localizeConversationShareUrl(shareHandoverContext.shareUrl, locale));
-  }, [locale, onOpenBrowserUrl, shareHandoverContext]);
   const initialDraftConfigForDiagnostics = isDraft ? resolveInitialDraftConfig() : undefined;
   // CLI V4 projection 是 running/count/manifest 的唯一权威；renderer 不再在 spawn
   // 事件后另发查询拼接第二份状态，避免并发 child 的 in-flight refresh 丢更新。
@@ -3830,28 +3715,6 @@ export function SessionPane({
               onLoadAllOlder={handleLoadAllOlder}
               turnNavigatorDirectoryRevision={state.turnNavigatorDirectoryRevision}
               bottomDock={conversationBottomDock}
-              headerSlot={
-                // unsupportedRowCount 也要开这个门：整份副本的行都被本 build 跳过时
-                // rows 为空，但只读块必须留下来显示「需要更新 ZCode」，不能整块消失。
-                importedShare &&
-                (importedShare.rows.length > 0 || importedShare.unsupportedRowCount > 0) ? (
-                  <ConversationShareImportNotice
-                    rows={importedShare.rows}
-                    unsupportedRowCount={importedShare.unsupportedRowCount}
-                    artifactNames={importedShareArtifactNames}
-                    artifactWorkspaceRelativePaths={importedShareArtifactWorkspaceRelativePaths}
-                    workspacePath={workspacePath}
-                    {...(workspaceIdentity ? { workspaceIdentity } : {})}
-                    {...(remoteSessionId ? { workspaceRemoteSessionId: remoteSessionId } : {})}
-                    locale={locale}
-                    theme={theme}
-                    codePreviewSettings={codePreviewSettings}
-                    onOpenShareUrl={onOpenBrowserUrl ? handleOpenImportedShareUrl : undefined}
-                    onOpenFileLink={onOpenFileLink}
-                    onOpenCodeViewer={onOpenCodeViewer}
-                  />
-                ) : null
-              }
               emptyState={
                 isDraft ? (
                   <div data-testid={TID_CHAT_EMPTY} className="w-full">

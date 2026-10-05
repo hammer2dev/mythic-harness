@@ -206,7 +206,6 @@ import type {
 } from "#src/process/runtimeProcessLifecycle.js";
 import type { SessionMessageSendRequested } from "#src/session/sessionMailbox.js";
 import {
-  buildRuntimeZCodeApiUrl,
   DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
   formatLogPrefix,
   getCapturedZCodeAgentTelemetryEnv,
@@ -232,13 +231,6 @@ import { createClientScenesService } from "./client-scenes/clientScenesService.j
 import { ServiceCollection } from "./collection.js";
 import { ICommandsService } from "./commands/commands.js";
 import { createCommandsService } from "./commands/commandsService.js";
-import {
-  createUnsupportedConversationShareService,
-  IConversationShareService,
-  type IConversationShareService as IConversationShareServiceType,
-} from "./conversation-share/conversationShare.js";
-import { ConversationShareHttpClient } from "./conversation-share/conversationShareHttpClient.js";
-import { ConversationShareService } from "./conversation-share/conversationShareService.js";
 import { ICredentialService } from "./credential/credential.js";
 import { createCredentialService } from "./credential/credentialService.js";
 import { IFeedbackService } from "./feedback/feedback.js";
@@ -328,10 +320,6 @@ import { createZCodeTaskIndexSyncer } from "./zcode-agent/zcodeTaskIndexSyncer.j
 import { createZCodeTaskServiceAdapter } from "./zcode-agent/zcodeTaskServiceAdapter.js";
 import { IZCodeSessionService } from "./zcode-session/zcodeSession.js";
 import { createZCodeSessionService } from "./zcode-session/zcodeSessionService.js";
-
-// 这些 conversation-share 实现依赖 Node 文件系统；仅通过 @zcode/services/node 暴露，
-// 防止 browser-safe 根入口把 node:* 依赖带进 renderer。
-export { ConversationShareHttpClient, ConversationShareService };
 
 interface ServiceWithDisposeAll {
   disposeAll: () => void;
@@ -749,20 +737,6 @@ export function createLocalServices(options: {
     authorizeLocalMediaPreviewPath: options?.authorizeLocalMediaPreviewPath,
     createLocalMediaPreviewUrl: buildLocalMediaPreviewUrl,
   });
-  const conversationShareClient = new ConversationShareHttpClient({
-    // 分享运行时始终走真实 API；测试/Mock 场景应在 service 单测或 Web fixture 中显式注入，
-    // 不能让开发环境默认生成仅存在于进程内存的 mock-share 链接。
-    apiClient,
-    baseUrl: buildRuntimeZCodeApiUrl(process.env, "/api/v1"),
-  });
-  const conversationShareService: IConversationShareServiceType = isDesktopAttachedRemote
-    ? createUnsupportedConversationShareService({
-        message: "Conversation publishing is not available for remote workspaces",
-      })
-    : new ConversationShareService({
-        zcodeSessionService,
-        client: conversationShareClient,
-      });
   const sqliteReposToClose: Array<{ close(): void }> = [];
   const services = new ServiceCollection()
     .register(IFileService, fileService)
@@ -778,7 +752,6 @@ export function createLocalServices(options: {
     .register(IZCodeTaskService, zcodeTaskService)
     .register(IZCodeAgentService, zcodeAgentService)
     .register(IZCodeSessionService, zcodeSessionService)
-    .register(IConversationShareService, conversationShareService)
     .register(
       IBotsService,
       createBotsService({

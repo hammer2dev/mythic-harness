@@ -35,11 +35,7 @@ export interface ModelInputMessage {
   modelId?: Model["modelId"];
 }
 
-export type RuntimeMessageSource =
-  | SystemReminderSource
-  | "shared_context"
-  | "real_user"
-  | "legacy_synthetic";
+export type RuntimeMessageSource = SystemReminderSource | "real_user" | "legacy_synthetic";
 
 export interface RuntimeMessageMetadata {
   source: RuntimeMessageSource;

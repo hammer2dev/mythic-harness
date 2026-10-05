@@ -3,7 +3,6 @@ import type { IBroadcastService } from "./broadcast/broadcast.js";
 import type { IClientConfigService } from "./client-config/clientConfig.js";
 import type { IClientScenesService } from "./client-scenes/clientScenes.js";
 import type { ICommandsService } from "./commands/commands.js";
-import type { IConversationShareService } from "./conversation-share/conversationShare.js";
 import type { ICredentialService } from "./credential/credential.js";
 import type { IFeedbackService } from "./feedback/feedback.js";
 import type { IFileService } from "./file/file.js";
@@ -54,7 +53,6 @@ export interface IServiceAccessor {
   readonly windowControllerService?: IWindowControllerService;
   readonly zcodeAgentService: IZCodeAgentService;
   readonly zcodeSessionService: IZCodeSessionService;
-  readonly conversationShareService: IConversationShareService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
   /** 当前 Environment 的 Provider 配置与设置视图。 */

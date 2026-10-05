@@ -63,7 +63,6 @@ export function decodeSessionRow(row: SessionRow): SessionInfo {
     titleSource: decodeSessionTitleSource(row.title_source),
     titleMessageID: row.title_message_id ? (row.title_message_id as MessageId) : undefined,
     version: row.version,
-    shareURL: row.share_url ?? undefined,
     summaryAdditions: row.summary_additions ?? undefined,
     summaryDeletions: row.summary_deletions ?? undefined,
     summaryFiles: row.summary_files ?? undefined,

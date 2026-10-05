@@ -18,7 +18,6 @@ interface CanonicalCommandIntent {
   fallbackReasonCode?: string;
   attachmentRefs?: readonly AttachmentRef[];
   projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
-  sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
   provenance?: TurnInputIntentMetadata["provenance"];
 }
 
@@ -34,7 +33,6 @@ export function inputIntentMetadata(
     mode?: SubmissionMode;
     planEnabled?: boolean;
     projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
-    sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
   },
 ): TurnInputIntentMetadata {
   const admission = commandAdmissionOf(envelope);
@@ -69,7 +67,6 @@ export function inputIntentMetadata(
     ...(options.projectWorkspace
       ? { projectWorkspace: structuredClone(options.projectWorkspace) }
       : {}),
-    ...(options.sharedContextRefs ? { sharedContextRefs: [...options.sharedContextRefs] } : {}),
   };
 }
 
@@ -100,7 +97,6 @@ export function inputIntentMetadataFromCanonical(
     ...(canonical.projectWorkspace
       ? { projectWorkspace: structuredClone(canonical.projectWorkspace) }
       : {}),
-    ...(canonical.sharedContextRefs ? { sharedContextRefs: [...canonical.sharedContextRefs] } : {}),
     ...(originalSourceCommandId
       ? {
           provenance: canonical.provenance ?? {
@@ -137,7 +133,6 @@ export function inputIntentMetadataFromQueueItem(
       : {}),
     attachmentRefs: item.attachments,
     ...(item.projectWorkspace ? { projectWorkspace: structuredClone(item.projectWorkspace) } : {}),
-    ...(item.sharedContextRefs ? { sharedContextRefs: [...item.sharedContextRefs] } : {}),
     // 提升只改变调度状态；重试／编辑原始输入的来源关联不能在此丢失。
     ...(item.provenance ? { provenance: { ...item.provenance } } : {}),
   };

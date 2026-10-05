@@ -26,7 +26,7 @@ const REASONING_TEXT = "先检查示例文件，再给出结果。";
 const TOOL_OUTPUT = "示例文件内容";
 
 function persistedMessages(
-  intentFields: Pick<TurnInputIntentMetadata, "projectWorkspace" | "sharedContextRefs">,
+  intentFields: Pick<TurnInputIntentMetadata, "projectWorkspace">,
 ): MessageWithParts[] {
   const inputIntent: TurnInputIntentMetadata = {
     sourceCommandId: "history-fixture-command",
@@ -150,33 +150,4 @@ test("带项目快照的批量历史恢复保留助手内容与两种订阅快�
     assert.equal(frame.payload.snapshot.meta.projectId, PROJECT_ID);
     assert.equal(frame.payload.snapshot.control.phase, "completedSuccess");
   }
-});
-
-test("批量恢复附加共享上下文后继续接纳助手正文", () => {
-  const contextId = "history-fixture-context";
-  const messages = persistedMessages({
-    sharedContextRefs: [{ kind: "shared_context_import", context_id: contextId }],
-  });
-  messages[1]!.parts = messages[1]!.parts.filter((part) => part.type === "text");
-  const events = synthesizeEventsFromMessages(messages, { sessionId: SESSION_ID });
-  const projection = new ProductProjection(SESSION_ID, LOG_EPOCH);
-  projection.seedSharedContextImport({
-    contextId,
-    title: "示例共享上下文",
-    shareUrl: "https://example.com/cn/share/fixture",
-    status: "pending",
-  });
-  projection.beginHydrationReplay();
-  for (const event of events) projection.applyHydrationEvent(event);
-  projection.completeHydrationReplay();
-
-  const restored = projection.getSnapshot();
-  assert.ok(restored.sharedContextImport && "status" in restored.sharedContextImport);
-  assert.equal(restored.sharedContextImport.status, "attached");
-  assert.equal(
-    restored.rows.window.find((row) => row.kind === "assistantText")?.text,
-    ASSISTANT_TEXT,
-  );
-  assert.equal(restored.control.phase, "completedSuccess");
-  assert.equal(projection.getDroppedContentStreamEventCount(), 0);
 });

@@ -24,8 +24,6 @@ export interface V4ComposerDraft {
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
   modelSelection?: ModelSelection;
-  /** 首次分享导入等待公共新任务初始化；不能由空 Session snapshot 抢先填充。 */
-  initializeFromNewTask?: true;
   updatedAt: number;
 }
 
@@ -133,9 +131,6 @@ function readDraft(value: unknown): V4ComposerDraft | null {
       ? { lastPlanTransitionId: value.lastPlanTransitionId }
       : {}),
     ...(modelSelection ? { modelSelection } : {}),
-    ...(value.initializeFromNewTask === true && !mode.success
-      ? { initializeFromNewTask: true as const }
-      : {}),
     updatedAt:
       typeof value.updatedAt === "number" && Number.isFinite(value.updatedAt) ? value.updatedAt : 0,
   };
@@ -187,8 +182,7 @@ export function persistV4ComposerDraft(
     !draft.editorStateJson &&
     !draft.mention &&
     !draft.mode &&
-    !draft.modelSelection &&
-    !draft.initializeFromNewTask
+    !draft.modelSelection
   ) {
     delete file.scopes[scopeId];
   } else {

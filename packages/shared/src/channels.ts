@@ -87,8 +87,6 @@ export const ServiceChannels = {
   ZCodeAgent: "zcode-agent",
   /** ZCode session 应用服务 */
   ZCodeSession: "zcode-session",
-  /** 会话分享发布、预览与 continuation API 编排 */
-  ConversationShare: "conversation-share",
   /** 文件系统监视服务 */
   FileWatcher: "file-watcher",
   /** 新 Provider Config 的设置读写 Facade */
@@ -265,8 +263,6 @@ export const PlatformChannels = {
   OpenInFileManager: "zcode:open-in-file-manager",
   /** Renderer → Main：使用系统默认应用打开本地文件 */
   OpenExternalFile: "zcode:open-external-file",
-  /** Main → Renderer：外部分享页请求导入 share code。 */
-  ShareImport: "zcode:share-import",
   /** Renderer → Main：renderer 已就绪，可接收缓存的 deep link */
   RendererReady: "zcode:renderer-ready",
   /** Renderer → Main：同步当前 renderer 的 telemetry 上下文 */
@@ -784,11 +780,6 @@ export interface PlatformChannelMap {
   [PlatformChannels.OpenExternalFile]: {
     request: string;
     response: { success: boolean; error?: string };
-  };
-  // 单向 send（不是 invoke）：dragstart 必须同步发起，等不了 invoke 的往返。
-  [PlatformChannels.ShareImport]: {
-    request: { shareCode: string };
-    response: void;
   };
   [PlatformChannels.RendererReady]: {
     request: void;

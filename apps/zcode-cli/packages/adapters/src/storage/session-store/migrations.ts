@@ -19,7 +19,6 @@ export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
         path text,
         title text not null,
         version text not null,
-        share_url text,
         summary_additions integer,
         summary_deletions integer,
         summary_files integer,

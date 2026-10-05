@@ -13,7 +13,6 @@ export interface SessionRow {
   title_source: string | null;
   title_message_id: string | null;
   version: string;
-  share_url: string | null;
   summary_additions: number | null;
   summary_deletions: number | null;
   summary_files: number | null;

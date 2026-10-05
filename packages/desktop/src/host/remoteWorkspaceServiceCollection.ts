@@ -12,7 +12,6 @@ import {
   IZCodeTaskService,
   IZCodeAgentService,
   IZCodeSessionService,
-  IConversationShareService,
   IBotsService,
   IFileWatcherService,
   IModelSelectionService,
@@ -35,8 +34,6 @@ import {
   type IServiceAccessor,
 } from "@zcode/services";
 import {
-  ConversationShareHttpClient,
-  ConversationShareService,
   createSettingService,
   createCredentialService,
   createBroadcastService,
@@ -52,7 +49,6 @@ import {
   createMemoryService,
 } from "@zcode/services/node";
 import {
-  buildRuntimeZCodeApiUrl,
   DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
   type ZCodeSessionRuntimePreferencesResult,
 } from "@zcode/shared";
@@ -92,14 +88,6 @@ export function createRemoteWorkspaceServiceCollection(params: {
     fetchImpl: hostApiNetworkTransport.fetch,
   });
   const localBroadcastService = createBroadcastService(params.parentPort);
-  const conversationShareClient = new ConversationShareHttpClient({
-    // 远端 workspace 的分享也必须使用真实 API；本地 Mock 仅用于单测，不生成无法跨进程访问的链接。
-    apiClient: localApiClient,
-    baseUrl: buildRuntimeZCodeApiUrl(process.env, "/api/v1"),
-  });
-  const conversationShareService = new ConversationShareService({
-    client: conversationShareClient,
-  });
   const reportingRemoteZCodeTaskService = params.createReportingRemoteZCodeTaskService(
     params.connectionServices.zcodeTaskService,
   );
@@ -230,7 +218,6 @@ export function createRemoteWorkspaceServiceCollection(params: {
     .register(IZCodeTaskService, remoteZCodeTaskService)
     .register(IZCodeAgentService, params.connectionServices.zcodeAgentService)
     .register(IZCodeSessionService, remoteZCodeSessionService)
-    .register(IConversationShareService, conversationShareService)
     .register(
       IBotsService,
       createBotsService({
