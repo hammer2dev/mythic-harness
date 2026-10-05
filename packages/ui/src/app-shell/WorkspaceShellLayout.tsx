@@ -243,7 +243,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   isMacDesktop,
   isWindowsDesktop,
   workspaceShellZCodeState,
-  theme,
   isMacFullscreen,
   desktopWindowChromeState,
   macWindowControlsLeftPaddingPx,
@@ -1619,7 +1618,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                   <div className={cn("h-full", workspaceMainView !== "chat" && "hidden")}>
                     <WorkspaceSidebar
                       workspacePath={workspaceAbsPath}
-                      workspaceRemoteSessionId={workspaceRemoteSessionId}
                       activePreviewPath={activePreviewPath}
                       onSelectTask={handleSelectTaskInChat}
                       onStartDraftInWorkspace={handleCreateProjectDraft}
@@ -1629,7 +1627,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                       onCreateTask={handleCreateTaskInChat}
                       onCreateConversationTask={onCreateConversationTask ?? handleCreateTaskInChat}
                       onOpenRemoteWorkspace={onOpenRemoteWorkspace}
-                      theme={theme}
                       onConnectRemote={onConnectRemote}
                       onSelectRemoteProject={onSelectRemoteProject}
                       onCancelRemoteProject={onCancelRemoteProject}

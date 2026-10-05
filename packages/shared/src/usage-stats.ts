@@ -45,7 +45,7 @@ export interface CodingPlanUsageRequest {
 }
 
 export interface UsageEntitlementRequest {
-  /** 购买或领取完成后，使对应 Start Plan balance 短期缓存失效。 */
+  /** 权益变更后，使对应 Start Plan balance 短期缓存失效。 */
   invalidateBalanceCache?: boolean;
   /** 兼容旧调用方的提示；Coding Plan 权益必须查询订阅并返回摘要，不再允许仅用额度推断权益。 */
   includeSubscription?: boolean;
@@ -123,7 +123,6 @@ export interface UsageEntitlementSubscription {
 export interface UsageEntitlementSubscriptionDetail {
   productId: string;
   productName: string;
-  purchaseTime: string | null;
   beginTime: string | null;
   billingCycle?: string | null;
   renewTime?: string | null;

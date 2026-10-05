@@ -6785,30 +6785,6 @@
       ]
     },
     {
-      "name": "@stripe/react-stripe-js",
-      "version": "6.4.0",
-      "license": "MIT",
-      "repository": "https://github.com/stripe/react-stripe-js.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "f5ecc63f26b1bf790f68fd8e4a84376385b19b9246100dc93a5b6ba9bf17f964"
-        }
-      ]
-    },
-    {
-      "name": "@stripe/stripe-js",
-      "version": "9.6.0",
-      "license": "MIT",
-      "repository": "github:stripe/stripe-js",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "f5ecc63f26b1bf790f68fd8e4a84376385b19b9246100dc93a5b6ba9bf17f964"
-        }
-      ]
-    },
-    {
       "name": "@szmarczak/http-timer",
       "version": "4.0.6",
       "license": "MIT",
@@ -15701,22 +15677,6 @@
       ]
     },
     {
-      "name": "prop-types",
-      "version": "15.8.1",
-      "license": "MIT",
-      "repository": "facebook/prop-types",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce"
-        },
-        {
-          "member": "README.md (license section)",
-          "sha256": "ca980af9aad75880631440fc14082e1a217b1ea3e615cf715469468bee6a8ef4"
-        }
-      ]
-    },
-    {
       "name": "propagating-hammerjs",
       "version": "3.0.0",
       "license": "MIT",
@@ -15981,18 +15941,6 @@
         {
           "member": "LICENSE",
           "sha256": "2cdb493db15b320c5787535f9dadd37b13cae6fe0a1cdd7849ccfbce70c389fd"
-        }
-      ]
-    },
-    {
-      "name": "react-is",
-      "version": "16.13.1",
-      "license": "MIT",
-      "repository": "https://github.com/facebook/react.git",
-      "notices": [
-        {
-          "member": "LICENSE",
-          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
         }
       ]
     },

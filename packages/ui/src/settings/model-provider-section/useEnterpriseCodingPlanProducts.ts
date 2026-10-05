@@ -12,7 +12,7 @@ import {
   resolveEnterpriseCodingPlanProductList,
   type EnterpriseCodingPlanProductDisplay,
 } from "@/settings/model-provider-section/enterpriseCodingPlanProducts.js";
-import { normalizeErrorMessage } from "@/settings/model-provider-section/useCodingPlanProducts.js";
+import { normalizeCodingPlanErrorMessage } from "@/settings/model-provider-section/codingPlanError.js";
 
 interface EnterpriseCodingPlanProductsState {
   snapshot: EnterpriseCodingPlanProductsSnapshot | null;
@@ -24,7 +24,7 @@ interface EnterpriseCodingPlanProductsSnapshot {
   productList: EnterpriseCodingPlanProductDisplay[];
   raw: EnterpriseCodingPlanPricingResponse;
   authenticated: boolean;
-  /** 静态目录控制购买横幅，不能用实时 pricing 补造目录中缺失的商品。 */
+  /** 静态目录控制可展示的团队套餐，不能用实时 pricing 补造目录中缺失的商品。 */
   staticProductIds?: string[];
 }
 
@@ -88,11 +88,8 @@ export function useEnterpriseCodingPlanProducts({
   enabled,
   authenticated,
   family = "bigmodel",
-  staticOnly = false,
 }: {
   enabled: boolean;
-  /** 未登录购买横幅只读取公开静态目录，不请求实时 pricing。 */
-  staticOnly?: boolean;
   authenticated: boolean;
   family?: ProviderFamilyDomain;
 }) {
@@ -125,10 +122,8 @@ export function useEnterpriseCodingPlanProducts({
       }
 
       setState((current) => ({
-        // 企业/个人切换和登录态刷新时不应把套餐区域替换成整块 loading；
-        // 保留上一轮企业套餐数据，让刷新状态只体现在刷新按钮和卡片局部状态上。
-        // 但公开 pricing 与登录态 pricing 的字段语义不同，切换鉴权来源时必须丢弃旧数据，
-        // 否则升级 Coding Plan 列表页会继续展示未鉴权的套餐结果。
+        // 刷新时保留同一鉴权状态下的团队快照，让 loading 只反映当前请求。
+        // 登录状态改变后丢弃旧快照，避免沿用另一鉴权上下文的团队权益。
         snapshot: shouldRetainEnterprisePricingSnapshotForRefresh(current.snapshot, authenticated)
           ? current.snapshot
           : null,
@@ -137,13 +132,11 @@ export function useEnterpriseCodingPlanProducts({
       }));
 
       try {
-        // 静态目录是展示配置，pricing 是订阅身份与实时价格的权威来源。
-        // 两者必须独立请求，避免灰度环境缺少新配置字段时阻断已购 Team Plan 的恢复。
+        // 静态目录补充名称与权益文案，pricing 提供账户订阅和团队上下文。
+        // 两条读取独立执行，静态目录缺失时仍可恢复已有 Team Plan 状态。
         const [staticResult, pricingResult] = await Promise.allSettled([
           service.getStaticTeamProducts(),
-          staticOnly
-            ? Promise.resolve<EnterpriseCodingPlanPricingResponse>({ productList: [] })
-            : service.getEnterprisePricing({ authenticated, family }),
+          service.getEnterprisePricing({ authenticated, family }),
         ]);
         const staticProducts =
           staticResult.status === "fulfilled"
@@ -155,10 +148,10 @@ export function useEnterpriseCodingPlanProducts({
           pricingResult.status === "fulfilled" ? pricingResult.value : { productList: [] };
         const pricingError = pricingResult.status === "rejected" ? pricingResult.reason : null;
         if (pricingError) {
-          const message = normalizeErrorMessage(pricingError);
+          const message = normalizeCodingPlanErrorMessage(pricingError);
           setState((current) => ({
-            // pricing 刷新失败代表实时状态未知，不能用静态目录或空列表覆盖
-            // 同鉴权态下上一轮有效的订阅身份与价格；首次失败时才展示静态禁用卡片。
+            // 读取失败表示当前账户状态未知；同一鉴权上下文下保留上次有效快照。
+            // 没有账户快照时，才从静态目录补充只读商品说明。
             snapshot: resolveEnterprisePricingFailureSnapshot({
               currentSnapshot: current.snapshot,
               authenticated,
@@ -187,7 +180,7 @@ export function useEnterpriseCodingPlanProducts({
             authenticated,
           },
           loading: false,
-          error: pricingError ? normalizeErrorMessage(pricingError) : null,
+          error: pricingError ? normalizeCodingPlanErrorMessage(pricingError) : null,
         });
         if (
           staticResult.status === "rejected" &&
@@ -195,11 +188,11 @@ export function useEnterpriseCodingPlanProducts({
         ) {
           logger.warn("[useEnterpriseCodingPlanProducts] 读取团队静态配置失败，回退实时 pricing", {
             authenticated,
-            error: normalizeErrorMessage(staticResult.reason),
+            error: normalizeCodingPlanErrorMessage(staticResult.reason),
           });
         }
       } catch (error) {
-        const message = normalizeErrorMessage(error);
+        const message = normalizeCodingPlanErrorMessage(error);
         // 远端 workspace 壳层会早于 attachment 绑定短暂渲染；此时断连代理报错是
         // 可预期的初始化等待态，不应伪装成 pricing 故障。真实 RPC 错误仍保留 warn。
         if (!isRemoteWorkspaceDisconnectedError(error)) {
@@ -209,9 +202,8 @@ export function useEnterpriseCodingPlanProducts({
           });
         }
         setState((current) => ({
-          // 企业定价接口失败时如果直接清空 snapshot，
-          // 切换到团队套餐页会只剩“暂无可购买的编程套餐”，用户无法分辨是接口失败还是确实无商品。
-          // 保留上一轮可见套餐并把错误显式抛给 UI，避免把可恢复的刷新失败伪装成空列表。
+          // 团队状态读取失败时保留同一鉴权上下文的上次快照，并把错误显式交给 UI。
+          // 这样可恢复的刷新失败不会被伪装成空的团队状态。
           snapshot: shouldRetainEnterprisePricingSnapshotForRefresh(current.snapshot, authenticated)
             ? current.snapshot
             : null,
@@ -220,7 +212,7 @@ export function useEnterpriseCodingPlanProducts({
         }));
       }
     },
-    [authenticated, codingPlanProviderId, enabled, family, service, staticOnly],
+    [authenticated, codingPlanProviderId, enabled, family, service],
   );
 
   useEffect(() => {

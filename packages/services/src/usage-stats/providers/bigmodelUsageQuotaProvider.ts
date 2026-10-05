@@ -1173,7 +1173,7 @@ function buildSubscriptionSnapshot(summary: {
   return {
     identityType: "unknown",
     identityMasked: null,
-    details: [{ ...summary, purchaseTime: null, beginTime: null }],
+    details: [{ ...summary, beginTime: null }],
   };
 }
 
@@ -1189,7 +1189,6 @@ function buildZaiStartPlanSubscription(
     details: activePlans.map((plan) => ({
       productId: readNonEmptyString(plan.plan_id) ?? "",
       productName: readNonEmptyString(plan.name) ?? "编程套餐",
-      purchaseTime: null,
       beginTime: formatUnixSecondsAsIso(plan.starts_at),
       billingCycle: pickZaiStartPlanBillingCycle(plan),
       // Start Plan 卡片不展示套餐级续期时间：额度桶刷新时间由每个 limit 的

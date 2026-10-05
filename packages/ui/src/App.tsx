@@ -1136,7 +1136,6 @@ export function App({
         isMacDesktop={isMacDesktop}
         isWindowsDesktop={isWindowsDesktop}
         workspaceShellZCodeState={workspaceShellZCodeState}
-        theme={theme}
         isMacFullscreen={isMacFullscreen}
         desktopWindowChromeState={desktopWindowChromeState}
         macWindowControlsLeftPaddingPx={macWindowControlsLeftPaddingPx}

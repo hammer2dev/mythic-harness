@@ -8,7 +8,7 @@
  * | 模型不可用     | 3006 | 400  | 切换到 Built-in Provider 中的其他模型 |
  * | 参数错误       | 3001 | 400  | 检查请求体 |
  * | 安全校验拒绝   | 3007 | 403  | 客户端无法完成安全校验，提示联系支持 |
- * | 模型并发上限   | 3010 | 429  | Start Plan 下走升级横幅 |
+ * | 模型并发上限   | 3010 | 429  | Start Plan 下显示并发限制 |
  * | 请求过频       | 3002/429 | 429 | 限流提示，稍后重试 |
  * | 闲时票据不可用 | 3102 | 400  | 单段运行时间到顶，提示新建闲时任务续跑 |
  * | 上游 HTTP 异常 | 2007 | 500  | 可重试；刷新配额，勿本地扣额度 |
@@ -36,8 +36,7 @@ export type ProviderBusinessErrorUiAction =
   | "login"
   | "refresh-quota"
   | "switch-model"
-  | "retry-later"
-  | "upgrade";
+  | "retry-later";
 
 const PROVIDER_BUSINESS_ERROR_MESSAGE_IDS: Record<ProviderBusinessErrorCode, string> = {
   "1006": "zcode.error.providerBusiness.1006",
@@ -64,10 +63,9 @@ const PROVIDER_BUSINESS_ERROR_UI_ACTIONS: Record<
   "3001": null,
   // 3007 安全校验拒绝：客户端无法完成安全校验，没有可执行的恢复动作。
   "3007": null,
-  // 3008/3009/3010 并发上限：Start Plan 下走升级横幅，非 Start Plan 走 upgrade 动作
-  "3008": "upgrade",
-  "3009": "upgrade",
-  "3010": "upgrade",
+  "3008": null,
+  "3009": null,
+  "3010": null,
   "3002": "retry-later",
   // 3102 闲时票据不可用：只能新建闲时任务续跑，横幅里的重试/切模型都救不回来。
   "3102": null,
@@ -173,7 +171,7 @@ const GLM_QUOTA_BANNER_BUSINESS_CODE_SET = new Set<string>(GLM_QUOTA_BANNER_BUSI
 
 /**
  * 判断是否为并发上限业务错误（3008/3009/3010）。
- * Start Plan 下命中时走并发限制升级横幅，而非普通错误横幅。
+ * Start Plan 下命中时显示并发限制横幅，而非普通错误横幅。
  */
 export function resolveStartPlanConcurrentLimitBusinessCode(
   code: string | undefined,
@@ -218,7 +216,7 @@ export function resolveGlmQuotaBannerBusinessCode(
   const normalizedCode = code?.trim();
   if (normalizedCode && GLM_QUOTA_BANNER_BUSINESS_CODE_SET.has(normalizedCode)) {
     // GLM API 1308/1309/1310/1311/1313-1321 都是额度、
-    // 套餐或账号使用边界，不应被普通错误横幅盖住升级入口。
+    // 套餐或账号使用边界，不应被普通错误横幅覆盖。
     return normalizedCode as GlmQuotaBannerBusinessCode;
   }
   return undefined;

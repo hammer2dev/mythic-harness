@@ -39,7 +39,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { type Locale, type RemoteTarget, type UserInfo, type ZCodeTaskMeta } from "@zcode/shared";
+import { type RemoteTarget, type UserInfo, type ZCodeTaskMeta } from "@zcode/shared";
 import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
@@ -61,7 +61,6 @@ import {
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceReadOnly, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import { useWorkspaceTaskLists } from "@/hooks/useWorkspaceTaskLists.js";
@@ -93,7 +92,6 @@ import {
   type WorkspaceTaskVisibleLimitByKey,
 } from "@/lib/workspaceTaskPagination.js";
 import { partitionWorkspaceTabsByPurpose } from "@/lib/workspacePurpose.js";
-import type { Theme } from "@/useTheme.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { WorkspaceFileTree } from "@/WorkspaceFileTree.js";
@@ -108,7 +106,6 @@ import {
 } from "./SortableWorkspaceSidebar.js";
 import { WorkspacePurposeSection } from "@/WorkspaceSidebar/WorkspacePurposeSection.js";
 import { cn } from "@/components/lib/utils.js";
-import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import {
   resolveWorkspaceDragGlobalIndices,
   resolveWorkspaceDragExpanded,
@@ -198,7 +195,6 @@ function resolveSidebarTaskViewMode(params: {
 
 export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   workspacePath,
-  workspaceRemoteSessionId,
   activePreviewPath,
   onSelectTask,
   onStartDraftInWorkspace,
@@ -208,7 +204,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateTask,
   onCreateConversationTask,
   onOpenRemoteWorkspace,
-  theme,
   onConnectRemote: _onConnectRemote,
   onSelectRemoteProject: _onSelectRemoteProject,
   onCancelRemoteProject: _onCancelRemoteProject,
@@ -236,7 +231,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onFileTreeOpenChange,
 }: {
   workspacePath: string;
-  workspaceRemoteSessionId?: string;
   activePreviewPath?: string | null;
   onSelectTask: (
     targetWorkspacePath: string,
@@ -252,7 +246,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateTask: (request?: CreateTaskRequest) => void;
   onCreateConversationTask: () => void;
   onOpenRemoteWorkspace?: () => void;
-  theme: Theme;
   onConnectRemote: (options: RemoteTarget, requestId?: string) => Promise<string>;
   onSelectRemoteProject: (
     sessionId: string,
@@ -283,7 +276,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   navigationFooterContainer?: HTMLElement | null;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
-  const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  const { intl } = useZCodeIntl();
   const handleTaskRowSelect = useCallback(
     (
       targetWorkspacePath: string,
@@ -303,7 +296,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     },
     [onSelectTask],
   );
-  const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
   const workspaceIdentity = useTabStore((state) => {
     if (!state.activeTabId) {
       return undefined;
@@ -324,7 +316,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
         id: "workspaceSidebar.unavailableLocalDirectory",
       })
     : undefined;
-  const setTheme = useZCodeStore((state) => state.setTheme);
   const commandCenterShortcutLabel = useShortcutCommandLabel("openCommandCenter");
   const tabs = useTabStore((state) => state.tabs);
   const addTab = useTabStore((state) => state.addTab);
@@ -495,7 +486,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
-  const localeMenuValue = localePreference === "system" ? "system" : localePreference;
   const workspaceTaskLists = useWorkspaceTaskLists({
     workspaceTabs: projectWorkspaceTabs,
     activeWorkspacePath: workspacePath,
@@ -590,46 +580,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     [activeWorkspaceDragId, projectWorkspaceTabs],
   );
 
-  const handleThemeChange = useCallback(
-    (value: string) => {
-      if (
-        value === "light" ||
-        value === "dark" ||
-        value === "zai-light" ||
-        value === "zai-dark" ||
-        value === "system"
-      ) {
-        setTheme(value);
-      }
-    },
-    [setTheme],
-  );
-
-  const handleLocaleChange = useCallback(
-    (value: string) => {
-      if (value === "system") {
-        setLocalePreference("system");
-        return;
-      }
-      if (value === "zh-CN" || value === "en-US") {
-        setLocalePreference(value as Locale);
-      }
-    },
-    [setLocalePreference],
-  );
-
-  const handleOpenCodingPlanUpgrade = useCallback(
-    (
-      providerId: string,
-      funnelContext?: import("@/lib/codingPlanFunnelTelemetry.js").CodingPlanFunnelContext,
-    ) => {
-      openCodingPlanUpgrade({
-        providerId,
-        funnelContext,
-      });
-    },
-    [openCodingPlanUpgrade],
-  );
   const activeTaskId = useZCodeSessionStore(
     (state) =>
       // Web 远程控制从全局 task 入口进入远端 workspace 时，会先按
@@ -942,20 +892,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const footer = (
     <WorkspaceSidebarFooter
       layout={navigationFooterContainer !== undefined ? "rail" : "default"}
-      theme={theme}
-      localeMenuValue={localeMenuValue}
-      onLocaleChange={handleLocaleChange}
-      onThemeChange={handleThemeChange}
       onSettingsButtonClick={openSettingsTab}
-      onUsageClick={openSettingsTab}
-      onUpgradeClick={handleOpenCodingPlanUpgrade}
       onLogin={onLogin}
       onLogout={onLogout}
       user={user}
       workspacePath={workspacePath}
       workspaceIdentity={workspaceIdentity}
-      workspaceRemoteSessionId={workspaceRemoteSessionId}
-      activeTaskId={activeTaskId}
       isDesktop={isDesktop}
     />
   );

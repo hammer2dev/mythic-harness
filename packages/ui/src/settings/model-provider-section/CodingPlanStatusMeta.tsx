@@ -9,20 +9,16 @@ export function CodingPlanStatusMeta({
   expireTime,
   extraAction,
   statusLabel,
-  manageLabel,
   unlinkLabel,
   unlinkLoading,
-  onManage,
   onUnlink,
 }: {
   extraAction?: ReactNode;
   statusLabel?: ReactNode;
   renewTime?: string | null;
   expireTime?: string | null;
-  manageLabel?: string | null;
   unlinkLabel?: string | null;
   unlinkLoading?: boolean;
-  onManage?: () => void;
   onUnlink?: () => void;
 }) {
   const { intl, locale } = useZCodeIntl();
@@ -47,7 +43,6 @@ export function CodingPlanStatusMeta({
     statusLabel ||
     subscriptionTimeLabel ||
     extraAction ||
-    (manageLabel && onManage) ||
     (unlinkLabel && onUnlink),
   );
   const fallbackStatusLabel =
@@ -65,14 +60,8 @@ export function CodingPlanStatusMeta({
       <CodingPlanMetaSeparator visible={Boolean(subscriptionTimeLabel && extraAction)} />
       {extraAction}
       <CodingPlanMetaSeparator
-        visible={Boolean((subscriptionTimeLabel || extraAction) && manageLabel)}
-      />
-      {manageLabel && onManage ? (
-        <CodingPlanMetaAction label={manageLabel} onClick={onManage} />
-      ) : null}
-      <CodingPlanMetaSeparator
         visible={Boolean(
-          (subscriptionTimeLabel || extraAction || manageLabel || fallbackStatusLabel) &&
+          (subscriptionTimeLabel || extraAction || fallbackStatusLabel) &&
           unlinkLabel,
         )}
       />
@@ -139,7 +128,7 @@ export function StartPlanStatusMeta({
       )
     : null;
   // 产品语义：待生效时展示排期；到点但额度桶尚未同步时提供就地刷新；
-  // 对应额度桶出现后只保留过期日期。免费套餐无管理页，升级入口在卡片右侧。
+  // 对应额度桶出现后只保留过期日期。免费套餐只展示状态和额度信息。
   return (
     <span className="flex flex-wrap items-center gap-1.5 text-ui-base text-foreground-subtle">
       {pendingEffectiveTimeLabel ? (

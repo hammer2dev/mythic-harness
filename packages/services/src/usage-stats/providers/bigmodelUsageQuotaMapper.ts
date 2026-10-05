@@ -6,7 +6,6 @@ interface BigModelSubscriptionListItem {
   productName?: string;
   status?: string;
   inCurrentPeriod?: boolean;
-  purchaseTime?: string;
   valid?: string;
   autoRenew?: number | boolean;
   currentRenewTime?: string;
