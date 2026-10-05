@@ -1,4 +1,4 @@
-import { Clock3, Moon } from "lucide-react";
+import { Clock3 } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { Spinner } from "@/components/ui/spinner.js";
@@ -21,27 +21,7 @@ interface AutomationsSecondaryNavigationProps {
   } | null;
 }
 
-const TAB_ICONS = { scheduled: Clock3, idle: Moon };
-
-export function resolveAutomationTemplateVisibility({
-  hasAnyTasks,
-  offPeakCreationEnabled,
-  tab,
-  hasSecondaryNavigation = false,
-}: {
-  hasAnyTasks: boolean;
-  offPeakCreationEnabled: boolean;
-  tab: "scheduled" | "idle";
-  hasSecondaryNavigation?: boolean;
-}): { showOffPeakTemplates: boolean; showScheduledTemplates: boolean } {
-  // 旧空首页没有分类入口，需要并列两类模板；二级栏提供分类后必须跟随当前选择，
-  // 否则「闲时任务」正文仍会露出定时模板，造成导航与内容不一致。
-  const showAllTemplates = !hasAnyTasks && !hasSecondaryNavigation;
-  return {
-    showOffPeakTemplates: offPeakCreationEnabled && (showAllTemplates || tab === "idle"),
-    showScheduledTemplates: showAllTemplates || tab === "scheduled",
-  };
-}
+const TAB_ICONS = { scheduled: Clock3 };
 
 /** 页面状态的只读投影；所有选择和任务操作仍交给 AutomationsSection。 */
 export function AutomationsSecondaryNavigation({

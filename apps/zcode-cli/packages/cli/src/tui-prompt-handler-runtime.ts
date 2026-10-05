@@ -3,10 +3,9 @@
 // 常驻运行时 → 读默认模型选择」这段进程级准备拆到本文件；
 // 公开面仍从 tui-prompt-handler.ts 导出。
 import { loadBootstrapModule } from "./bootstrap-loader.js";
-import { loadCliDotenv } from "./env.js";
-import { createCliProviderRefreshReporter } from "./provider-runtime-env.js";
-import { resolveResumeSession } from "./resume.js";
 import type { CliResumeRequest, RunDependencies } from "./cli-types.js";
+import { loadCliDotenv } from "./env.js";
+import { resolveResumeSession } from "./resume.js";
 
 type ProviderRegistryRuntime = Awaited<
   ReturnType<NonNullable<RunDependencies["startProcessProviderRegistryRuntime"]>>
@@ -67,17 +66,7 @@ export async function prepareTuiAppRuntime(
   if (!startProviderRegistryRuntime) {
     throw new Error("Provider Registry runtime is unavailable.");
   }
-  state.providerRegistryRuntimePromise ??= startProviderRegistryRuntime(
-    appEnv,
-    deps.skipUserConfig
-      ? {}
-      : {
-          standalone: {
-            ...createCliProviderRefreshReporter(),
-            ...(deps.userConfigPath ? { legacyCliUserConfigFilePath: deps.userConfigPath } : {}),
-          },
-        },
-  );
+  state.providerRegistryRuntimePromise ??= startProviderRegistryRuntime(appEnv);
   const providerRegistryRuntime = await state.providerRegistryRuntimePromise;
   const configuredDefaultModelSelection = providerRegistryRuntime?.modelSelectionConfigRepository
     ? await providerRegistryRuntime.modelSelectionConfigRepository.read()

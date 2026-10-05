@@ -1,29 +1,26 @@
 import { getDefaultConfigPath, updateUiLocaleInFileConfig } from "@zcode/adapters/config";
-import type { SessionEvent } from "@zcode/contracts";
 import type { ZCodeAppOptions } from "@zcode/bootstrap";
+import type { SessionEvent } from "@zcode/contracts";
 import { DEFAULT_LOCALE, type SupportedLocale } from "@zcode/i18n";
-import type { TuiRequestPermission } from "@zcode/tui";
 import type { GlobalOptions } from "@zcode/shared-types";
-import { createCommandCenter, parseSlashCommand } from "./command-center.js";
+import type { TuiRequestPermission } from "@zcode/tui";
 import type { CommandCenterApp } from "./command-center.js";
-import { resolveDisplayLocale } from "./locale.js";
+import { createCommandCenter, parseSlashCommand } from "./command-center.js";
 import { createCliHeadlessBrowserRuntime } from "./headless-browser.js";
+import { resolveDisplayLocale } from "./locale.js";
 // 复用防御式 runtime 读取：subscribeEvents 不在 app 的静态类型面上，
 // 两处各写一份「怎么把它读出来」就会在方法改名时只修好一处。
+import type {
+  CliModeState,
+  CliPermissionMode,
+  CliResumeRequest,
+  CliRuntimeMode,
+  ModeCapableApp,
+  RunDependencies,
+} from "./cli-types.js";
 import { readRuntimeEventSubscriber } from "./runtime-event-subscriber.js";
-import { createTuiSessionEventRelay } from "./tui-session-event-relay.js";
-import { attachTuiAppQueries, readTuiSessionMetadata } from "./tui-prompt-handler-queries.js";
-import {
-  createTuiProcessRuntimeState,
-  prepareTuiAppRuntime,
-} from "./tui-prompt-handler-runtime.js";
 import { DEFAULT_CLI_CLEANUP_TIMEOUT_MS, runCliCleanupWithTimeout } from "./shutdown.js";
-import {
-  configureApiKeyForTui,
-  loginBigmodelForTui,
-  loginForTui,
-  logoutForTui,
-} from "./tui-auth.js";
+import { configureApiKeyForTui } from "./tui-auth.js";
 import {
   listCustomCommandsForTui,
   listSessionsForTui,
@@ -36,16 +33,14 @@ import {
   TUI_TITLE_GENERATION_CONFIG,
   type TuiPromptHandler,
 } from "./tui-command-state.js";
-import { createTuiModelAvailabilityChecker } from "./tui-login-state.js";
+import { createTuiModelAvailabilityChecker } from "./tui-model-availability.js";
+import { attachTuiAppQueries, readTuiSessionMetadata } from "./tui-prompt-handler-queries.js";
+import {
+  createTuiProcessRuntimeState,
+  prepareTuiAppRuntime,
+} from "./tui-prompt-handler-runtime.js";
+import { createTuiSessionEventRelay } from "./tui-session-event-relay.js";
 import { withTuiMetadata } from "./tui-submit-metadata.js";
-import type {
-  CliModeState,
-  CliPermissionMode,
-  CliResumeRequest,
-  CliRuntimeMode,
-  ModeCapableApp,
-  RunDependencies,
-} from "./cli-types.js";
 
 export function createTuiSubmitPrompt(
   deps: RunDependencies,
@@ -150,11 +145,6 @@ export function createTuiSubmitPrompt(
         projectConfigPath: deps.projectConfigPath,
         providerRegistry: providerRegistryRuntime.runtime.registryService,
         configuredDefaultModelSelection,
-        ...(providerRegistryRuntime.providerRuntimeHeadersPort
-          ? {
-              providerRuntimeHeadersPort: providerRegistryRuntime.providerRuntimeHeadersPort,
-            }
-          : {}),
         resume: sessionId !== undefined,
         runtimeConfig: {
           ...(modeState.override ? { mode: modeState.override } : {}),
@@ -265,8 +255,6 @@ export function createTuiSubmitPrompt(
     listSessions: () => listSessionsForTui(deps),
     listSkills: () => listSkillsForTui(deps),
     configureApiKey: (options) => configureApiKeyForTui(deps, options),
-    login: (options) => loginForTui(deps, options),
-    loginBigmodel: (options) => loginBigmodelForTui(deps, options),
     loadCustomCommand: (name) => loadCustomCommandForTui(deps, name),
     newApp,
     recordInputHistory: async (input, kind) => {
@@ -280,7 +268,6 @@ export function createTuiSubmitPrompt(
       }
       await runtime.modelSelectionConfigRepository.saveConfiguredDefault(selection);
     },
-    logout: () => logoutForTui(deps),
     setLocale: async (locale) => {
       if (app?.setLocale) {
         const result = await app.setLocale(locale);

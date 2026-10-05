@@ -1,17 +1,9 @@
-import { join } from "node:path";
+import type { ConfigResult } from "@zcode/adapters/config";
 import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
 import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
 import { createNodeWebFetchHttpClientAdapter } from "@zcode/adapters/http";
 import { createNodeSkillAdapter } from "@zcode/adapters/skills";
-import type { ConfigResult } from "@zcode/adapters/config";
-import {
-  AgentRuntime,
-  type AgentRuntimeConfig,
-  type AgentRuntimeDeps,
-  type ChildClientPortsContext,
-  type PermissionService,
-} from "@zcode/core";
 import {
   type AgentExecutionTelemetryPort,
   type ContextSourcePort,
@@ -19,10 +11,10 @@ import {
   type HttpClientPort,
   type ImageProcessorPort,
   type JsonSchema,
-  type PdfDocumentPort,
   type Logger,
   type McpPort,
   type ModelRequestAdmission,
+  type PdfDocumentPort,
   type SessionId,
   type SessionStorePort,
   type ToolArtifactStorePort,
@@ -31,6 +23,14 @@ import {
   type WorkflowEscalatePort,
   type WorkflowSubmitPort,
 } from "@zcode/contracts";
+import {
+  AgentRuntime,
+  type AgentRuntimeConfig,
+  type AgentRuntimeDeps,
+  type ChildClientPortsContext,
+  type PermissionService,
+} from "@zcode/core";
+import { join } from "node:path";
 import { collectDisabledPaths } from "../skill-command-overrides.js";
 import { parseProviderQualifiedModelSelection } from "./provider-registry-selection.js";
 import type { ZCodeAppOptions } from "./types.js";
@@ -142,9 +142,7 @@ export function createScriptWorkflowAgentRuntime(input: {
       ...(input.workflowSubmitPort && input.workflowSubmitSchema
         ? { workflowSubmitSchema: input.workflowSubmitSchema }
         : {}),
-      ...(input.workflowEscalatePort
-        ? { workflowEscalatePort: input.workflowEscalatePort }
-        : {}),
+      ...(input.workflowEscalatePort ? { workflowEscalatePort: input.workflowEscalatePort } : {}),
       ...(input.modelRequestAdmission
         ? { modelRequestAdmission: input.modelRequestAdmission }
         : {}),

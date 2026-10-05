@@ -111,7 +111,6 @@ function createMcpToolEntry(
         toolName: descriptor.toolName,
         ...(descriptor.description ? { description: descriptor.description } : {}),
         // 只有官方 MCP 的结果才允许携带被客户端信任的结构化标识（额度耗尽 / 无套餐）。
-        ...(descriptor.official ? { official: true } : {}),
       },
       needsApproval,
       readOnly,

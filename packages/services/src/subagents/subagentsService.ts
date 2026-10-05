@@ -36,14 +36,7 @@ import {
 } from "./subagentStorage.js";
 import type { ISubagentsService } from "./subagents.js";
 import { atomicWriteText } from "#src/fs/atomicFileUtils.js";
-import {
-  migrateUserSubagentMarkdown,
-  migrateSubagentStateFile,
-  scanOfficialPluginCacheRoots,
-} from "@zcode/shared/node";
-import { createServiceLogger } from "#src/logger/serviceLogger.js";
-
-const subagentLogger = createServiceLogger("subagents");
+import { scanOfficialPluginCacheRoots } from "@zcode/shared/node";
 
 interface AgentsStateFile {
   builtInModelSelectionOverrides: BuiltInSubagentModelSelectionOverrides;
@@ -156,7 +149,6 @@ async function exists(path: string): Promise<boolean> {
 }
 
 async function readAgentStateFile(options?: SubagentsServiceOptions): Promise<AgentsStateFile> {
-  await migrateSubagentStateFile(await resolveSubagentStateFile(options));
   try {
     const raw = await readFile(await resolveSubagentStateFile(options), "utf-8");
     const parsed = JSON.parse(raw) as {
@@ -540,29 +532,13 @@ function normalizeBuiltInSelectionOverrides(
   return result;
 }
 
-export function createSubagentsService(options?: SubagentsServiceOptions): ISubagentsService & {
-  /** Host 启动 Agent 前的一次性存储导入，不暴露为 Renderer RPC。 */
-  prepareRuntimeState(): Promise<void>;
-} {
+export function createSubagentsService(options?: SubagentsServiceOptions): ISubagentsService {
   let writeQueue = Promise.resolve();
   const storageOptions: SubagentsServiceOptions = {
     homeDir: options?.homeDir,
   };
 
   return {
-    async prepareRuntimeState() {
-      const markdownMigration = await migrateUserSubagentMarkdown(
-        await resolveUserSubagentRoot(storageOptions),
-      );
-      for (const failure of markdownMigration.failures)
-        subagentLogger.warn(undefined, "用户 Subagent Markdown 迁移失败，保留原文件", failure);
-      const runImport = async () =>
-        migrateSubagentStateFile(await resolveSubagentStateFile(storageOptions));
-      const queued = writeQueue.then(runImport, runImport);
-      writeQueue = queued.catch(() => {});
-      await queued;
-    },
-
     async list(params: {
       workspacePath: string;
       workspaceIdentity?: string;
@@ -572,17 +548,6 @@ export function createSubagentsService(options?: SubagentsServiceOptions): ISuba
       const capability = resolveCapabilities(options);
       const mode = params.mode ?? "allRuntimeScopes";
       const diagnostics: AgentDiagnostic[] = [];
-      if (capability.userScopeAvailable) {
-        const migration = await migrateUserSubagentMarkdown(
-          await resolveUserSubagentRoot(storageOptions),
-        );
-        for (const failure of migration.failures)
-          diagnostics.push({
-            code: "agent_read_failed",
-            message: "Subagent Markdown migration failed; original file preserved",
-            path: failure.path,
-          });
-      }
       const state = await readAgentStateFile(storageOptions);
       const builtInAgents = createBuiltInAgents(state.builtInModelSelectionOverrides);
       const fileAgents = await discoverFileAgents({

@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { findOfficialMcpReservedHeaders } from "@zcode/shared";
 import type {
   McpOAuthConfig,
   McpServerConfig,
@@ -12,21 +9,12 @@ import type {
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zcode/contracts";
 import { ZCODE_PLUGIN_ID_ENV_KEY } from "@zcode/shared";
 import type { LoadedPlugin } from "./types.js";
-import { isNotFoundError, isPluginOptionValue, isRecord, resolveInside } from "./helpers.js";
-import { buildOfficialProvenance, parseZCodeOfficialAuth } from "./mcp-official-auth.js";
-
+import { isPluginOptionValue, isRecord } from "./helpers.js";
+import { loadPluginMcpServerDefinitions } from "./mcp-definitions.js";
+export { loadPluginMcpServerDefinitions } from "./mcp-definitions.js";
 const SUPPORTED_MCP_TYPES = new Set(["stdio", "http", "sse"]);
 const TEMPLATE_PATTERN = /\$\{([^}]+)\}/g;
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-export function loadPluginMcpServerDefinitions(input: {
-  diagnostics: PluginDiagnostic[];
-  loaded: LoadedPlugin;
-}): Record<string, unknown> {
-  const fromFile = loadMcpServersFromFile(join(input.loaded.rootPath, ".mcp.json"), input);
-  const fromManifest = loadMcpServersFromSpec(input.loaded.manifest.mcpServers, input);
-  return { ...fromFile, ...fromManifest };
-}
 
 export function resolvePluginMcpServers(input: {
   dataPath: string;
@@ -66,77 +54,6 @@ export function resolvePluginMcpServers(input: {
 
 function toNamespacedServerName(loaded: LoadedPlugin, serverName: string): string {
   return `plugin:${loaded.manifest.name}:${serverName}`;
-}
-
-function loadMcpServersFromSpec(
-  spec: unknown,
-  input: {
-    diagnostics: PluginDiagnostic[];
-    loaded: LoadedPlugin;
-  },
-): Record<string, unknown> {
-  if (spec === undefined) return {};
-  if (typeof spec === "string") {
-    const path = resolveInside(input.loaded.rootPath, spec);
-    if (!path) {
-      input.diagnostics.push({
-        code: "plugin_component_path_invalid",
-        message: `Plugin mcpServers path escapes plugin root: ${spec}`,
-        path: input.loaded.manifestPath,
-        pluginId: input.loaded.id,
-        severity: "error",
-      });
-      return {};
-    }
-    return loadMcpServersFromFile(path, input);
-  }
-  if (Array.isArray(spec)) {
-    return Object.assign({}, ...spec.map((item) => loadMcpServersFromSpec(item, input)));
-  }
-  return normalizeMcpServersShape(spec, input);
-}
-
-function loadMcpServersFromFile(
-  path: string,
-  input: {
-    diagnostics: PluginDiagnostic[];
-    loaded: LoadedPlugin;
-  },
-): Record<string, unknown> {
-  try {
-    return normalizeMcpServersShape(JSON.parse(readFileSync(path, "utf8")), input);
-  } catch (error) {
-    if (isNotFoundError(error)) return {};
-    input.diagnostics.push({
-      code: "plugin_mcp_read_failed",
-      message: error instanceof Error ? error.message : `Failed to read MCP config: ${path}`,
-      path,
-      pluginId: input.loaded.id,
-      severity: "error",
-    });
-    return {};
-  }
-}
-
-function normalizeMcpServersShape(
-  value: unknown,
-  input: {
-    diagnostics: PluginDiagnostic[];
-    loaded: LoadedPlugin;
-  },
-): Record<string, unknown> {
-  if (!isRecord(value)) {
-    input.diagnostics.push({
-      code: "plugin_mcp_invalid",
-      message: "Plugin MCP config must be an object",
-      path: input.loaded.manifestPath,
-      pluginId: input.loaded.id,
-      severity: "error",
-    });
-    return {};
-  }
-  const servers = isRecord(value.mcpServers) ? value.mcpServers : value;
-  return Object.fromEntries(Object.entries(servers).filter(([, config]) => isRecord(config)));
 }
 
 interface VariableContext {
@@ -179,6 +96,8 @@ function resolveMcpServerConfig(
   identity: { mcpKey: string; pluginId: string },
 ): McpServerConfig {
   if (!isRecord(server)) throw new Error("MCP server config must be an object");
+  if (server.auth !== undefined)
+    throw new Error(`MCP server ${identity.mcpKey}: account authentication is no longer supported`);
   const type = typeof server.type === "string" ? server.type : inferMcpType(server);
   if (!SUPPORTED_MCP_TYPES.has(type)) throw new Error(`Unsupported MCP transport: ${type}`);
   // ZCode 官方市场同时包含随应用装载的 Builtin Plugin 与按需安装的 CDN Plugin；后者运行时
@@ -191,21 +110,9 @@ function resolveMcpServerConfig(
   //
   // stdio 之所以能放开：请求由插件进程自己发出，身份头随每条出站协议消息的 _meta 下发
   // （见 adapters/src/mcp/index.ts）。sse 没有对应通道，继续拒绝。
-  const officialAuth = parseZCodeOfficialAuth(server.auth, identity.mcpKey);
-  if (officialAuth && type !== "http" && type !== "stdio") {
-    throw new Error(
-      `MCP server ${identity.mcpKey}: ${officialAuth.type} auth requires type "http" or "stdio", got "${type}"`,
-    );
-  }
-
   if (type === "stdio") {
     const command = requireString(server.command, "stdio MCP server requires command");
     // stdio 不走 OAuth 分支，声明 oauth 属无效配置；与 http 一样不做优先级裁决，直接禁用。
-    if (officialAuth && server.oauth !== undefined) {
-      throw new Error(
-        `MCP server ${identity.mcpKey}: ${officialAuth.type} auth cannot be combined with oauth`,
-      );
-    }
     const env = resolveStringRecord(
       {
         CLAUDE_PROJECT_DIR: context.workingDirectory,
@@ -239,13 +146,6 @@ function resolveMcpServerConfig(
       env,
       source,
       timeoutMs: typeof server.timeoutMs === "number" ? server.timeoutMs : undefined,
-      ...(officialAuth
-        ? {
-            auth: officialAuth,
-            // provenance 由宿主生成；即便 .mcp.json 里写了 official 字段也会被此处覆盖。
-            official: buildOfficialProvenance(identity),
-          }
-        : {}),
     };
   }
 
@@ -254,35 +154,6 @@ function resolveMcpServerConfig(
     ? resolveStringRecord(server.headers, context, { allowSensitive: true })
     : undefined;
   const oauth = resolveMcpOAuthConfig(server.oauth, context);
-
-  if (officialAuth) {
-    // 第一阶段不做优先级裁决：两种鉴权同时声明属于配置错误，直接禁用。
-    if (oauth) {
-      throw new Error(
-        `MCP server ${identity.mcpKey}: ${officialAuth.type} auth cannot be combined with oauth`,
-      );
-    }
-    // 保留头只在官方鉴权路径下拦截。普通/第三方 MCP 静态携带 authorization 是既有合法用法，
-    // 全局拦截会造成回归。
-    const reserved = findOfficialMcpReservedHeaders(headers);
-    if (reserved.length > 0) {
-      throw new Error(
-        `MCP server ${identity.mcpKey}: static headers must not contain reserved header(s): ${reserved.join(", ")}`,
-      );
-    }
-    return {
-      type: "http",
-      url: resolveTemplate(url, context, { allowSensitive: false }),
-      enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
-      headers,
-      auth: officialAuth,
-      source,
-      // provenance 由宿主生成；即便 .mcp.json 里写了 official 字段也会被此处覆盖。
-      official: buildOfficialProvenance(identity),
-      timeoutMs: typeof server.timeoutMs === "number" ? server.timeoutMs : undefined,
-    };
-  }
-
   return {
     type,
     url: resolveTemplate(url, context, { allowSensitive: false }),
@@ -433,7 +304,6 @@ function resolveTemplate(
       return envValue;
     }
     if (options.allowSensitive && ENVIRONMENT_VARIABLE_NAME_PATTERN.test(name)) {
-
       // token。只在敏感 sink 解析，避免 secret 被展开到 args、URL 或其它可见字段。
       const envValue = context.env[name];
       if (envValue === undefined)

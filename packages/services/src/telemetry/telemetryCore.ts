@@ -10,7 +10,6 @@ import {
   sanitizeTelemetryEventDetail,
   type TelemetryEventPayload,
   type TelemetryRendererContext,
-  type OAuthLoginAttribution,
 } from "@zcode/shared";
 import {
   ensureDeviceMid,
@@ -46,9 +45,6 @@ const REPORT_MAX_ATTEMPTS = 2;
 
 interface TelemetryCoreDependencies {
   fetchImpl?: typeof fetch;
-  loadUserId?: () => Promise<string>;
-  loadAuthorization?: (userId: string) => Promise<string | null>;
-  loadMarketingParams?: () => Promise<OAuthLoginAttribution | null>;
   randomUUID?: () => string;
   now?: () => number;
   appVersion?: string;
@@ -284,11 +280,9 @@ export function ensureTelemetryDeviceMid(options: EnsureDeviceMidOptions = {}): 
 
 export function createTelemetryCore(dependencies: TelemetryCoreDependencies = {}) {
   const fetchImpl = dependencies.fetchImpl ?? fetch;
-  const loadUserId = dependencies.loadUserId ?? (async () => "");
-  const loadMarketingParams = dependencies.loadMarketingParams ?? (async () => null);
+  const loadUserId = async () => "";
   const telemetryLogger = createServiceLogger("telemetry-core");
   const warn = dependencies.warn ?? ((message: string) => telemetryLogger.warn(undefined, message));
-  let didWarnMarketingParamsLoadFailure = false;
   const randomUUID = dependencies.randomUUID ?? (() => createUuid());
   const now = dependencies.now ?? Date.now;
   const appVersion = dependencies.appVersion ?? ZCODE_VERSION;
@@ -322,14 +316,8 @@ export function createTelemetryCore(dependencies: TelemetryCoreDependencies = {}
     endpoint: string,
     body: string,
     headers: Record<string, string>,
-    userId: string,
+    _userId: string,
   ): Promise<void> {
-    let authorization: string | null = null;
-    try {
-      authorization = (await dependencies.loadAuthorization?.(userId)) ?? null;
-    } catch {
-      // 凭据不可读时匿名上报，不打印原始异常，也不阻断业务事件。
-    }
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), requestTimeoutMs);
     let response: Response;
@@ -339,7 +327,6 @@ export function createTelemetryCore(dependencies: TelemetryCoreDependencies = {}
         headers: {
           "Content-Type": "application/json",
           ...headers,
-          ...(authorization ? { Authorization: authorization } : {}),
         },
         // 不把带身份的上报转发至服务端重定向目标。
         redirect: "error",
@@ -368,18 +355,6 @@ export function createTelemetryCore(dependencies: TelemetryCoreDependencies = {}
     if (!ZCODE_TELEMETRY_ENABLED || !ZCODE_TELEMETRY_REPORT_ENDPOINT) {
       return;
     }
-    let marketingParams: OAuthLoginAttribution | null = null;
-    try {
-      marketingParams = await loadMarketingParams();
-    } catch {
-      // 修复原因：营销归因只是 telemetry 的附加上下文，凭据损坏或暂时不可读
-      // 不应阻断原事件；同一 core 只告警一次，避免高频埋点持续刷屏。
-      if (!didWarnMarketingParamsLoadFailure) {
-        didWarnMarketingParamsLoadFailure = true;
-        // 凭据后端异常可能带本机路径或堆栈；生产日志只保留固定、脱敏的降级事件。
-        warn("Telemetry marketing attribution load failed; continuing without attribution");
-      }
-    }
     const requestBody = JSON.stringify({
       event_id: eventId,
       client_timezone: context.clientTimezone,
@@ -400,7 +375,6 @@ export function createTelemetryCore(dependencies: TelemetryCoreDependencies = {}
       device_os_version: osVersion,
       device_mid: deviceMid,
       mac_id: "",
-      marketing_params: JSON.stringify(marketingParams ?? {}),
       ...(payload.talkId ? { talk_id: payload.talkId } : {}),
       ...(payload.messageId ? { message_id: payload.messageId } : {}),
     });

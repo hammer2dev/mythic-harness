@@ -5,14 +5,6 @@ import { decodeCustomModelValue, encodeCustomModelValue } from "@zcode/shared";
 const legacyProviderIds: Readonly<Record<string, string>> = Object.freeze({
   "zai-api": "builtin:zai",
   "bigmodel-api": "builtin:bigmodel",
-  "account:zai-individual-coding-plan": "builtin:zai-coding-plan",
-  "account:zai-team-coding-plan": "builtin:zai-coding-plan",
-  "account:bigmodel-individual-coding-plan": "builtin:bigmodel-coding-plan",
-  "account:bigmodel-team-coding-plan": "builtin:bigmodel-coding-plan",
-  "account:zai-start-plan": "builtin:zai-start-plan",
-  "account:bigmodel-start-plan": "builtin:bigmodel-start-plan",
-  "account:zai-offpeak-idle-plan": "offpeak-idle-plan",
-  "account:bigmodel-offpeak-idle-plan": "offpeak-idle-plan",
 });
 
 export function legacyTelemetryProviderId(providerId: string): string {

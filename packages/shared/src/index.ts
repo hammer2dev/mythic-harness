@@ -1,4 +1,3 @@
-export * from "./account-provider-state.js";
 export * from "./api.js";
 export { resolveSafeEndpointHostname } from "./endpointHostname.js";
 export {
@@ -90,8 +89,6 @@ export * from "./conversation-share.js";
 export * from "./dynamic-workflow-feature.js";
 export * from "./markdown-artifact-images.js";
 export * from "./media-preview.js";
-export * from "./official-mcp-auth.js";
-export * from "./official-mcp-tool-error.js";
 export * from "./plugin-display-name.js";
 export * from "./remote-workspace-identity.js";
 export * from "./runtimeEnv.js";
@@ -129,7 +126,6 @@ export * from "./background-task-notifications.js";
 export * from "./bots.js";
 export * from "./browser-use/index.js";
 export * from "./channels.js";
-export * from "./coding-plan-subscription.js";
 export * from "./command-types.js";
 export * from "./custom-model-value.js";
 export * from "./desktopMenu.js";
@@ -143,23 +139,18 @@ export * from "./intranetDefaults.js";
 export * from "./intranetProbe.js";
 export { LAUNCH_MARKS_QUERY_KEY, parseLaunchMarks, serializeLaunchMarks } from "./launchMarks.js";
 export type { LaunchMarks } from "./launchMarks.js";
-export * from "./legacy-model-provider-identity.js";
 export * from "./lineChangeStat.js";
 export { formatLogPrefix, formatTimestamp } from "./log-format.js";
 export * from "./mcp-sync.js";
 export * from "./mcp.js";
-export * from "./model-provider-family.js";
 export * from "./model-provider-types.js";
 export * from "./model-selection-key.js";
 export * from "./model-selection-types.js";
 export * from "./model-selection.js";
-export * from "./oauth.js";
-export * from "./off-peak-types.js";
 export * from "./official-glm-model-id.js";
 export * from "./onboardingRecord.js";
 export * from "./openrouter-attribution.js";
 export * from "./permission-request-preview.js";
-export * from "./plan-identity.js";
 export {
   BROWSER_SCREENSHOT_SURFACE_PREPARE_TIMEOUT_MS,
   BROWSER_VIEW_RESTORE_BOOTSTRAP_URL,
@@ -223,7 +214,6 @@ export * from "./plugin-marketplaces.js";
 export * from "./plugin-sync.js";
 export * from "./plugin-types.js";
 export * from "./process-names.js";
-export * from "./provider-family-connection-selection.js";
 export * from "./provider-provisioning.js";
 export * from "./remote-sync.js";
 export * from "./remoteAppConfig.js";
@@ -283,8 +273,6 @@ export * from "./zcode-agent-model-state.js";
 export * from "./zcode-task-types.js";
 export type { ZCodeTaskCreateResult } from "./zcode-task-types.js";
 export * from "./zcodePersistedMessageMerge.js";
-
-export * from "./coding-plan-reset.js";
 export * from "./database-startup.js";
 export * from "./execution-state.js";
 export * from "./memoryDiagnostics.js";
@@ -303,3 +291,5 @@ export * from "./pluginStoreOrder.js";
 export * from "./pluginStoreOrdering.js";
 export * from "./session-debug.js";
 export * from "./project-workspace.js";
+
+export * from "./credential-errors.js";

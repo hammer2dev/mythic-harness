@@ -49,8 +49,7 @@ export function OccupationOnboarding({
   const shortcutBindings = useEffectiveShortcutBindings();
   const requested = useZCodeStore((state) => state.newUserOnboardingOpen);
   const setRequested = useZCodeStore((state) => state.setNewUserOnboardingOpen);
-  // 登录态变化（useRootOAuthEffects 登录成功后 setUser）时按 userId 重新判定是否触发引导。
-  const userId = useZCodeStore((state) => state.user?.id) ?? null;
+
   const { intl } = useZCodeIntl();
   const t = (key: string) => intl.formatMessage({ id: `occupationOnboarding.${key}` });
   const requestOnboardingDialog = useZCodeStore((state) => state.requestOnboardingDialog);
@@ -64,7 +63,6 @@ export function OccupationOnboarding({
   const loadDeviceMid = useCallback(() => platform.getDeviceId(), [platform]);
   const [needsOnboarding, markOnboarded] = useOnboardingTrigger({
     onboardingRecord,
-    userId,
     hasStoredOccupation: Boolean(settings?.onboardingOccupation),
     loadDeviceMid,
     update,
@@ -135,7 +133,7 @@ export function OccupationOnboarding({
     return () => {
       cancelled = true;
     };
-  }, [onboardingRecord, userId]);
+  }, [onboardingRecord]);
   const markUserEdited = () => {
     userEditedRef.current = true;
   };

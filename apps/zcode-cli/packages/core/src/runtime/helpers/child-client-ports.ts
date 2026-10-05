@@ -13,15 +13,13 @@
 // **父 runtime** 调用（`AgentRuntime.createChildClientPorts`），`parentSessionId` 由父自己填，
 // 调用方给不了错的值。
 
-import type { PermissionBrokerPort, SessionId } from "../deps.js";
-import type { ProviderRuntimeHeadersPort } from "../types.js";
 import type { SubagentInteractionOriginContext } from "../../subagent/interaction-origin.js";
+import type { PermissionBrokerPort, SessionId } from "../deps.js";
 import { createSubagentInteractionBroker } from "./subagent-interaction-broker.js";
 
 /** 一个 runtime 面向协议客户端的端口集合。 */
 export interface ClientFacingPorts {
   permissionBroker?: PermissionBrokerPort;
-  providerRuntimeHeadersPort?: ProviderRuntimeHeadersPort;
 }
 
 /**
@@ -47,32 +45,5 @@ export function deriveChildClientPorts(
     ...(parent.permissionBroker === undefined
       ? {}
       : { permissionBroker: createSubagentInteractionBroker(parent.permissionBroker, context) }),
-    ...(parent.providerRuntimeHeadersPort === undefined
-      ? {}
-      : {
-          providerRuntimeHeadersPort: rerouteProviderRuntimeHeadersPort(
-            parent.providerRuntimeHeadersPort,
-            context.parentSessionId,
-          ),
-        }),
-  };
-}
-
-/**
- * provider runtime headers 是独立的反向协议请求，不经子事件镜像；子会话的 sessionId 只是 CLI
- * 内部账本，桌面端只订阅父 task 的会话，所以刷新账号凭据 header 时必须用父会话路由。服务层会
- * 识别请求模型与父会话当前模型是否一致，不一致时只同步本次 header，不把父会话切到子模型。
- */
-function rerouteProviderRuntimeHeadersPort(
-  parentPort: ProviderRuntimeHeadersPort,
-  parentSessionId: SessionId,
-): ProviderRuntimeHeadersPort {
-  return {
-    shouldRefreshBeforeModelRequest(input) {
-      return parentPort.shouldRefreshBeforeModelRequest?.(input) ?? true;
-    },
-    refreshBeforeModelRequest(input) {
-      return parentPort.refreshBeforeModelRequest({ ...input, sessionId: parentSessionId });
-    },
   };
 }

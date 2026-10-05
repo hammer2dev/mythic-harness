@@ -10,8 +10,6 @@
  */
 
 import { decodeCustomModelValue } from "./custom-model-value.js";
-import { migrateLegacyModelProviderId } from "./legacy-model-provider-identity.js";
-import { isBuiltinModelProviderId } from "./model-provider-types.js";
 import { OFFICIAL_GLM_MODEL_IDS } from "./official-glm-model-id.js";
 
 /** 单字段默认上限；ARMS 单字段过长会被截断或拒绝，主动截断保证关键头部一定上得去。 */
@@ -162,19 +160,6 @@ export interface TelemetryProviderIdentity {
   providerScope: TelemetryProviderScope;
 }
 
-/**
- * 旧报表身份（`builtin:zai` / `builtin:zai-start-plan` 等）是 ZCode 自己的固定 ID。
- *
- * 修复原因：V4 supervisor 投影 /report detail 时会用 legacyTelemetryProviderId 把运行时
- * `account:*` 映射成这些旧身份，plan_ttft / perf_ui_* 复用同一份 detail。只认 `account:*`
- * 会让全部内置用户被当成自定义 provider 归一为 `custom`。复用 shared 的单向迁移表判定，
- * 未知的 `builtin:` 前缀仍按自定义处理，不能借前缀混入。
- */
-function isLegacyBuiltinTelemetryProviderId(providerId: string): boolean {
-  const migrated = migrateLegacyModelProviderId(providerId);
-  return migrated !== undefined && migrated !== providerId;
-}
-
 /** 内置 provider 保留稳定 ID；自定义 provider 由用户命名，原样上报会泄露私有名称并制造高基数。 */
 export function resolveTelemetryProviderScope(
   providerId: string | undefined | null,
@@ -182,9 +167,6 @@ export function resolveTelemetryProviderScope(
   const normalized = providerId?.trim();
   if (!normalized) {
     return { providerId: "", providerScope: "unknown" };
-  }
-  if (isBuiltinModelProviderId(normalized) || isLegacyBuiltinTelemetryProviderId(normalized)) {
-    return { providerId: normalized, providerScope: "builtin" };
   }
   return { providerId: "custom", providerScope: "custom" };
 }

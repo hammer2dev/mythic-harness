@@ -66,13 +66,11 @@ export function createOnboardingRecordService(
     entries: [],
     decisions: [],
   });
-  const hasIdentityRecord = (file: OnboardingRecordFile, userId: string | null): boolean =>
-    file.entries.some((entry) => entry.userId === userId) ||
-    file.decisions.some((decision) => decision.userId === userId);
+  const hasIdentityRecord = (file: OnboardingRecordFile): boolean =>
+    file.entries.length > 0 || file.decisions.length > 0;
 
   return {
     async appendRecord(deviceMid: string, entry: OnboardingRecordEntryInput): Promise<void> {
-      const userId = await options.loadUserId();
       await enqueueWrite(async () => {
         const filePath = getRecordFile();
         const existing = await readRecordFile(filePath);
@@ -94,62 +92,30 @@ export function createOnboardingRecordService(
           file = createFile(deviceMid);
         }
         const record: OnboardingRecordEntry = {
-          userId,
           ...entry,
-          uploadState: "pending",
         };
         // 每 userId（含 null）至多一条：同一用户重复完成引导（debug 重置后再答等）覆盖旧条目，
         // 而不是追加——覆盖后的新答案重新置 pending，等待上传。
-        const previousIndex = file.entries.findIndex((item) => item.userId === userId);
+        const previousIndex = file.entries.length ? 0 : -1;
         const validated = onboardingRecordEntrySchema.parse(record);
         if (previousIndex >= 0) file.entries[previousIndex] = validated;
         else file.entries.push(validated);
-        file.decisions = file.decisions.filter((decision) => decision.userId !== userId);
+        file.decisions = [];
         await mkdir(join(filePath, ".."), { recursive: true });
         await atomicWriteText(filePath, JSON.stringify(file, null, 2));
       });
     },
 
-    async claimAnonymousRecord(): Promise<void> {
-      const userId = await options.loadUserId();
-      if (!userId) return;
-      await enqueueWrite(async () => {
-        const filePath = getRecordFile();
-        const file = await readRecordFile(filePath);
-        if (!file) return;
-        if (hasIdentityRecord(file, userId)) return;
-        // 兼容旧版重复文件取最后一条 null；移交是改写，不保留匿名副本。
-        for (let i = file.entries.length - 1; i >= 0; i -= 1) {
-          if (file.entries[i]!.userId === null) {
-            file.entries[i] = onboardingRecordEntrySchema.parse({
-              ...file.entries[i]!,
-              userId,
-            });
-            await atomicWriteText(filePath, JSON.stringify(file, null, 2));
-            return;
-          }
-        }
-        for (let i = file.decisions.length - 1; i >= 0; i -= 1) {
-          if (file.decisions[i]!.userId !== null) continue;
-          file.decisions[i] = onboardingDecisionSchema.parse({ ...file.decisions[i]!, userId });
-          await atomicWriteText(filePath, JSON.stringify(file, null, 2));
-          return;
-        }
-      });
-    },
-
     async shouldOnboard(deviceMid: string): Promise<boolean> {
-      const userId = await options.loadUserId();
       const file = await readRecordFile(getRecordFile());
-      if (file && hasIdentityRecord(file, userId)) return false;
+      if (file && hasIdentityRecord(file)) return false;
       if (!(await options.hasExistingLocalTask())) return true;
       await enqueueWrite(async () => {
         const filePath = getRecordFile();
         const current = (await readRecordFile(filePath)) ?? createFile(deviceMid);
-        if (hasIdentityRecord(current, userId)) return;
+        if (hasIdentityRecord(current)) return;
         current.decisions.push(
           onboardingDecisionSchema.parse({
-            userId,
             status: "existing_local_user",
             reason: "existing_local_task",
             decidedAt: new Date().toISOString(),
@@ -162,18 +128,16 @@ export function createOnboardingRecordService(
     },
 
     async dismissOnboarding(deviceMid: string): Promise<void> {
-      const userId = await options.loadUserId();
       await enqueueWrite(async () => {
         const filePath = getRecordFile();
         const file = (await readRecordFile(filePath)) ?? createFile(deviceMid);
-        if (file.entries.some((entry) => entry.userId === userId)) return;
+        if (file.entries.length > 0) return;
         const decision = onboardingDecisionSchema.parse({
-          userId,
           status: "dismissed",
           reason: "user_closed",
           decidedAt: new Date().toISOString(),
         });
-        const index = file.decisions.findIndex((item) => item.userId === userId);
+        const index = file.decisions.length ? 0 : -1;
         if (index >= 0) file.decisions[index] = decision;
         else file.decisions.push(decision);
         await mkdir(join(filePath, ".."), { recursive: true });
@@ -182,24 +146,22 @@ export function createOnboardingRecordService(
     },
 
     async getLatestEntry(): Promise<OnboardingRecordEntry | null> {
-      const userId = await options.loadUserId();
       const file = await readRecordFile(getRecordFile());
       if (!file) return null;
       let latest: OnboardingRecordEntry | undefined;
       for (const entry of file.entries) {
-        if (entry.userId === userId) latest = entry;
+        latest = entry;
       }
       return latest ?? null;
     },
 
     async syncSettingsFromRecord(): Promise<OnboardingSettingsSyncPatch | null> {
-      const userId = await options.loadUserId();
       const file = await readRecordFile(getRecordFile());
       if (!file) return null;
       // append 是覆盖语义，正常每 userId 至多一条；兼容旧版本的重复追加文件时取最后一条。
       let latest: OnboardingRecordEntry | undefined;
       for (const entry of file.entries) {
-        if (entry.userId === userId) latest = entry;
+        latest = entry;
       }
       if (!latest) return null;
       // 跳过页记 null：回填保守默认，与引导跳过写 settings 的行为一致（职业 other、偏好关）。
@@ -218,12 +180,11 @@ export function createOnboardingRecordService(
         Pick<OnboardingRecordEntryInput, "memoryEnabled" | "proactiveSuggestionsEnabled">
       >,
     ): Promise<void> {
-      const userId = await options.loadUserId();
       await enqueueWrite(async () => {
         const filePath = getRecordFile();
         const file = await readRecordFile(filePath);
         if (!file) return;
-        const index = file.entries.findLastIndex((entry) => entry.userId === userId);
+        const index = file.entries.length - 1;
         if (index < 0) return;
         file.entries[index] = onboardingRecordEntrySchema.parse({
           ...file.entries[index],

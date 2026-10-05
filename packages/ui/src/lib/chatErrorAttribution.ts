@@ -78,10 +78,6 @@ const STABLE_ERROR_ATTRIBUTION: Readonly<
     reason: "invalid_input",
   },
   MessageAbortedError: { source: "runtime", reason: "cancelled" },
-  StartPlanBusyAutoRetryExhaustedError: {
-    source: "provider",
-    reason: "rate_limited",
-  },
 };
 
 const NETWORK_FAILURE_REASONS = new Set([

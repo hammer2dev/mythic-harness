@@ -16,7 +16,6 @@ import { getProjectMemoryRoot } from "./paths.js";
 import type { ZCodeAppOptions } from "./types.js";
 import {
   resolveRegistryOwnedModelSelection,
-  resolveRegistryModelSelection,
   type ResolvedRegistrySelection,
 } from "./provider-registry-selection.js";
 

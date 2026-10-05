@@ -9,6 +9,15 @@ import { isOfficialMarketplaceId, ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zco
 import { DEFAULT_PLUGIN_MARKETPLACES, sanitizeZCodeRuntimeEnv } from "@zcode/shared";
 import { loadPluginMcpServerDefinitions, resolvePluginMcpServers } from "./mcp.js";
 import {
+  createManifestFromMarketplaceEntry,
+  DEFAULT_PLUGIN_VERSION as DEFAULT_VERSION,
+  findPluginManifestPath,
+  isAccountOnlyPlugin,
+  isAccountOnlyPluginAtRoot,
+  isAccountOnlyPluginAtRootSync,
+  readPluginManifestFromRoot,
+} from "./marketplace-plugin-policy.js";
+import {
   appendPluginSourceCleanupError,
   cleanupPluginSourceBestEffort,
   directoryExists,
@@ -51,15 +60,10 @@ const MARKETPLACE_JSON_MAX_BYTES = 10 * 1024 * 1024;
 const MARKETPLACE_JSON_MAX_REDIRECTS = 5;
 const MARKETPLACE_JSON_TIMEOUT_MS = 180_000;
 const CLAUDE_MARKETPLACE_FILE = join(".claude-plugin", "marketplace.json");
-const ZCODE_MANIFEST_PATH = join(".zcode-plugin", "plugin.json");
-const CLAUDE_MANIFEST_PATH = join(".claude-plugin", "plugin.json");
-const CODEX_MANIFEST_PATH = join(".codex-plugin", "plugin.json");
-const DEFAULT_VERSION = "0.0.0";
 const GIT_CLONE_MAX_ATTEMPTS = 3;
 const GIT_COMMAND_TIMEOUT_MS = 90_000;
 const GIT_CLONE_RETRY_DELAY_MS = 1_000;
 const MARKETPLACE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-const PLUGIN_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const SOURCE_SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const UNSUPPORTED_MANIFEST_FIELDS = ["channels", "lspServers", "outputStyles", "settings"] as const;
 
@@ -555,7 +559,26 @@ export function loadMarketplaceManifestSync(
   // 落盘后读新 target，避免 overview 看见跨代 manifest/summary。
   const readableDirectory = recoverAtomicTargetSync(dirname(manifestPath));
   const parsed = readJsonFileSync(join(readableDirectory, basename(manifestPath)));
-  return parseMarketplaceManifest(parsed);
+  const manifest = parseMarketplaceManifest(parsed);
+  if (!manifest) return null;
+  const pluginBaseDir = resolveMarketplacePluginBaseDir(readableDirectory, manifest);
+  return {
+    ...manifest,
+    plugins: manifest.plugins.filter((entry) => {
+      try {
+        const rootPath = resolveLocalPluginSourceRoot({
+          entry,
+          marketplace,
+          pluginBaseDir,
+          storageRoot,
+        });
+        return !rootPath || !isAccountOnlyPluginAtRootSync({ entry, marketplace, rootPath });
+      } catch {
+        // 目录或 manifest 不可读时交给原校验流程诊断，不能阻断同市场普通插件的展示。
+        return true;
+      }
+    }),
+  };
 }
 
 function loadInstalledPluginsSync(storageRoot: string): InstalledPluginsState {
@@ -1122,6 +1145,18 @@ async function cacheMarketplacePlugin(input: {
   let target: string;
   let activation: AtomicDirectoryActivation | undefined;
   try {
+    // 独立远端源码的账号标记不一定出现在市场条目中，必须在缓存和安装记录写入前检查。
+    if (
+      await isAccountOnlyPluginAtRoot({
+        entry: input.entry,
+        marketplace: input.marketplace,
+        rootPath: sourceRoot.path,
+      })
+    ) {
+      throw new Error(
+        `Plugin account resources are no longer supported: ${input.entry.name}@${input.marketplace}`,
+      );
+    }
     // 多顶层 ZIP 未显式 path 时 resolver 会回退到 extract root，
     // 原安装流程未在删除旧 cache 前校验 manifest，仍会写 installed record 并默认启用，最终 runtime
     // 无法 discover。ZIP 源必须先确认根目录可形成合法插件；strict:false 继续复用 synthetic manifest。
@@ -1201,39 +1236,15 @@ async function resolvePluginSourceRoot(input: {
   const manifest =
     input.manifest ?? loadMarketplaceManifestSync(input.storageRoot, input.marketplace);
   const pluginBaseDir = resolveMarketplacePluginBaseDir(marketplaceDir, manifest);
-  // 内置 official 插件 seed 到 marketplace.json 时 source 写的是裸 kind 字符串
-  // "filesystem"/"sea"（见 bootstrap/app/bundled-plugins.ts writeOfficialMarketplace），
-  // 原逻辑落到下面的 `typeof source === "string"` 分支，把 "filesystem" 当相对路径解析后抛
-  // "Unsupported or missing plugin source: filesystem"，导致市场详情页对内置插件枚举不出组件。
-  // 这类插件已落盘在 cachePath（缺失时按 cache/<marketplace>/<name>/<version> 兜底），直接定位即可。
-  if (source === "filesystem" || source === "sea") {
-    const cachePath = input.entry.cachePath;
-    if (cachePath && directoryExists(cachePath)) return { path: cachePath };
-    const computed = getPluginCacheDir(
-      input.storageRoot,
-      input.marketplace,
-      input.entry.name,
-      input.entry.version ?? DEFAULT_VERSION,
-    );
-    if (directoryExists(computed)) return { path: computed };
-    throw new Error(
-      `Bundled plugin cache directory missing: ${input.entry.name}@${input.marketplace}`,
-    );
-  }
-  if (typeof source === "string") {
-    const local = resolveInside(pluginBaseDir, source.replace(/^\.\//, ""));
-    if (local && directoryExists(local)) return { path: local };
-    const fallback = resolve(source);
-    if (directoryExists(fallback)) return { path: fallback };
-    throw new Error(`Unsupported or missing plugin source: ${source}`);
-  }
+  const local = resolveLocalPluginSourceRoot({
+    entry: input.entry,
+    marketplace: input.marketplace,
+    pluginBaseDir,
+    storageRoot: input.storageRoot,
+  });
+  if (local) return { path: local };
   if (isRecord(source)) {
     const sourceKind = typeof source.source === "string" ? source.source : "";
-    if (sourceKind === "directory") {
-      const path = resolve(readRequiredPluginSourceString(source, "path", "directory path"));
-      if (directoryExists(path)) return { path };
-      throw new Error(`Plugin source directory does not exist: ${path}`);
-    }
     if (sourceKind === "github") {
       const repo = readRequiredPluginSourceString(source, "repo", "GitHub repo");
       const url = `https://github.com/${repo}.git`;
@@ -1295,9 +1306,48 @@ async function resolvePluginSourceRoot(input: {
       `Plugin source is invalid or unsupported for ${input.entry.name}@${input.marketplace}: ${sourceKind || "missing kind"}`,
     );
   }
-  const localByName = join(pluginBaseDir, input.entry.name);
-  if (directoryExists(localByName)) return { path: localByName };
   throw new Error(`Plugin source is not supported for ${input.entry.name}@${input.marketplace}`);
+}
+
+function resolveLocalPluginSourceRoot(input: {
+  entry: PluginMarketplaceEntry;
+  marketplace: string;
+  pluginBaseDir: string;
+  storageRoot: string;
+}): string | undefined {
+  const source = input.entry.source;
+  // 内置 source 的 filesystem/sea 是 kind，不是目录名；复用已有 cachePath / cache 定位规则。
+  if (source === "filesystem" || source === "sea") {
+    const cachePath = input.entry.cachePath;
+    if (cachePath && directoryExists(cachePath)) return cachePath;
+    const computed = getPluginCacheDir(
+      input.storageRoot,
+      input.marketplace,
+      input.entry.name,
+      input.entry.version ?? DEFAULT_VERSION,
+    );
+    if (directoryExists(computed)) return computed;
+    throw new Error(
+      `Bundled plugin cache directory missing: ${input.entry.name}@${input.marketplace}`,
+    );
+  }
+  if (typeof source === "string") {
+    const local = resolveInside(input.pluginBaseDir, source.replace(/^\.\//, ""));
+    if (local && directoryExists(local)) return local;
+    const fallback = resolve(source);
+    if (directoryExists(fallback)) return fallback;
+    throw new Error(`Unsupported or missing plugin source: ${source}`);
+  }
+  if (isRecord(source)) {
+    if (source.source === "directory") {
+      const path = resolve(readRequiredPluginSourceString(source, "path", "directory path"));
+      if (directoryExists(path)) return path;
+      throw new Error(`Plugin source directory does not exist: ${path}`);
+    }
+    return undefined;
+  }
+  const localByName = join(input.pluginBaseDir, input.entry.name);
+  return directoryExists(localByName) ? localByName : undefined;
 }
 
 export function readPluginSourceSha(source: unknown): string | undefined {
@@ -1476,33 +1526,6 @@ function assertZipPluginInstallRoot(
       `Plugin manifest name '${loaded.manifest.name}' does not match marketplace entry '${entry.name}'`,
     );
   }
-}
-
-function createManifestFromMarketplaceEntry(
-  entry: PluginMarketplaceEntry,
-): Record<string, unknown> {
-  const raw = { ...entry.raw };
-  delete raw.source;
-  delete raw.category;
-  delete raw.tags;
-  delete raw.strict;
-  // 商店信息（Store Listing）是目录层展示元数据，不属于插件 manifest；
-  // 合成 manifest 时剔除，避免污染 plugin.json 语义（author/homepage 是合法 manifest 字段，保留）。
-  delete raw.displayName;
-  delete raw.displayName_i18n;
-  delete raw.description_i18n;
-  delete raw.icon;
-  delete raw.privacyPolicy;
-  delete raw.termsOfService;
-  delete raw.heroImage;
-  delete raw.examplePrompts;
-  delete raw.examplePrompts_i18n;
-  delete raw.requiresPaidPlan;
-  return {
-    ...raw,
-    name: entry.name,
-    version: entry.version ?? DEFAULT_VERSION,
-  };
 }
 
 async function loadMarketplaceFromSource(
@@ -1981,7 +2004,8 @@ function parseMarketplaceManifest(value: unknown): PluginMarketplaceManifest | n
 function normalizeMarketplaceManifest(
   value: PluginMarketplaceManifest | Record<string, unknown>,
 ): PluginMarketplaceManifest {
-  if (isPluginMarketplaceManifest(value)) return value;
+  if (isPluginMarketplaceManifest(value))
+    return { ...value, plugins: value.plugins.filter((entry) => !isAccountOnlyPlugin(entry)) };
   const metadata = isRecord(value.metadata) ? value.metadata : {};
   const plugins = Array.isArray(value.plugins)
     ? value.plugins
@@ -2012,7 +2036,9 @@ function normalizeMarketplaceManifest(
             raw: entry,
           };
         })
-        .filter((entry): entry is PluginMarketplaceEntry => entry !== null)
+        .filter(
+          (entry): entry is PluginMarketplaceEntry => entry !== null && !isAccountOnlyPlugin(entry),
+        )
     : [];
   const allowCrossMarketplaceDependenciesOn = Array.isArray(
     value.allowCrossMarketplaceDependenciesOn,
@@ -2147,14 +2173,6 @@ function findMarketplaceManifestPath(rootPath: string, explicitPath?: string): s
   return null;
 }
 
-function findPluginManifestPath(rootPath: string): string | null {
-  for (const candidate of [ZCODE_MANIFEST_PATH, CLAUDE_MANIFEST_PATH, CODEX_MANIFEST_PATH]) {
-    const path = join(rootPath, candidate);
-    if (fileExists(path)) return path;
-  }
-  return null;
-}
-
 // 缓存路径段与安装记录的版本来源。优先取插件落盘 plugin.json 里的真实
 // version（与加载器 readPluginManifestFromRoot/index.ts 展示版本同源），缺失时才回退到 marketplace
 // 条目的 version，最后兜底 DEFAULT_VERSION。读取失败保持宽松回退，校验交给 validateMarketplacePlugin。
@@ -2175,34 +2193,6 @@ function resolveInstalledPluginVersion(rootPath: string, entry: PluginMarketplac
     }
   }
   return entry.version ?? DEFAULT_VERSION;
-}
-
-function readPluginManifestFromRoot(
-  rootPath: string,
-  entry: PluginMarketplaceEntry,
-): { manifest: PluginManifest; manifestPath?: string } | null {
-  const manifestPath = findPluginManifestPath(rootPath);
-  if (manifestPath) {
-    const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as unknown;
-    if (!isRecord(parsed)) throw new Error("Plugin manifest must be a JSON object");
-    const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
-    if (!PLUGIN_NAME_PATTERN.test(name)) throw new Error(`Invalid plugin name: ${name}`);
-    return {
-      manifest: {
-        ...parsed,
-        name,
-        version: typeof parsed.version === "string" ? parsed.version : DEFAULT_VERSION,
-      } as PluginManifest,
-      manifestPath,
-    };
-  }
-  if (entry.strict === false) {
-    const rawManifest = createManifestFromMarketplaceEntry(entry);
-    return {
-      manifest: rawManifest as unknown as PluginManifest,
-    };
-  }
-  return null;
 }
 
 function validatePluginRoot(input: {

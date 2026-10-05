@@ -1,19 +1,6 @@
-import { querySessionDebug } from "./session-debug.js";
-import {
-  zcodePluginsCancelOperationParamsSchema,
-  zcodeProtocolMethods,
-  zcodeWorkspaceCancelGenerateTextParamsSchema,
-  zcodeWorkspaceHookTrustGrantParamsSchema,
-} from "@zcode/shared";
 import type { BrowserControlPort } from "@zcode/contracts";
+import { createInMemorySessionEventStore } from "@zcode/contracts";
 import { InMemoryWorkspaceHookPolicyProvider } from "@zcode/core";
-import {
-  V4_METHODS,
-  V4_NOTIFICATIONS,
-  parseConversationTopic,
-  parseSessionsIndexTopic,
-  parseWorkspaceConfigTopic,
-} from "@zcode/shared/zcode-protocol-v4";
 import type {
   ZCodeProtocolError,
   ZCodeProtocolMessage,
@@ -24,34 +11,31 @@ import type {
   ZCodeProtocolResponse,
 } from "@zcode/shared";
 import {
-  cancelBackgroundTask,
-  closeSession,
-  compactSession,
-  createSession,
-  forkSession,
-  generateWorkspaceText,
-  goalSession,
-  getTaskTokenUsage,
-  getUsageStats,
-  listSessions,
-  listSessionSubagents,
-  readEvents,
-  readMessages,
-  readSession,
-  resumeSession,
-  sendPrompt,
-  setMode,
-  setModel,
-  setThoughtLevel,
-  stopSession,
-  subscribeSession,
-} from "./server-operations.js";
-import { listChildProcesses } from "./process-child-processes.js";
-import { ProtocolRuntimeResources } from "./runtime-resources.js";
+  zcodePluginsCancelOperationParamsSchema,
+  zcodeProtocolMethods,
+  zcodeWorkspaceCancelGenerateTextParamsSchema,
+  zcodeWorkspaceHookTrustGrantParamsSchema,
+} from "@zcode/shared";
 import {
-  readWorkspacePresentation,
-  testProviderModelConnectivity,
-} from "./workspace-model-runtime.js";
+  parseConversationTopic,
+  parseSessionsIndexTopic,
+  parseWorkspaceConfigTopic,
+  V4_METHODS,
+  V4_NOTIFICATIONS,
+} from "@zcode/shared/zcode-protocol-v4";
+import {
+  resolveV4InteractionRegistryOptionsFromEnv,
+  V4InteractionRegistry,
+} from "../zcode-protocol-v4/interaction-registry.js";
+import { createProtocolBrowserControlBroker } from "./browser-control-broker.js";
+import { updateDynamicWorkflowPolicy } from "./dynamic-workflow-policy.js";
+import { updateInteractionPreferences } from "./interaction-preferences.js";
+import { listMcpServers } from "./mcp.js";
+import { updateModelIoPreferences } from "./model-io-preferences.js";
+import {
+  getPluginReferenceCatalog,
+  resolveSuggestedPluginReference,
+} from "./plugin-reference-catalog.js";
 import {
   addPluginMarketplace,
   configurePlugin,
@@ -68,11 +52,8 @@ import {
   updatePluginMarketplace,
   validatePlugin,
 } from "./plugins.js";
-import {
-  getPluginReferenceCatalog,
-  resolveSuggestedPluginReference,
-} from "./plugin-reference-catalog.js";
-import { getSkillReferenceCatalog } from "./skill-reference-catalog.js";
+import { listChildProcesses } from "./process-child-processes.js";
+import { ProtocolRuntimeResources } from "./runtime-resources.js";
 import {
   deleteSavedWorkflowOp,
   getSavedWorkflowOp,
@@ -81,40 +62,57 @@ import {
   moveSavedWorkflowOp,
   updateSavedWorkflowMetaOp,
 } from "./saved-workflows.js";
-import { listMcpServers } from "./mcp.js";
-import { updateInteractionPreferences } from "./interaction-preferences.js";
-import { updateAccountProviderConfig } from "./account-provider-config.js";
-import { updateModelIoPreferences } from "./model-io-preferences.js";
-import { updateOffPeakToolPolicy } from "./off-peak-tool-policy.js";
-import { updateDynamicWorkflowPolicy } from "./dynamic-workflow-policy.js";
-import { grantWorkspaceHookTrustForProtocol } from "./workspace-hook-trust.js";
 import {
-  V4InteractionRegistry,
-  resolveV4InteractionRegistryOptionsFromEnv,
-} from "../zcode-protocol-v4/interaction-registry.js";
-import { createConversationV4Gateway } from "./v4-bridge.js";
-import { createSessionResidentPoolHost } from "./session-residency.js";
-import {
-  DEFAULT_SESSION_RESIDENT_HIGH_WATER_COUNT,
-  SessionResidentPool,
-} from "./session-resident-pool.js";
-import { createProtocolBrowserControlBroker } from "./browser-control-broker.js";
+  cancelBackgroundTask,
+  closeSession,
+  compactSession,
+  createSession,
+  forkSession,
+  generateWorkspaceText,
+  getTaskTokenUsage,
+  getUsageStats,
+  goalSession,
+  listSessions,
+  listSessionSubagents,
+  readEvents,
+  readMessages,
+  readSession,
+  resumeSession,
+  sendPrompt,
+  setMode,
+  setModel,
+  setThoughtLevel,
+  stopSession,
+  subscribeSession,
+} from "./server-operations.js";
 import {
   createProtocolLogger,
   isErrorResponse,
   isNotification,
   isRequest,
   isResponse,
-  ProtocolRequestError,
-  type ParamsSchema,
   parseParams,
+  ProtocolRequestError,
   toProtocolError,
-  type ZCodeProtocolClientRequestOptions,
+  type ParamsSchema,
   type ZCodeProtocolAgentDependencies,
   type ZCodeProtocolAgentServerContext,
+  type ZCodeProtocolClientRequestOptions,
   type ZCodeProtocolSessionRecord,
 } from "./server-types.js";
-import { createInMemorySessionEventStore } from "@zcode/contracts";
+import { querySessionDebug } from "./session-debug.js";
+import { createSessionResidentPoolHost } from "./session-residency.js";
+import {
+  DEFAULT_SESSION_RESIDENT_HIGH_WATER_COUNT,
+  SessionResidentPool,
+} from "./session-resident-pool.js";
+import { getSkillReferenceCatalog } from "./skill-reference-catalog.js";
+import { createConversationV4Gateway } from "./v4-bridge.js";
+import { grantWorkspaceHookTrustForProtocol } from "./workspace-hook-trust.js";
+import {
+  readWorkspacePresentation,
+  testProviderModelConnectivity,
+} from "./workspace-model-runtime.js";
 
 export type { ZCodeProtocolAgentDependencies, ZCodeProtocolSessionRecord };
 
@@ -204,15 +202,6 @@ export class ZCodeProtocolAgentServer {
   private readonly runtimeResources: ProtocolRuntimeResources;
   private shutdownPromise?: Promise<void>;
   readonly browserControlPort: BrowserControlPort;
-  /**
-   * 官方 MCP 身份头端口所需的最小上下文。
-   * MCP 连接池的构造早于 server，需要在 server 就绪后回填闭包持有的引用——
-   * 与 v4Gateway 同样的构造顺序收口方式。只暴露 requestClient，不外泄整个 context。
-   */
-  get officialMcpAuthRequestContext(): Pick<ZCodeProtocolAgentServerContext, "requestClient"> {
-    return this.context;
-  }
-
   private messageSink?: (message: ZCodeProtocolOutboundMessage) => void;
   private clientDisconnectError?: Error;
   private readonly context: ZCodeProtocolAgentServerContext;
@@ -249,7 +238,6 @@ export class ZCodeProtocolAgentServer {
       appRuntimePreferences: {
         askUserQuestionAutoResolutionEnabled: true,
         modelIoFullRetentionEnabled: false,
-        offPeakToolEnabled: false,
         // 动态工作流灰度门 fail-closed：Host 必须显式 workspace/updateDynamicWorkflowPolicy
         // 才开启。
         dynamicWorkflowEnabled: false,
@@ -623,14 +611,10 @@ export class ZCodeProtocolAgentServer {
         }
         return grantResult;
       }
-      case zcodeProtocolMethods.providerUpdateAccountConfig:
-        return await updateAccountProviderConfig(this.context, request.params);
       case zcodeProtocolMethods.workspaceUpdateInteractionPreferences:
         return await updateInteractionPreferences(this.context, request.params);
       case zcodeProtocolMethods.workspaceUpdateModelIoPreferences:
         return await updateModelIoPreferences(this.context, request.params);
-      case zcodeProtocolMethods.workspaceUpdateOffPeakToolPolicy:
-        return await updateOffPeakToolPolicy(this.context, request.params);
       case zcodeProtocolMethods.workspaceUpdateDynamicWorkflowPolicy:
         return await updateDynamicWorkflowPolicy(this.context, request.params);
       case zcodeProtocolMethods.workspaceGenerateText:

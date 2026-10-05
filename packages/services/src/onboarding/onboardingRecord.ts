@@ -26,13 +26,6 @@ export interface IOnboardingRecordService {
   shouldOnboard(deviceMid: string): Promise<boolean>;
   /** 用户关闭首次引导时持久化 dismissed；已有作答时为空操作。 */
   dismissOnboarding(deviceMid: string): Promise<void>;
-  /**
-   * 登录认领：当前 userId 没有条目而存在匿名（null）条目时，把 null 条目移交给该 userId
-   * （改写而非复制，避免同一引导行为产生双条目污染上传统计）。同一人"未登录答一次→登录"
-   * 不再被当成新用户重复引导；匿名态失去记录后再次触发引导属预期。
-   * 未登录（userId=null）或已有条目时为幂等空操作。
-   */
-  claimAnonymousRecord(): Promise<void>;
   /** 当前用户最近一条作答（引导再次打开时预填用）；无记录返回 null。 */
   getLatestEntry(): Promise<OnboardingRecordEntry | null>;
   /**
@@ -58,7 +51,6 @@ export interface IOnboardingRecordService {
 
 /** 工厂入参：userId 解析注入（正式装配用 oauthCredentialRepo，测试用桩）。 */
 export interface CreateOnboardingRecordServiceOptions {
-  loadUserId: () => Promise<string | null>;
   hasExistingLocalTask: () => Promise<boolean>;
 }
 

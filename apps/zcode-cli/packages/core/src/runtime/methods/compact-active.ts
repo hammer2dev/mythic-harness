@@ -1,57 +1,54 @@
 import {
+  legacySyntheticRuntimeMetadata,
+  type RuntimeMessageEntry,
+} from "../../agent/message-history.js";
+import type { Model, SessionEvent, TraceContext } from "../deps.js";
+import {
   CompactPhase,
   CompactReason,
-  CompactTrigger,
   CompactTimelineStatus,
+  CompactTrigger,
   MAX_OUTPUT_TOKENS_FOR_SUMMARY,
   SessionEventType,
-  createChildTraceContext,
-  isCoreError,
-  createMessageId,
-  createPartId,
-  traceContextToLogContext,
   buildCompactPrompt,
   buildCompactSummaryMessage,
   buildManualCompactBoundary,
+  createChildTraceContext,
   createCompactBoundaryId,
+  createMessageId,
+  createPartId,
   getUsageTotalTokens,
+  isCoreError,
+  traceContextToLogContext,
 } from "../deps.js";
-import type { SessionEvent, TraceContext } from "../deps.js";
-import { resolveModelRequestSessionTypeFromTaskType } from "./model-request-session-type.js";
+import { selectPersistedCompactTail } from "../helpers/compact-preservation.js";
 import {
-  defaultCompactPhaseForTrigger,
-  defaultCompactReasonForTrigger,
   buildPostCompactReadStateReminderEntries,
-  countCompactPreservedRuntimeMessages,
   buildPostCompactRuntimeEntries,
   compactFailureReasonFromError,
+  countCompactPreservedRuntimeMessages,
+  defaultCompactPhaseForTrigger,
+  defaultCompactReasonForTrigger,
   estimateRuntimeEntryTokens,
   getRuntimeEntriesToSummarize,
   hasEnoughRuntimeEntriesToCompact,
+  isModelContextExceededError,
+  isModelMediaTooLargeError,
+  isTurnCancellationError,
+  logCompactMediaRetryProjection,
+  logMediaBudgetProjection,
+  logMediaCapabilityProjection,
+  projectCompactMediaForRetry,
+  projectMessagesForModelMediaPolicy,
+  readApprovedPlanFileReferenceEntry,
   selectCompactEntries,
   selectCompactEntriesAfterPromptTooLong,
   selectCompactEntriesForInitialPromptTooLong,
   throwIfTurnAborted,
-  isTurnCancellationError,
-  isModelContextExceededError,
-  isModelMediaTooLargeError,
-  logMediaBudgetProjection,
-  logMediaCapabilityProjection,
   truncateCompactSummaryRequestEntriesAfterPromptTooLong,
-  projectCompactMediaForRetry,
-  projectMessagesForModelMediaPolicy,
-  logCompactMediaRetryProjection,
-  readApprovedPlanFileReferenceEntry,
 } from "../helpers/index.js";
-import type { CompactTimelineContext, RuntimeModelTextResult } from "../types.js";
-import type { Model } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
-import type { CompactAttemptOutcome } from "./turn-loop-state.js";
-import {
-  legacySyntheticRuntimeMetadata,
-  type RuntimeMessageEntry,
-} from "../../agent/message-history.js";
-import { selectPersistedCompactTail } from "../helpers/compact-preservation.js";
+import type { CompactTimelineContext, RuntimeModelTextResult } from "../types.js";
 import {
   buildCompactSummaryRequestMessages,
   createCompactContextExceededFinishError,
@@ -60,14 +57,15 @@ import {
   persistCompactTimelineEvent,
 } from "./compact-active-helpers.js";
 import { runCompactSummaryModelRequest } from "./compact-summary-model-request.js";
+import { resolveModelRequestSessionTypeFromTaskType } from "./model-request-session-type.js";
 import { resolveNormalRequestMaxOutputTokens } from "./model-token-limits.js";
-import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
-import { recordModelUsageFact } from "./usage-observability.js";
 import { createRuntimeModel } from "./runtime-model.js";
+import type { CompactAttemptOutcome } from "./turn-loop-state.js";
 import {
   filterOutputTokenContinuationEntries,
   preserveCanonicalContextPrefix,
 } from "./turn-output-token-continuation.js";
+import { recordModelUsageFact } from "./usage-observability.js";
 
 const AUTO_COMPACT_MAX_ATTEMPTS = 3;
 const COMPACT_TOOL_KEEP_MAX_COUNT = 100;
@@ -401,11 +399,6 @@ async function compactActiveConversationImpl(
           preserveProviderStreamBoundaries: true,
           traceContext: modelTraceContext,
           tools: compactTools,
-          refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(this, {
-            abortSignal: options.abortSignal,
-            model: compactModel,
-            traceContext: modelTraceContext,
-          }),
         };
 
         try {

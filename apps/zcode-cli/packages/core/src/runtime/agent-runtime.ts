@@ -1,5 +1,67 @@
-import { DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY, resolveExecutionState } from "@zcode/shared";
 import type { BackgroundBashOutputResult } from "@zcode/shared";
+import { DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY, resolveExecutionState } from "@zcode/shared";
+import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
+import { InMemoryRuntimeTaskRegistry, type RuntimeTaskRegistry } from "../runtime-task/registry.js";
+import { projectPersistentAgentMemoryTools } from "../subagent/persistent-memory.js";
+import { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
+import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
+import type { RuntimeCommandQueue } from "./command-queue.js";
+import { createRuntimeCommandQueue } from "./command-queue.js";
+import type {
+  BackgroundTaskCancelResult,
+  CollaborationMode,
+  ContextBuilder,
+  ContextBuildResult,
+  ContextSourcePort,
+  ContextSourceSnapshot,
+  DynamicWorkflowRunPort,
+  DynamicWorkflowRunProgressPayload,
+  ExecutionPort,
+  ExecutionShellSelection,
+  FileSystemPort,
+  HookRunner,
+  ImageProcessorPort,
+  Logger,
+  McpConnectionSnapshot,
+  McpPort,
+  MessageHistory,
+  MessageId,
+  Model,
+  ModelCatalogPort,
+  ModelSelection,
+  ModelSelectionOrigin,
+  ModelToolContract,
+  PdfDocumentPort,
+  PermissionBrokerPort,
+  PermissionBrokerRequest,
+  ProjectId,
+  ReadFileStateMap,
+  SavedWorkflowScope,
+  SessionEvent,
+  SessionEventSink,
+  SessionEventStorePort,
+  SessionGoal,
+  SessionId,
+  SessionProjection,
+  SessionStorePort,
+  SkillLoadOutcome,
+  SkillPort,
+  SubagentPort,
+  TargetChangedPayload,
+  ToolArtifactStorePort,
+  ToolCall,
+  ToolCallId,
+  ToolExecutor,
+  ToolRegistry,
+  ToolSchedule,
+  TraceContext,
+  TurnId,
+  TurnInputIntentMetadata,
+  TurnState,
+  TurnSteerInput,
+  TurnSteerResult,
+  UserInputAutoResolutionUpdatedPayload,
+} from "./deps.js";
 import {
   createDenyPermissionBroker,
   createRootTraceContext,
@@ -11,83 +73,30 @@ import {
   ToolScheduler,
   traceContextToLogContext,
 } from "./deps.js";
+import type { ChildClientPortsContext, ClientFacingPorts } from "./helpers/child-client-ports.js";
+import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
+import { initializeRuntimeTooling } from "./helpers/runtime-tools.js";
+import type { AgentRuntimeInternal } from "./internal.js";
 import type {
-  CollaborationMode,
-  Logger,
-  BackgroundTaskCancelResult,
-  SessionEvent,
-  MessageId,
-  Model,
-  ModelSelection,
-  ModelSelectionOrigin,
-  ModelToolContract,
-  PermissionBrokerPort,
-  PermissionBrokerRequest,
-  ProjectId,
-  SessionEventSink,
-  SessionEventStorePort,
-  SessionId,
-  SessionProjection,
-  SessionStorePort,
-  SessionGoal,
-  SavedWorkflowScope,
-  TargetChangedPayload,
-  DynamicWorkflowRunProgressPayload,
-  UserInputAutoResolutionUpdatedPayload,
-  ContextSourcePort,
-  ExecutionPort,
-  FileSystemPort,
-  ImageProcessorPort,
-  PdfDocumentPort,
-  McpConnectionSnapshot,
-  SkillLoadOutcome,
-  SkillPort,
-  McpPort,
-  DynamicWorkflowRunPort,
-  ModelCatalogPort,
-  SubagentPort,
-  ToolArtifactStorePort,
-  ToolCallId,
-  TraceContext,
-  TurnSteerInput,
-  TurnInputIntentMetadata,
-  TurnSteerResult,
-  ToolCall,
-  TurnState,
-  MessageHistory,
-  ReadFileStateMap,
-  ToolSchedule,
-  ToolExecutor,
-  ToolRegistry,
-  ContextBuilder,
-  ContextBuildResult,
-  ContextSourceSnapshot,
-  ExecutionShellSelection,
-  HookRunner,
-  TurnId,
-} from "./deps.js";
-import { installAgentRuntimeMethods } from "./methods/index.js";
-import type { StartSavedWorkflowRunResult } from "./methods/dynamic-workflow-run-start.js";
+  RuntimeBackgroundStopOptions,
+  RuntimeBackgroundStopResult,
+} from "./methods/background.js";
 import type {
   AmendWorkflowRunSettingsInput,
   AmendWorkflowRunSettingsResult,
 } from "./methods/dynamic-workflow-run-settings.js";
-import { createRuntimeCommandQueue } from "./command-queue.js";
-import type { RuntimeCommandQueue } from "./command-queue.js";
+import type { StartSavedWorkflowRunResult } from "./methods/dynamic-workflow-run-start.js";
+import { installAgentRuntimeMethods } from "./methods/index.js";
 import type {
   ModelConnectivityTestInput,
   WorkspaceGenerateTextInput,
   WorkspaceGenerateTextResult,
 } from "./methods/workspace-generate-text.js";
+import { cloneModelSelection } from "./model-selection.js";
 import type {
-  RuntimeBackgroundStopOptions,
-  RuntimeBackgroundStopResult,
-} from "./methods/background.js";
-import { initializeRuntimeTooling } from "./helpers/runtime-tools.js";
-import type {
-  ActiveTurnInfo,
-  ActiveForegroundExecutionState,
   AcquireForegroundPromotionLeaseResult,
+  ActiveForegroundExecutionState,
+  ActiveTurnInfo,
   ActiveTurnStartReservation,
   ActiveTurnSteeringState,
   AgentRuntimeConfig,
@@ -98,16 +107,16 @@ import type {
   ExecuteToolsOptions,
   ExecuteToolsResult,
   ExecuteTurnOptions,
-  PromptAdmissionOptions,
-  PromptAdmissionReceipt,
   ForegroundPromotionLeaseMode,
   ForegroundPromotionLeaseState,
+  MainTurnCacheHitAggregate,
   PendingModelChangeTimeline,
   PermissionDecisionResult,
-  MainTurnCacheHitAggregate,
-  RuntimeTurnFileChangeMap,
+  PromptAdmissionOptions,
+  PromptAdmissionReceipt,
   ResumeSessionOptions,
   ResumeSessionResult,
+  RuntimeTurnFileChangeMap,
   SelectionSideChatCreateOptions,
   StableConversationForkOptions,
   StopActiveForegroundExecutionOptions,
@@ -118,15 +127,6 @@ import type {
   WorkspaceFileRewindPreview,
   WorkspaceForkResult,
 } from "./types.js";
-import type { AgentRuntimeInternal } from "./internal.js";
-import { InMemoryRuntimeTaskRegistry, type RuntimeTaskRegistry } from "../runtime-task/registry.js";
-import type { ChildClientPortsContext, ClientFacingPorts } from "./helpers/child-client-ports.js";
-import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
-import { projectPersistentAgentMemoryTools } from "../subagent/persistent-memory.js";
-import { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
-import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
-import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
-import { cloneModelSelection } from "./model-selection.js";
 
 // oxlint-disable typescript-eslint/no-unsafe-declaration-merging
 export class AgentRuntime {
@@ -150,7 +150,6 @@ export class AgentRuntime {
   private workspaceHookAdmission?: WorkspaceHookRuntimeAdmissionPort;
   private modelFactory: AgentRuntimeDeps["modelFactory"];
   private modelIoDir?: string;
-  private providerRuntimeHeadersPort?: AgentRuntimeDeps["providerRuntimeHeadersPort"];
   private browserControlPort?: AgentRuntimeDeps["browserControlPort"];
   /** 模型请求准入端口；随每次模型请求进调用上下文。 */
   private modelRequestAdmission?: AgentRuntimeDeps["modelRequestAdmission"];
@@ -272,7 +271,6 @@ export class AgentRuntime {
     this.isRemoteWorkspace = deps.isRemoteWorkspace ?? (() => false);
     this.modelFactory = deps.modelFactory;
     this.modelIoDir = deps.modelIoDir;
-    this.providerRuntimeHeadersPort = deps.providerRuntimeHeadersPort;
     this.browserControlPort = deps.browserControlPort;
     this.modelRequestAdmission = deps.modelRequestAdmission;
     // 旧会话的选择缺失不能阻断历史恢复；不在这里制造默认模型。

@@ -26,7 +26,6 @@ import spreadsheetsIconUrl from "@/assets/document-skill-icons/spreadsheets@2x.p
 import {
   PluginStoreInstallButton,
   PluginStoreItemMenu,
-  PluginStorePaidPlanBadge,
   type PluginStoreActions,
 } from "@/settings/PluginStoreCard.js";
 import {
@@ -133,8 +132,7 @@ export function PluginStoreDetailView({
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight text-foreground">
               {displayName}
-            </h1>
-            <PluginStorePaidPlanBadge item={item} />
+            </h1>{" "}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {item.installed ? (

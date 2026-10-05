@@ -3,7 +3,7 @@
 ## 产品规则
 
 - 一级导航依次为项目、定时任务、工作流、插件市场。工作流沿用现有动态工作流可用性开关，关闭时不展示入口；关闭后原工作流页面回到定时任务，保持旧开关的回退规则。
-- 定时任务页面只管理定时任务与闲时任务，保留列表、模板、创建、编辑、启停、执行结果与聊天创建入口。进入时默认定时任务；指定 idle 的入口仍定位闲时任务。
+- 定时任务页面只管理 Cron 定时任务，保留列表、模板、创建、编辑、启停、执行结果与聊天创建入口。进入时默认定时任务。
 - 工作流页面独立管理已保存工作流。二级栏按全局和项目展示流程目录，选中流程后右侧展示详情及参数、运行、修订、删除、运行记录和产物等已有操作；列表概览仍可返回。
 - 工作流目录在查看详情时保持可达；全局工作流沿用本地项目执行目标，项目工作流沿用对应 workspace identity 与目标服务。
 - 工作流通过聊天创建和修订仍只预填草稿，不自动发送。工作流手动运行沿用原服务；本轮不新增定时任务绑定工作流协议。
@@ -13,14 +13,14 @@
 
 ## 状态所有者与接口
 
-| 状态              | 唯一所有者                                      | 投影与接口                                                                 |
-| ----------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
-| 一级视图          | App.workspaceMainView                           | WorkspacePrimaryNavigation 发出选择，WorkspaceShellLayout 挂载页面         |
-| 导航历史          | zcodeSessionStore.taskNavHistory                | 独立 workflows kind；导航 hook 统一入栈与回放                              |
-| 定时/闲时任务数据 | 原 automationManagementStore / offPeakTaskStore | AutomationsSection 原 hooks、原写入路径                                    |
-| 已保存流程数据    | savedWorkflowStore                              | 全局/项目 Group 原加载与操作；目录仅派生投影，不复制库存                   |
-| 工作流选择、刷新  | SavedWorkflowsSection                           | Group 持续挂载；同组只有一份查询和操作实例                                 |
-| 二级栏 DOM 与布局 | WorkspaceShellLayout                            | SavedWorkflowsSection.navigationContainer 可选 portal，null 表示插槽待挂载 |
+| 状态              | 唯一所有者                       | 投影与接口                                                                 |
+| ----------------- | -------------------------------- | -------------------------------------------------------------------------- |
+| 一级视图          | App.workspaceMainView            | WorkspacePrimaryNavigation 发出选择，WorkspaceShellLayout 挂载页面         |
+| 导航历史          | zcodeSessionStore.taskNavHistory | 独立 workflows kind；导航 hook 统一入栈与回放                              |
+| 定时任务数据      | automationManagementStore        | AutomationsSection 原 hooks、原写入路径                                    |
+| 已保存流程数据    | savedWorkflowStore               | 全局/项目 Group 原加载与操作；目录仅派生投影，不复制库存                   |
+| 工作流选择、刷新  | SavedWorkflowsSection            | Group 持续挂载；同组只有一份查询和操作实例                                 |
+| 二级栏 DOM 与布局 | WorkspaceShellLayout             | SavedWorkflowsSection.navigationContainer 可选 portal，null 表示插槽待挂载 |
 
 ```mermaid
 sequenceDiagram
@@ -51,7 +51,7 @@ sequenceDiagram
 ## 关键验收
 
 1. 一级入口与标题分别显示定时任务、工作流，定时任务二级栏不再显示工作流。
-2. 定时/闲时详情入口保持原目标，旧 workflow 标签入口落独立工作流；前进后退不串页，并保留远程身份。
+2. 定时详情入口保持原目标，旧 workflow 标签入口落独立工作流；前进后退不串页，并保留远程身份。
 3. 工作流全局/项目目录在查看详情时仍可选；创建、运行、修订、删除、记录与产物沿用原动作。
 4. 窄 Web 可打开和关闭二级抽屉，选中项可访问；宽桌面复用原分隔线与布局。
 5. 执行关键导航测试、typecheck、lint、架构检查及可用构建；交互 E2E 的已执行结果与环境限制另记 ACCEPTANCE.md。

@@ -17,7 +17,7 @@ export type {
   ZCodeAppOptions,
   ZCodeModelOption,
 } from "./app/types.js";
-export * from "./auth-login.js";
+export * from "./auth-api-key.js";
 export {
   inspectZCodeCustomCommand,
   listZCodeCustomCommands,
@@ -31,7 +31,6 @@ export type {
 export { createModelAdapter } from "./model-factory.js";
 export type { CreateModelAdapterOptions } from "./model-factory.js";
 export { startProcessProviderRegistryRuntime } from "./app/process-provider-registry-runtime.js";
-export type { ProcessProviderRegistryRuntimeOptions } from "./app/process-provider-registry-runtime.js";
 export {
   addZCodePluginMarketplace,
   getZCodePluginsOverview,

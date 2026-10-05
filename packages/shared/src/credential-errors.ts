@@ -1,0 +1,2 @@
+export const CREDENTIAL_DECRYPT_ERROR_PREFIX = "凭据解密失败：" as const;
+export const CREDENTIAL_DECRYPT_ERROR_CODE = "ZCODE_CREDENTIAL_DECRYPT_FAILED" as const;

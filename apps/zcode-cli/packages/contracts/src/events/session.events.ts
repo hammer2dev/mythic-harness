@@ -301,20 +301,13 @@ export interface BackgroundResultOriginMeta {
  * 不得推进 session running/activeWorks，也不应产生“工作中/已工作”状态。
  */
 export type TurnExecutionKind = "agent" | "controlOnly";
-
-export type OffPeakRunType = "init" | "resume";
-
 export type TurnBackgroundAttribution =
-  | { automationId: string; offPeakTaskId?: never; offPeakRunType?: never }
+  | { automationId: string }
   | {
-      offPeakTaskId: string;
-      offPeakRunType?: OffPeakRunType;
       automationId?: never;
     }
   | {
       automationId?: undefined;
-      offPeakTaskId?: undefined;
-      offPeakRunType?: never;
     };
 
 /**

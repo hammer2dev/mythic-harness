@@ -105,11 +105,7 @@ export function listDisposingHostProcesses(): ElectronUtilityProcess[] {
   return Array.from(disposingHostProcesses);
 }
 
-export function loadWindow(
-  win: BrowserWindow,
-  page: "index" | "login" = "index",
-  bootstrap?: WindowBootstrapOptions,
-): Promise<void> {
+export function loadWindow(win: BrowserWindow, bootstrap?: WindowBootstrapOptions): Promise<void> {
   const query = Object.fromEntries(
     Object.entries({
       restoreSession:
@@ -124,7 +120,7 @@ export function loadWindow(
     }).filter((entry): entry is [string, string] => entry[1] != null),
   );
 
-  if (page === "index") {
+  {
     const partial = getMainLaunchPartialMarks();
     query[LAUNCH_MARKS_QUERY_KEY] = serializeLaunchMarks({
       ...partial,
@@ -135,13 +131,13 @@ export function loadWindow(
   // 生产包不能信任继承环境中的开发服务器地址，否则会被本机开发会话劫持为空白页。
   if (!app.isPackaged && process.env["ELECTRON_RENDERER_URL"]) {
     const base = process.env["ELECTRON_RENDERER_URL"];
-    const url = new URL(page === "login" ? `${base}/login.html` : base);
+    const url = new URL(base);
     for (const [key, value] of Object.entries(query)) {
       url.searchParams.set(key, value);
     }
     return win.loadURL(url.toString());
   } else {
-    return win.loadFile(join(import.meta.dirname, `../renderer/${page}.html`), {
+    return win.loadFile(join(import.meta.dirname, "../renderer/index.html"), {
       query,
     });
   }
@@ -208,19 +204,8 @@ export function spawnHostProcess(
       error?: string;
       failureKind?: "transient" | "permanent";
     }) => void;
-    /** host → main：闲时任务派发结果，转交给 scheduler 结算（与 cron 独立）。 */
-    onOffPeakRunResult?: (result: {
-      offPeakTaskId: string;
-      ok: boolean;
-      conversationId?: string;
-      sessionId?: string;
-      error?: string;
-      failureKind?: "transient" | "permanent";
-    }) => void;
     /** host 中 manual run 落库后请求 main 立即唤醒 scheduler。 */
     onCronSchedulerWakeRequested?: (automationId: string) => void;
-    /** host 中闲时任务翻 schedulable 后请求 main 立即唤醒 scheduler。 */
-    onOffPeakSchedulerWakeRequested?: (offPeakTaskId?: string) => void;
     // browser-use：main 用 WebContentsView+CDP 执行一条命令。实现由宿主注入；缺省则 backend_unavailable。
     handleBrowserExecuteRequest?: (params: {
       win: BrowserWindow;
@@ -270,9 +255,6 @@ export function spawnHostProcess(
   );
   dependencies.logger.info(`[spawnHostProcess] host module path: ${hostModulePath}`);
   dependencies.logger.info(`[spawnHostProcess] glm binary path: ${glmBinaryPath ?? "<not found>"}`);
-  dependencies.logger.info(
-    `[spawnHostProcess] BIGMODEL_OAUTH_APP_SECRET source: ${process.env.BIGMODEL_OAUTH_APP_SECRET ? "process" : dependencies.hostProcessLocalEnv.BIGMODEL_OAUTH_APP_SECRET ? "dotenv" : "fallback"}`,
-  );
 
   // 远程连接与本地服务共享 window Host，进程级 stdout 没有请求身份。
   // 连接进度改由 HostResponseTypes.RemoteWorkspaceConnectionLog 按 requestId 上报。
@@ -502,29 +484,10 @@ export function spawnHostProcess(
       });
       return;
     }
-
-    if (result.data.type === HostResponseTypes.OffPeakRunResult) {
-      dependencies.onOffPeakRunResult?.({
-        offPeakTaskId: result.data.offPeakTaskId,
-        ok: result.data.ok,
-        conversationId: result.data.conversationId,
-        sessionId: result.data.sessionId,
-        error: result.data.error,
-        failureKind: result.data.failureKind,
-      });
-      return;
-    }
-
     if (result.data.type === HostResponseTypes.CronSchedulerWakeRequest) {
       dependencies.onCronSchedulerWakeRequested?.(result.data.automationId);
       return;
     }
-
-    if (result.data.type === HostResponseTypes.OffPeakSchedulerWakeRequest) {
-      dependencies.onOffPeakSchedulerWakeRequested?.(result.data.offPeakTaskId);
-      return;
-    }
-
     if (result.data.type === HostResponseTypes.AgentRunningTaskCountChanged) {
       if (result.data.runningTaskCount > 0) {
         dependencies.hostRunningTaskCountMap.set(child, result.data.runningTaskCount);

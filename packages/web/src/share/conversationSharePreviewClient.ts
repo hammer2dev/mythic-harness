@@ -133,7 +133,7 @@ export class ConversationSharePreviewClient {
     this.diagnostics = options.diagnostics ?? DEFAULT_DIAGNOSTICS;
   }
 
-  async getPreview(shareCode: string, accessToken?: string): Promise<ConversationSharePreview> {
+  async getPreview(shareCode: string): Promise<ConversationSharePreview> {
     if (!isSafeConversationShareCode(shareCode)) {
       throw new ConversationSharePreviewClientError({
         kind: "invalid_contract",
@@ -141,10 +141,7 @@ export class ConversationSharePreviewClient {
       });
     }
 
-    const headers = accessToken?.trim()
-      ? { Authorization: `Bearer ${accessToken.trim()}` }
-      : undefined;
-    const authenticated = headers !== undefined;
+    const authenticated = false;
     const requestTarget = `${this.baseUrl}/shares/<redacted>/preview`;
     this.diagnostics.info("preview_request_started", {
       requestTarget,
@@ -156,7 +153,7 @@ export class ConversationSharePreviewClient {
     try {
       response = await this.fetchImpl(
         `${this.baseUrl}/shares/${encodeURIComponent(shareCode)}/preview`,
-        { method: "GET", ...(headers ? { headers } : {}) },
+        { method: "GET", credentials: "omit" },
       );
     } catch (error) {
       const errorName = error instanceof Error ? error.name : typeof error;

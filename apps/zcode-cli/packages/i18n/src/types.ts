@@ -40,13 +40,13 @@ export interface TuiCopy {
     restorePreviousInputFailed: string;
     typePrompt: string;
   };
-  loginRequired: {
+  modelSetupRequired: {
     help: string;
     message: string;
     status: string;
     title: string;
   };
-  loginSetup: {
+  modelSetup: {
     emptyMessage: string;
     help: string;
     options: {
@@ -56,29 +56,12 @@ export interface TuiCopy {
         primary: string;
         secondary: string;
       };
-      bigmodelOauth: {
-        pendingPrimary: string;
-        pendingSecondary: string;
-        primary: string;
-        secondary: string;
-      };
       zaiApiKey: {
         inputPrimary: string;
         inputSecondary: string;
         primary: string;
         secondary: string;
       };
-      zaiOauth: {
-        pendingPrimary: string;
-        pendingSecondary: string;
-        primary: string;
-        secondary: string;
-      };
-    };
-    pending: {
-      cancelStatus: string;
-      help: string;
-      status: string;
     };
     input: {
       cancelStatus: string;

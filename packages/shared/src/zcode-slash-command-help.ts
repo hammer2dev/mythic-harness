@@ -18,21 +18,13 @@ export const BUILTIN_ZCODE_SLASH_COMMAND_HELP_ENTRIES: readonly BuiltinZCodeSlas
       usage: "/help [command]",
     },
     {
+      name: "apikey",
+      summary: "Configure a provider API key.",
+      usage: "/apikey [zai-coding-plan-api-key <api-key>|bigmodel-coding-plan-api-key <api-key>]",
       details: [
-        "Opens a Coding Plan setup picker when called without arguments.",
-        "Z.ai and BigModel browser login poll for authorization, then securely save credentials and refresh available models.",
-        "Manual API key variants accept the API key as an argument.",
+        "Opens the API key picker in the TUI.",
+        "Writes the manually entered key to personal Provider configuration.",
       ],
-      name: "login",
-      summary: "Set up a Coding Plan provider.",
-      usage:
-        "/login [zai-coding-plan|bigmodel-coding-plan|zai-coding-plan-api-key <api-key>|bigmodel-coding-plan-api-key <api-key>]",
-    },
-    {
-      details: ["Deletes Z.ai OAuth credentials from the shared ZCode credential store."],
-      name: "logout",
-      summary: "Remove the shared Z.ai login credentials.",
-      usage: "/logout",
     },
     {
       details: ["Runs the core manual compaction path and forwards optional summary instructions."],

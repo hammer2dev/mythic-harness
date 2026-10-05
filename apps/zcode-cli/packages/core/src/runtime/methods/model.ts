@@ -1,28 +1,27 @@
 import { beginLocalTurnPreparation } from "@zcode/contracts";
-import { runWithModelInvocationContext, traceContextToLogContext } from "../deps.js";
 import type { ModelReasoningContentBlock, ModelToolCall, ModelUsage, ToolCallId } from "../deps.js";
+import { runWithModelInvocationContext, traceContextToLogContext } from "../deps.js";
 import {
   buildSuspiciousEmptyDiagnostics,
   finalizeSuspiciousEmptyModelResult,
   isContextExceededFinishReason,
   isSuspiciousEmptyModelResult,
-  logModelRequestMediaSummary,
   logMediaBudgetProjection,
   logMediaCapabilityProjection,
-  normalizeStreamError,
+  logModelRequestMediaSummary,
   normalizeModelToolCallsForRuntime,
-  projectMessagesWithMediaAttachmentPaths,
+  normalizeStreamError,
   projectMessagesForInputFormat,
   projectMessagesForMediaBudget,
+  projectMessagesWithMediaAttachmentPaths,
   readRawFinishReason,
 } from "../helpers/index.js";
-import type { RunModelTextRequestOptions, RuntimeModelTextResult } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
-import { modelRequestTokenLimitLogContext } from "./model-token-limits.js";
-import { createModelStreamingEventQueue } from "./model-streaming-event-queue.js";
-import { getOrCreateReasoningBlock } from "./reasoning-stream.js";
-import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
+import type { RunModelTextRequestOptions, RuntimeModelTextResult } from "../types.js";
 import { resolveModelRequestSessionTypeFromTaskType } from "./model-request-session-type.js";
+import { createModelStreamingEventQueue } from "./model-streaming-event-queue.js";
+import { modelRequestTokenLimitLogContext } from "./model-token-limits.js";
+import { getOrCreateReasoningBlock } from "./reasoning-stream.js";
 import { isOutputTokenLimitFinishReason } from "./turn-output-token-continuation.js";
 
 const TOOL_INPUT_STREAM_DELTA_FALLBACK_FLUSH_CHARS = 4096;
@@ -106,11 +105,6 @@ export async function runModelTextRequest(
         : {}),
     }),
     traceContext: projectedOptions.traceContext,
-    refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(this, {
-      abortSignal: projectedOptions.abortSignal,
-      model,
-      traceContext: projectedOptions.traceContext,
-    }),
     // SSE 已经输出后由 core recovery 重发新请求；这些请求在 adapter 看起来都是 attempt=1，
     // 必须把 recovery 次数带过去，才能把 idle timeout 从首请求窗口逐次递增。
     streamIdleTimeoutRetryNumber: projectedOptions.streamRecovery?.retryNumber,

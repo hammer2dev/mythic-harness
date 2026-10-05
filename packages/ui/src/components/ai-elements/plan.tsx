@@ -22,8 +22,6 @@ import { ChevronsUpDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 import { createContext, useContext, useMemo } from "react";
 
-import { Shimmer } from "./shimmer.js";
-
 interface PlanContextValue {
   isStreaming: boolean;
 }

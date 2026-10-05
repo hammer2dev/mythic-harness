@@ -1,16 +1,24 @@
 /* eslint-disable max-lines -- subagent runtime wiring 集中衔接 child runtime、tool pool、权限、MCP 与 activity watchdog，拆分需单独迁移。 */
-import { RESPOND_TO_COORDINATOR_TOOL_NAME } from "@zcode/contracts";
 import type { SubagentRunOptions } from "@zcode/contracts";
+import { RESPOND_TO_COORDINATOR_TOOL_NAME } from "@zcode/contracts";
+import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/capability.js";
+import { toMcpToolName } from "../../mcp/index.js";
+import { createBorrowedSubagentMcpAccess } from "../../subagent/borrowed-mcp-port.js";
+import { createCoordinatorResponsePort } from "../../subagent/coordinator-response.js";
 import {
-  defaultScheduler,
-  PermissionService,
-  defaultPermissionConfig,
-  buildExploreAllowedTools,
-  buildExploreAgentPrompt,
-  createExploreSubagentPort,
-  createCoreError,
-  CoreErrorType,
-} from "../deps.js";
+  extractRequiredMcpServerNames,
+  matchesRequiredMcpServer,
+} from "../../subagent/mcp-config.js";
+import { createSubagentMessageSink } from "../../subagent/message-steering.js";
+import { loadPersistentAgentMemory } from "../../subagent/persistent-memory.js";
+import { isBuiltInExploreAgentProfile } from "../../subagent/profile.js";
+import { mirrorSubagentToolEvent } from "../../subagent/tool-event-mirror.js";
+import {
+  buildSubagentChildDisallowRules,
+  filterSubagentChildToolNames,
+} from "../../subagent/tool-policy.js";
+import { isSubagentDispatchToolName } from "../../tool/compat.js";
+import { AgentRuntime } from "../agent-runtime.js";
 import type {
   ExploreSubagentRuntimeRequest,
   McpConnectionSnapshot,
@@ -23,31 +31,23 @@ import type {
   SkillPort,
   SubagentPort,
 } from "../deps.js";
-import { AgentRuntime } from "../agent-runtime.js";
+import {
+  buildExploreAgentPrompt,
+  buildExploreAllowedTools,
+  CoreErrorType,
+  createCoreError,
+  createExploreSubagentPort,
+  defaultPermissionConfig,
+  defaultScheduler,
+  PermissionService,
+} from "../deps.js";
+import { deriveChildClientPorts } from "../helpers/child-client-ports.js";
+import { resolveSubagentSelection } from "../helpers/subagent-selection.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { cloneModelSelection } from "../model-selection.js";
-import { resolveSubagentSelection } from "../helpers/subagent-selection.js";
 import type { AgentRuntimeDeps } from "../types.js";
-import { toMcpToolName } from "../../mcp/index.js";
-import { createBorrowedSubagentMcpAccess } from "../../subagent/borrowed-mcp-port.js";
-import { createSubagentMessageSink } from "../../subagent/message-steering.js";
-import {
-  extractRequiredMcpServerNames,
-  matchesRequiredMcpServer,
-} from "../../subagent/mcp-config.js";
-import { mirrorSubagentToolEvent } from "../../subagent/tool-event-mirror.js";
-import { isBuiltInExploreAgentProfile } from "../../subagent/profile.js";
-import {
-  buildSubagentChildDisallowRules,
-  filterSubagentChildToolNames,
-} from "../../subagent/tool-policy.js";
-import { isSubagentDispatchToolName } from "../../tool/compat.js";
-import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/capability.js";
-import { getSessionShellEnvironment } from "./session-shell-environment.js";
-import { deriveChildClientPorts } from "../helpers/child-client-ports.js";
-import { createCoordinatorResponsePort } from "../../subagent/coordinator-response.js";
 import { isStaleBranchRuntimeTaskEvent } from "./runtime-command-generation.js";
-import { loadPersistentAgentMemory } from "../../subagent/persistent-memory.js";
+import { getSessionShellEnvironment } from "./session-shell-environment.js";
 
 export function createDefaultSubagentPort(
   this: AgentRuntimeInternal,
@@ -177,9 +177,6 @@ export function createDefaultSubagentPort(
       const childClientPorts = deriveChildClientPorts(
         {
           permissionBroker: this.permissionBroker,
-          ...(this.providerRuntimeHeadersPort === undefined
-            ? {}
-            : { providerRuntimeHeadersPort: this.providerRuntimeHeadersPort }),
         },
         {
           agentId: request.agentId,
@@ -438,7 +435,6 @@ function createSubagentOverrideModelFactory(
     return fallbackFactory({
       ...target,
       selection: override.selection,
-      requestDependencies: override.requestDependencies,
     });
   };
 }

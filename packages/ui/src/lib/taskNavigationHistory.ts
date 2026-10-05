@@ -16,7 +16,7 @@ export interface TaskNavEntry extends WorkspaceNavEntryBase {
 }
 
 // workflow 仅兼容旧入口，入栈时转换为独立的 workflows 记录。
-export type AutomationsNavigationTab = "scheduled" | "idle" | "workflow";
+export type AutomationsNavigationTab = "scheduled" | "workflow";
 
 export type OpenAutomationsMain = (
   automationId?: string,

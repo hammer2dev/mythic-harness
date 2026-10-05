@@ -1,25 +1,25 @@
 import type { Logger, ModelStatusSink, ModelTextResult } from "@zcode/contracts";
 import {
   ModelErrorCode,
-  ModelProtocolError,
   ModelRetryReason,
   ModelTransportKind as ModelTransportKindValue,
 } from "@zcode/contracts";
-import { classifyModelFailure, inspectProviderFailure } from "./failure-classifier.js";
-import type { ClassifiedModelFailure } from "./failure-classifier.js";
-import { getResponseHeaders, unwrapRetryError } from "./failure-inspection.js";
-import { offPeakTicketExpiredMessage, resolveOffPeakFailureDecision } from "./offpeak-retry.js";
-import { AiSdkModelAdapterError } from "./errors.js";
 import { resolveAnthropicRequestMetadataUserId } from "./anthropic-request-metadata.js";
-import { createGenerateTextOptions } from "./runner-options.js";
+import { canRetryEmptyCompletion, scheduleEmptyCompletionRetry } from "./empty-completion-retry.js";
+import { AiSdkModelAdapterError } from "./errors.js";
+import type { ClassifiedModelFailure } from "./failure-classifier.js";
+import { classifyModelFailure, inspectProviderFailure } from "./failure-classifier.js";
+import { getResponseHeaders, unwrapRetryError } from "./failure-inspection.js";
+import type { EnvRecord } from "./model-execution.js";
 import { detectProviderBusinessFinishError } from "./provider-finish-business-error.js";
+import { repairReasoningHistoryAfterSignatureRejection } from "./reasoning-history-normalization.js";
+import { admitAttempt, type AttemptAdmission } from "./request-admission.js";
 import {
-  normalizeReasoning,
-  normalizeSources,
-  normalizeToolCalls,
-  normalizeToolResults,
-  normalizeUsage,
-} from "./runner-normalization.js";
+  retryAttemptLoopContinues,
+  retryBudgetAllows,
+  retryBudgetMaxAttempts,
+} from "./retry-budget.js";
+import type { ResolvedAiSdkModelRetryOptions } from "./retry-policy.js";
 import {
   isDevelopmentModelIOEnv,
   recordGenerateTextDebug,
@@ -31,36 +31,33 @@ import {
   logGenerateTextDiagnostics,
 } from "./runner-diagnostics.js";
 import { sanitizeModelNetworkHeaders } from "./runner-network-headers.js";
-import { canRetryEmptyCompletion, scheduleEmptyCompletionRetry } from "./empty-completion-retry.js";
+import {
+  normalizeReasoning,
+  normalizeSources,
+  normalizeToolCalls,
+  normalizeToolResults,
+  normalizeUsage,
+} from "./runner-normalization.js";
+import { createGenerateTextOptions } from "./runner-options.js";
 import {
   calculateRetryDelay,
   logRetryDelayDecision,
   sleep,
   toAdapterError,
 } from "./runner-retry.js";
+import type {
+  AiSdkModelRuntime,
+  AiSdkModelTextRequest,
+  ResolvedAiSdkModel,
+} from "./runner-runtime.js";
 import {
   admissionWaitPublishers,
   createAttemptStatusContext,
   createStatusContext,
   publishModelStatus,
 } from "./runner-status.js";
-import type { EnvRecord } from "./model-execution.js";
-import type { ResolvedAiSdkModelRetryOptions } from "./retry-policy.js";
-import type {
-  AiSdkModelRuntime,
-  AiSdkModelTextRequest,
-  ResolvedAiSdkModel,
-} from "./runner-runtime.js";
-import { resolveModelForAttempt, RuntimeHeadersRefreshError } from "./runner-runtime-headers.js";
-import { retryAllowedByFailurePolicy } from "./workflow-model-failure-policy.js";
 import { modelFailureStatusFields, providerRequestIdFromHeaders } from "./runner-telemetry.js";
-import { repairReasoningHistoryAfterSignatureRejection } from "./reasoning-history-normalization.js";
-import { admitAttempt, type AttemptAdmission } from "./request-admission.js";
-import {
-  retryAttemptLoopContinues,
-  retryBudgetAllows,
-  retryBudgetMaxAttempts,
-} from "./retry-budget.js";
+import { retryAllowedByFailurePolicy } from "./workflow-model-failure-policy.js";
 
 export async function runGenerateText(input: {
   debugDir?: string;
@@ -101,17 +98,14 @@ export async function runGenerateText(input: {
     );
     attempt += 1
   ) {
-    const retryBudgetAttempt =
-      attempt - Number(signatureRepairAttempted);
+    const retryBudgetAttempt = attempt - Number(signatureRepairAttempted);
     const attemptRequest = { ...input.request, messages: requestMessages };
     const startedAt = Date.now();
     let resolved = input.resolved;
     let statusContext = createAttemptStatusContext(
       {
         ...baseStatusContext,
-        maxAttempts: statusMaxAttempts(
-          Number(signatureRepairAttempted),
-        ),
+        maxAttempts: statusMaxAttempts(Number(signatureRepairAttempted)),
       },
       attempt,
     );
@@ -158,11 +152,7 @@ export async function runGenerateText(input: {
     }
 
     try {
-      resolved = await resolveModelForAttempt({
-        attempt,
-        request: attemptRequest,
-        resolveModel: input.resolveModel,
-      });
+      resolved = input.resolveModel();
       const anthropicMetadataUserId = await resolveAnthropicRequestMetadataUserId({
         env: input.env,
         providerKind: resolved.providerKind,
@@ -330,34 +320,9 @@ export async function runGenerateText(input: {
       };
     } catch (error) {
       // 合并后鉴权解析进入 attempt try；与 stream 一致保留网络前凭据缺失的类型化错误。
-      if (
-        error instanceof ModelProtocolError &&
-        error.code === ModelErrorCode.ModelRequestAuthMissing
-      )
-        throw error;
       const completedAt = Date.now();
       const classified = classifyModelFailure(error, input.request.abortSignal);
-      if (error instanceof RuntimeHeadersRefreshError) {
-        classified.message = error.message;
-        classified.retryable = false;
-      }
-      // off-peak 特判（仅 idle plan provider，见 offpeak-retry.ts）：排队 429 豁免预算、
-      // 3102（兼容旧 3001）以稳定标记落败触发 desktop 侧续跑。
-      const offPeak = resolveOffPeakFailureDecision({
-        offPeak: resolved.accountAccess?.mode === "off-peak",
-        failure: classified,
-        error: unwrapRetryError(error),
-      });
-      const failure: ClassifiedModelFailure =
-        offPeak?.kind === "ticketExpired"
-          ? {
-              ...classified,
-              retryable: false,
-              message: offPeakTicketExpiredMessage(classified.message),
-            }
-          : offPeak?.kind === "queued"
-            ? { ...classified, retryable: true, retryReason: ModelRetryReason.OffpeakQueued }
-            : classified;
+      const failure: ClassifiedModelFailure = classified;
       const responseHeaders = sanitizeModelNetworkHeaders(
         getResponseHeaders(unwrapRetryError(error)),
       );
@@ -378,15 +343,13 @@ export async function runGenerateText(input: {
         };
       }
       const canRetryWithFailurePolicy =
-        offPeak?.kind === "queued"
-          ? true
-          : retryBudgetAllows(retryBudget, retryBudgetAttempt, input.retry.maxAttempts) &&
-            // workflow 流量（无上限预算）读策略表而不是分类器的 retryable；有界预算逐字不变。
-            retryAllowedByFailurePolicy(
-              failure,
-              retryBudget,
-              inspectProviderFailure(error).providerErrorCode,
-            );
+        retryBudgetAllows(retryBudget, retryBudgetAttempt, input.retry.maxAttempts) &&
+        // workflow 流量（无上限预算）读策略表而不是分类器的 retryable；有界预算逐字不变。
+        retryAllowedByFailurePolicy(
+          failure,
+          retryBudget,
+          inspectProviderFailure(error).providerErrorCode,
+        );
       const canRetry = retryWithRepairedHistory || canRetryWithFailurePolicy;
 
       if (options) {
@@ -467,10 +430,7 @@ export async function runGenerateText(input: {
         continue;
       }
 
-      const delayMs =
-        offPeak?.kind === "queued"
-          ? offPeak.delayMs
-          : calculateRetryDelay(input.retry, retryBudgetAttempt, failure.retryAfterMs);
+      const delayMs = calculateRetryDelay(input.retry, retryBudgetAttempt, failure.retryAfterMs);
       logRetryDelayDecision({
         attempt,
         canRetry,
@@ -526,10 +486,6 @@ export async function runGenerateText(input: {
         throw toAdapterError(sleepError, sleepFailure, statusContext, attempt, {
           errorPhase: "connect",
         });
-      }
-      if (offPeak?.kind === "queued") {
-        // 排队等待不消耗重试预算：回退计数让 for 自增后原地重试，无限探测。
-        attempt -= 1;
       }
     } finally {
       admission.release();

@@ -1,8 +1,6 @@
-import { Output, jsonSchema } from "ai";
 import type { ModelToolChoice } from "@zcode/contracts";
+import { Output, jsonSchema } from "ai";
 import type { EnvRecord } from "./model-execution.js";
-import { toAiSdkMessages } from "./transform.js";
-import { toAiSdkTools } from "./tool-transform.js";
 import type {
   AiSdkGenerateTextOptions,
   AiSdkModelTextRequest,
@@ -10,18 +8,13 @@ import type {
   ResolvedAiSdkModel,
 } from "./runner-runtime.js";
 import { createModelRequestAttributionHeaders, type ModelStatusContext } from "./runner-status.js";
+import { toAiSdkTools } from "./tool-transform.js";
+import { toAiSdkMessages } from "./transform.js";
 
 type ExperimentalIncludeWithResponseBody = {
   requestBody?: boolean;
   responseBody?: boolean;
 };
-
-/** zcode-plan 业务码常只出现在 finish chunk 的 response.body，流式路径需显式开启。 */
-function shouldIncludeStreamResponseBody(resolved: ResolvedAiSdkModel): boolean {
-  return (
-    resolved.providerKind === "openai-compatible" && resolved.accountAccess?.mode === "start-plan"
-  );
-}
 
 function mergeRequestHeaders(
   providerHeaders: Record<string, string> | undefined,
@@ -166,7 +159,7 @@ function createStreamExperimentalInclude(input: {
       responseBody: true,
     };
   }
-  return shouldIncludeStreamResponseBody(input.resolved) ? { responseBody: true } : undefined;
+  return false ? { responseBody: true } : undefined;
 }
 
 function toAiSdkToolChoice(

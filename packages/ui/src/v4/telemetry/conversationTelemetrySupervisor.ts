@@ -40,10 +40,6 @@ import {
   recordPromptTokenUsageDelta,
 } from "@/lib/messageTelemetry.js";
 import {
-  reportPlanUsageModelRequestStartedToArms,
-  reportPlanUsageTtftToArms,
-} from "@/lib/planUsageArmsTelemetry.js";
-import {
   reportSendFunnelInputFocus,
   reportSendFunnelSendClick,
   reportSendFunnelSendResult,
@@ -72,10 +68,7 @@ export interface ConversationPromptTelemetrySeed {
   sendTime: number;
   /** 发送瞬间冻结的旧版模型/模式/套餐字段。 */
   extraDetail: Record<string, string>;
-  /**
-   * 发送漏斗关联 ID，配对 send_click ↔ send_result。仅 composer 真实点击产生；
-   * 后台任务（off_peak / automation）seed 无此字段，落定时直接跳过不报。
-   */
+
   sendClickId?: string;
   /** 是否中途经过队列二次确认弹窗（该子集的 send_cost_ms 含用户停留时间）。 */
   queueConfirmed?: boolean;
@@ -147,18 +140,6 @@ function backgroundSeedFromTurnStarted(
   fact: Extract<ConversationTelemetryFact, { kind: "turn.started" }>,
 ): AcceptedConversationPromptTelemetrySeed | null {
   if (!fact.sourceCommandId) return null;
-  if (fact.offPeakTaskId) {
-    return {
-      sessionId: fact.sessionId,
-      sourceCommandId: fact.sourceCommandId,
-      sendTime: fact.occurredAt,
-      extraDetail: {
-        message_source: "off_peak_task",
-        off_peak_task_id: fact.offPeakTaskId,
-        ...(fact.offPeakRunType ? { off_peak_run_type: fact.offPeakRunType } : {}),
-      },
-    };
-  }
   if (!fact.automationId || !fact.taskTrigger) {
     if (fact.inputSource !== "background_task") return null;
     return {
@@ -201,8 +182,6 @@ const STEP_SOURCE_DETAIL_KEYS = [
   "message_source",
   "task_trigger",
   "automation_id",
-  "off_peak_task_id",
-  "off_peak_run_type",
 ] as const;
 
 function stepSourceDetailOf(extraDetail: Record<string, string>): Record<string, string> {
@@ -797,7 +776,6 @@ export class ConversationTelemetrySupervisor {
 
     // plan_request 只依赖真实模型网络事实，可前后台上报，也不要求本地 prompt seed。
     if (fact.kind === "model.request.status") {
-      reportPlanUsageModelRequestStartedToArms(this.platform, toLegacyNetworkEvent(fact));
     }
     if (fact.kind === "subagent.lifecycle") {
       this.handleSubagentLifecycle(fact, receivedAt);
@@ -1856,12 +1834,6 @@ export class ConversationTelemetrySupervisor {
         model: detail.model_name || undefined,
         talkId: sessionId,
         messageId: sourceCommandId,
-      });
-      reportPlanUsageTtftToArms(this.platform, {
-        providerId: detail.model_provider,
-        modelName: detail.model_name,
-        askMode: detail.ask_mode,
-        ttftMs: foregroundTtftMs,
       });
     }
     const durationMs = finiteNumber(detail.duration_ms);

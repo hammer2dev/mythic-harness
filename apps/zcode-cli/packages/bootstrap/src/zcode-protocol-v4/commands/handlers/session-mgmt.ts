@@ -51,7 +51,6 @@ async function createSession(
     workspaceId: payload.workspaceId,
     projectWorkspace: payload.projectWorkspace,
     mcpServers: payload.mcpServers,
-    offPeakToolEnabled: payload.offPeakToolEnabled,
     dynamicWorkflowEnabled: payload.dynamicWorkflowEnabled,
   });
   // createSession.config 消费——草稿态 UI 的先行选择（模型/思考深度/

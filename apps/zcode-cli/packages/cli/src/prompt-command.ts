@@ -1,7 +1,14 @@
-import { extname } from "node:path";
 import { formatJson, type PresentationSurface } from "@zcode/core";
-import type { RunContext, GlobalOptions } from "@zcode/shared-types";
+import type { GlobalOptions, RunContext } from "@zcode/shared-types";
+import { extname } from "node:path";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
+import type {
+  CliPermissionMode,
+  CliResumeRequest,
+  ModeCapableApp,
+  RunDependencies,
+} from "./cli-types.js";
+import type { CommandCenterApp, SlashCommand } from "./command-center.js";
 import {
   buildManualSkillPrompt,
   createCommandCenter,
@@ -16,7 +23,6 @@ import {
   readHeadlessRuntimeFacts,
   waitForHeadlessWorkflowSettle,
 } from "./headless-workflow.js";
-import { runLoginCommand, runLogoutCommand } from "./login-command.js";
 import { resolveResumeSession } from "./resume.js";
 import { readRuntimeEventSubscriber } from "./runtime-event-subscriber.js";
 import {
@@ -25,13 +31,6 @@ import {
   runCliCleanupWithTimeout,
 } from "./shutdown.js";
 import { runSkillsCommand } from "./skills-command.js";
-import type { CommandCenterApp, SlashCommand } from "./command-center.js";
-import type {
-  CliPermissionMode,
-  CliResumeRequest,
-  ModeCapableApp,
-  RunDependencies,
-} from "./cli-types.js";
 
 /**
  * Does this run print a JSON summary at the end?
@@ -86,21 +85,14 @@ export const runPrompt = async (
   if (slashCommand?.type === "known" && slashCommand.name === "skill" && !slashCommand.skillName) {
     return await runSkillsCommand(ctx, options, deps, []);
   }
-  if (slashCommand?.type === "known" && slashCommand.name === "login") {
+  if (slashCommand?.type === "known" && slashCommand.name === "apikey") {
     if (slashCommand.args.length > 0) {
-      ctx.stderr.write("Usage: /login\n");
+      ctx.stderr.write("Usage: /apikey\n");
       return 1;
     }
-    return await runLoginCommand(ctx, options, deps, false);
+    ctx.stderr.write("API Key setup is available in interactive TUI via /apikey\n");
+    return 1;
   }
-  if (slashCommand?.type === "known" && slashCommand.name === "logout") {
-    if (slashCommand.args.length > 0) {
-      ctx.stderr.write("Usage: /logout\n");
-      return 1;
-    }
-    return await runLogoutCommand(ctx, options, deps);
-  }
-
   const runtimePrompt =
     slashCommand?.type === "known" && slashCommand.name === "skill"
       ? buildManualSkillPrompt(slashCommand.skillName, slashCommand.task)
@@ -197,17 +189,7 @@ export const runPrompt = async (
     if (!startProviderRegistryRuntime) {
       throw new Error("Provider Registry runtime is unavailable.");
     }
-    providerRegistryRuntime = await startProviderRegistryRuntime(
-      appEnv,
-      deps.skipUserConfig
-        ? {}
-        : {
-            standalone: {
-              ...createCliProviderRefreshReporter(ctx.stderr),
-              ...(deps.userConfigPath ? { legacyCliUserConfigFilePath: deps.userConfigPath } : {}),
-            },
-          },
-    );
+    providerRegistryRuntime = await startProviderRegistryRuntime(appEnv);
     browserRuntime = createCliHeadlessBrowserRuntime(options, deps);
     app = await createApp({
       browserControlPort: browserRuntime?.browserControlPort,
@@ -219,11 +201,6 @@ export const runPrompt = async (
       permissionBroker: createHeadlessPermissionBroker(),
       providerRegistry: providerRegistryRuntime.runtime.registryService,
       configuredDefaultModelSelection: providerRegistryRuntime.configuredDefaultModelSelection,
-      ...(providerRegistryRuntime.providerRuntimeHeadersPort
-        ? {
-            providerRuntimeHeadersPort: providerRegistryRuntime.providerRuntimeHeadersPort,
-          }
-        : {}),
       resume: sessionId !== undefined,
       runtimeConfig: {
         ...(mode ? { mode } : {}),
@@ -639,4 +616,3 @@ function writeHeadlessWorkspaceHookTrustDiagnostic(
     ].join("\n") + "\n",
   );
 }
-import { createCliProviderRefreshReporter } from "./provider-runtime-env.js";

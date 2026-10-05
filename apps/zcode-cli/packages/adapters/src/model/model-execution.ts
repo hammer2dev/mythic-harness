@@ -6,27 +6,21 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { LanguageModel } from "ai";
+import { type Logger, type ModelId, type ModelProviderId } from "@zcode/contracts";
 import {
   compileModelOptionMaps,
   type CompiledModelOptionMaps,
   type ModelOptionValues,
 } from "@zcode/model-option-map";
-import {
-  type Logger,
-  type ModelId,
-  type ModelProviderId,
-  type ModelRequestAuth,
-} from "@zcode/contracts";
 import type { RegistryProviderConfig } from "@zcode/provider";
 import { withOpenRouterAttributionHeaders } from "@zcode/shared";
-import { createAnthropicCompatFetch } from "./anthropic-stream-compat.js";
-import { createOpenAIResponsesJsonCompatFetch } from "./openai-responses-json-compat.js";
-import { createModelOptionMapFetch, type RawRequestBodyCapture } from "./model-option-map-fetch.js";
+import type { LanguageModel } from "ai";
 import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
-import { createOfficialCodingPlanGatewayFetch } from "./official-coding-plan-gateway.js";
+import { createAnthropicCompatFetch } from "./anthropic-stream-compat.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
+import { createModelOptionMapFetch, type RawRequestBodyCapture } from "./model-option-map-fetch.js";
 import { mergeModelRequestHeaders } from "./model-request-headers.js";
+import { createOpenAIResponsesJsonCompatFetch } from "./openai-responses-json-compat.js";
 
 export type AiSdkProviderKind = "openai" | "anthropic" | "openai-compatible";
 
@@ -73,10 +67,7 @@ export interface AiSdkResolvedModel {
 
 export interface AiSdkBoundModelResolution {
   readonly resolved: AiSdkResolvedModel;
-  resolveRequest(input: {
-    readonly options: ModelOptionValues;
-    readonly requestAuth?: ModelRequestAuth;
-  }): AiSdkResolvedModel;
+  resolveRequest(input: { readonly options: ModelOptionValues }): AiSdkResolvedModel;
 }
 
 type LanguageModelFactory = (modelId: string) => LanguageModel;
@@ -187,9 +178,8 @@ export class AiSdkModelExecution {
     const optionMaps = compileModelOptionMaps(input.optionSpecs);
     return {
       // 这里只构造不执行请求的基础 Model；真正请求必须通过 resolveRequest 绑定完整 options。
-      resolved: this.resolveSnapshot(snapshot, undefined, undefined, undefined),
-      resolveRequest: ({ options, requestAuth }) =>
-        this.resolveSnapshot(snapshot, requestAuth, optionMaps, options),
+      resolved: this.resolveSnapshot(snapshot, undefined, undefined),
+      resolveRequest: ({ options }) => this.resolveSnapshot(snapshot, optionMaps, options),
     };
   }
 
@@ -224,11 +214,10 @@ export class AiSdkModelExecution {
 
   private resolveSnapshot(
     snapshot: AiSdkModelSnapshot,
-    requestAuth: ModelRequestAuth | undefined,
     optionMaps: CompiledModelOptionMaps | undefined,
     optionValues: ModelOptionValues | undefined,
   ): AiSdkResolvedModel {
-    const providerConfig = applyModelRequestAuth(snapshot.providerConfig, requestAuth);
+    const providerConfig = snapshot.providerConfig;
     // Model 创建时的 Provider 事实必须被冻结在当前 binding 中。若按 providerId 缓存
     // factory，配置更新后创建的新 Model 会错误复用旧 Endpoint / Header / API Key。
     const rawRequestBodyCapture: RawRequestBodyCapture = {};
@@ -352,9 +341,7 @@ function toAiSdkProviderConfig(
   config: RegistryProviderConfig,
 ): AiSdkProviderConfig {
   const common = {
-    ...(config.access.type !== "zhipu-account" && config.access.apiKey
-      ? { apiKey: config.access.apiKey }
-      : {}),
+    ...(config.access.apiKey ? { apiKey: config.access.apiKey } : {}),
     baseURL: config.api.baseUrl,
     ...(config.api.headers ? { headers: { ...config.api.headers } } : {}),
     providerOptions: { apiFormat: config.api.type },
@@ -369,20 +356,6 @@ function toAiSdkProviderConfig(
       return { kind: "openai-compatible", name: providerId, ...common };
   }
   throw new Error(`Unsupported Provider API type: ${String(config.api.type)}`);
-}
-
-function applyModelRequestAuth(
-  providerConfig: AiSdkProviderConfig,
-  requestAuth: ModelRequestAuth | undefined,
-): AiSdkProviderConfig {
-  if (!requestAuth) return providerConfig;
-  return {
-    ...providerConfig,
-    ...(requestAuth.apiKey ? { apiKey: requestAuth.apiKey } : {}),
-    ...(requestAuth.headers
-      ? { headers: mergeModelRequestHeaders(providerConfig.headers, requestAuth.headers) }
-      : {}),
-  };
 }
 
 function withAnthropicAuthorizationHeader(
@@ -514,10 +487,7 @@ function createProviderProxyFetch(options: ProviderProxyFetchOptions): ProviderF
  * 官方端点与网关端点的对应关系见 official-coding-plan-gateway.ts。
  */
 function createProviderTransportFetch(options: ProviderProxyFetchOptions): ProviderFetch {
-  return createOfficialCodingPlanGatewayFetch({
-    env: options.env,
-    fetch: createProviderProxyFetch(options),
-  });
+  return createProviderProxyFetch(options);
 }
 
 async function detectProviderBusinessError(

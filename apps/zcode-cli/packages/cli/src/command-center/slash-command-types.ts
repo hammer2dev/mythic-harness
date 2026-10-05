@@ -49,13 +49,7 @@ export type SlashCommand =
     }
   | {
       args: string;
-      name: "login";
-      rawName: string;
-      type: "known";
-    }
-  | {
-      args: string;
-      name: "logout";
+      name: "apikey";
       rawName: string;
       type: "known";
     }

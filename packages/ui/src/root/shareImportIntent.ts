@@ -54,7 +54,7 @@ export function resolveShareImportFailurePresentation(kind: string): {
 } {
   if (kind === "authentication_required") {
     return {
-      messageId: "conversationShare.import.loginRequired",
+      messageId: "conversationShare.import.failed",
       retryable: false,
     };
   }

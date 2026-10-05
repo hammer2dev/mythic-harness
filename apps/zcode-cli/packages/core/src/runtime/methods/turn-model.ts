@@ -5,32 +5,22 @@ import {
   type TraceContext,
   type TurnInputIntentMetadata,
 } from "@zcode/contracts";
-import { getCurrentModelInvocationContext } from "../deps.js";
+import { applyRuntimeExecutionState } from "../execution-state.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { cloneModelSelection } from "../model-selection.js";
-import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
 import { createRuntimeModel, withModelInvocationContext } from "./runtime-model.js";
-import { applyRuntimeExecutionState } from "../execution-state.js";
 
 export function createTurnModel(
   runtime: AgentRuntimeInternal,
   options: {
     selection?: ModelSelection;
-    requestDependencies?: import("@zcode/contracts").ModelRequestDependencies;
   } = {},
 ): Model {
   const selection = options.selection ?? runtime.getSessionModelSelection();
   const model = createRuntimeModel(runtime, {
     selection,
-    requestDependencies: options.requestDependencies,
   });
-  return withModelInvocationContext(model, (request) => ({
-    refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(runtime, {
-      abortSignal: request.abortSignal,
-      model,
-      traceContext: getCurrentModelInvocationContext()?.traceContext ?? runtime.rootTraceContext,
-    }),
-  }));
+  return withModelInvocationContext(model, (request) => ({}));
 }
 
 /**
@@ -51,7 +41,6 @@ export async function applySubmissionExecutionState(
   if (selection) {
     model ??= createTurnModel(runtime, {
       selection,
-      requestDependencies: modelExecution?.requestDependencies,
     });
     if (modelExecution?.selectionScope !== "execution") {
       const appliedSelection = cloneModelSelection(selection);

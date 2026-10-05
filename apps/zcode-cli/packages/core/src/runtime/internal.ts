@@ -1,61 +1,60 @@
-import { PermissionService, ToolScheduler } from "./deps.js";
+import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
+import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
+import type { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
+import type { RuntimeCommandQueue } from "./command-queue.js";
 import type {
-  Logger,
-  ModelSelection,
+  ContextBuilder,
+  ContextBuildResult,
+  ContextSourcePort,
+  ContextSourceSnapshot,
+  DynamicWorkflowRunPort,
   EventReducer,
+  ExecutionPort,
+  FileSystemPort,
+  HookRunner,
+  ImageProcessorPort,
+  Logger,
+  McpConnectionSnapshot,
+  McpPort,
+  MessageHistory,
   MessageId,
-  TurnId,
+  ModelCatalogPort,
+  ModelSelection,
   ModelToolContract,
+  PdfDocumentPort,
   PermissionBrokerPort,
+  ReadFileStateMap,
   SessionEventSink,
   SessionEventStorePort,
   SessionId,
   SessionMailboxPort,
   SessionStorePort,
-  ContextSourcePort,
-  ContextSourceSnapshot,
-  ExecutionPort,
-  FileSystemPort,
-  HookRunner,
-  ImageProcessorPort,
-  PdfDocumentPort,
-  McpConnectionSnapshot,
   SkillLoadOutcome,
   SkillPort,
-  McpPort,
-  DynamicWorkflowRunPort,
-  ModelCatalogPort,
   SubagentPort,
   ToolArtifactStorePort,
-  TraceContext,
-  MessageHistory,
-  ReadFileStateMap,
   ToolExecutor,
   ToolRegistry,
-  ContextBuilder,
-  ContextBuildResult,
+  TraceContext,
+  TurnId,
 } from "./deps.js";
+import { PermissionService, ToolScheduler } from "./deps.js";
+import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
+import type { AgentRuntimeHookMethods } from "./internal-hook-methods.js";
+import type { AgentRuntimeCoreMethods } from "./internal-methods.js";
+import type { AgentRuntimeTurnMethods } from "./internal-turn-methods.js";
 import type {
-  ActiveTurnSteeringState,
-  ActiveTurnStartReservation,
   ActiveForegroundExecutionState,
-  ForegroundPromotionLeaseState,
+  ActiveTurnStartReservation,
+  ActiveTurnSteeringState,
   AgentRuntimeConfig,
   AgentRuntimeDeps,
   BackgroundTaskNotificationSealReason,
-  PendingModelChangeTimeline,
-  ProviderRuntimeHeadersPort,
+  ForegroundPromotionLeaseState,
   MainTurnCacheHitAggregate,
+  PendingModelChangeTimeline,
   RuntimeTurnFileChangeMap,
 } from "./types.js";
-import type { RuntimeCommandQueue } from "./command-queue.js";
-import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
-import type { AgentRuntimeCoreMethods } from "./internal-methods.js";
-import type { AgentRuntimeTurnMethods } from "./internal-turn-methods.js";
-import type { AgentRuntimeHookMethods } from "./internal-hook-methods.js";
-import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
-import type { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
-import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 
 export interface AgentRuntimeInternal
   extends AgentRuntimeCoreMethods, AgentRuntimeTurnMethods, AgentRuntimeHookMethods {
@@ -79,7 +78,6 @@ export interface AgentRuntimeInternal
   workspaceHookAdmission?: WorkspaceHookRuntimeAdmissionPort;
   modelFactory: AgentRuntimeDeps["modelFactory"];
   modelIoDir?: string;
-  providerRuntimeHeadersPort?: ProviderRuntimeHeadersPort;
   browserControlPort?: AgentRuntimeDeps["browserControlPort"];
   modelRequestAdmission?: AgentRuntimeDeps["modelRequestAdmission"];
   sessionModelSelection: ModelSelection | undefined;

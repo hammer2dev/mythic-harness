@@ -1,5 +1,6 @@
 import type {
   CollaborationMode,
+  ContextBuilder,
   ExecutionShellSelection,
   Model,
   ModelSelection,
@@ -11,29 +12,29 @@ import type {
   SessionEventStorePort,
   SessionId,
   SessionProjection,
-  TraceContext,
   ToolExecutor,
   ToolRegistry,
-  ContextBuilder,
+  TraceContext,
 } from "../deps.js";
-import { isInspectablePermissionBroker, projectIdFromDirectory } from "../helpers/index.js";
+import { applyRuntimeExecutionState } from "../execution-state.js";
 import {
   deriveChildClientPorts,
   type ChildClientPortsContext,
   type ClientFacingPorts,
 } from "../helpers/child-client-ports.js";
-import type { AgentRuntimeConfig, ActiveTurnInfo } from "../types.js";
+import { isInspectablePermissionBroker, projectIdFromDirectory } from "../helpers/index.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { cloneModelSelection } from "../model-selection.js";
-import { applyRuntimeExecutionState } from "../execution-state.js";
+import type { ActiveTurnInfo, AgentRuntimeConfig } from "../types.js";
 
-import { orderProviderVisibleToolContracts } from "../../tool/provider-visible-order.js";
+import { resolveExecutionState } from "@zcode/shared";
 import { projectToolModelContract } from "../../tool/model-contract.js";
+import { orderProviderVisibleToolContracts } from "../../tool/provider-visible-order.js";
 import { rebuildContextPrefix } from "./context-refresh.js";
 import { filterEmbeddedSearchRuntimeVisibleTools } from "./embedded-search-branch.js";
 import {
-  getSessionShellSelection as readSessionShellSelection,
   initializeSessionShellEnvironmentIfNeeded as initializeSessionShellEnvironment,
+  getSessionShellSelection as readSessionShellSelection,
   type SessionShellEnvironmentCandidate,
 } from "./session-shell-environment.js";
 
@@ -220,9 +221,6 @@ export function createChildClientPorts(
   return deriveChildClientPorts(
     {
       ...(this.permissionBroker === undefined ? {} : { permissionBroker: this.permissionBroker }),
-      ...(this.providerRuntimeHeadersPort === undefined
-        ? {}
-        : { providerRuntimeHeadersPort: this.providerRuntimeHeadersPort }),
     },
     { ...context, parentSessionId: this.sessionId },
   );
@@ -271,4 +269,3 @@ function shouldExposeWebSearch(this: AgentRuntimeInternal, model?: Model): boole
   if (!model) return true;
   return model.properties.supportsNativeWebSearch;
 }
-import { resolveExecutionState } from "@zcode/shared";

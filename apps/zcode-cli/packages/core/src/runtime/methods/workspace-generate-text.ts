@@ -1,25 +1,24 @@
-import {
-  SessionEventType,
-  createChildTraceContext,
-  runWithModelInvocationContext,
-  traceContextToLogContext,
-} from "../deps.js";
+import { auxiliaryModelOptions } from "../../model/auxiliary-model-options.js";
 import type {
   ModelInputMessage,
-  ModelSelection,
   ModelRequest,
+  ModelSelection,
   ModelToolCall,
   ModelToolContract,
   ModelUsage,
   SessionEvent,
   TraceContext,
 } from "../deps.js";
-import type { AgentRuntimeInternal } from "../internal.js";
-import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
-import { recordModelUsageFact } from "./usage-observability.js";
-import { createRuntimeModel } from "./runtime-model.js";
+import {
+  SessionEventType,
+  createChildTraceContext,
+  runWithModelInvocationContext,
+  traceContextToLogContext,
+} from "../deps.js";
 import { normalizeStreamError } from "../helpers/index.js";
-import { auxiliaryModelOptions } from "../../model/auxiliary-model-options.js";
+import type { AgentRuntimeInternal } from "../internal.js";
+import { createRuntimeModel } from "./runtime-model.js";
+import { recordModelUsageFact } from "./usage-observability.js";
 
 const WORKSPACE_GENERATE_TEXT_TIMEOUT_MS = 60_000;
 const CONNECTIVITY_PROBE_MAX_OUTPUT_TOKENS = 1;
@@ -85,11 +84,6 @@ export async function testModelConnectivity(
       modelCall: { operation: "workspace_generate_text" },
       statusSink: this.createModelStatusSink(traceContext, []),
       traceContext,
-      refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(this, {
-        abortSignal,
-        model,
-        traceContext,
-      }),
     },
     async () => {
       for await (const event of model.streamText(request)) {
@@ -210,11 +204,6 @@ async function generateWorkspaceTextImpl(
       },
       statusSink: this.createModelStatusSink(modelTraceContext, events),
       traceContext: modelTraceContext,
-      refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(this, {
-        abortSignal,
-        model,
-        traceContext: modelTraceContext,
-      }),
     },
     () => model.generateText(modelRequest),
   ).catch(async (error: unknown) => {

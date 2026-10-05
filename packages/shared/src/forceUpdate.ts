@@ -1,4 +1,4 @@
-import type { ForceUpdateConfig } from "./coding-plan-subscription.js";
+import type { ForceUpdateConfig } from "./clientConfig.js";
 
 export interface ForceUpdateRequirement {
   currentVersion: string;

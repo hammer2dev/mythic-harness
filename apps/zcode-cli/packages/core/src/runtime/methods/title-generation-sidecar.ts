@@ -1,9 +1,5 @@
-import {
-  SessionEventType,
-  createChildTraceContext,
-  runWithModelInvocationContext,
-  traceContextToLogContext,
-} from "../deps.js";
+import type { AgentTelemetryCausation } from "@zcode/contracts";
+import { auxiliaryModelOptions } from "../../model/auxiliary-model-options.js";
 import type {
   MessageId,
   ModelInputMessage,
@@ -11,13 +7,16 @@ import type {
   SessionEvent,
   TraceContext,
 } from "../deps.js";
-import type { AgentTelemetryCausation } from "@zcode/contracts";
+import {
+  SessionEventType,
+  createChildTraceContext,
+  runWithModelInvocationContext,
+  traceContextToLogContext,
+} from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
-import { createRefreshRuntimeHeadersBeforeModelAttempt } from "./model-runtime-headers.js";
-import { recordModelUsageFact } from "./usage-observability.js";
-import { createRuntimeModel } from "./runtime-model.js";
 import { cloneModelSelection } from "../model-selection.js";
-import { auxiliaryModelOptions } from "../../model/auxiliary-model-options.js";
+import { createRuntimeModel } from "./runtime-model.js";
+import { recordModelUsageFact } from "./usage-observability.js";
 
 export const SESSION_TITLE_QUERY_SOURCE = "session_title";
 export const GOAL_SUMMARY_TITLE_QUERY_SOURCE = "goal_summary_title";
@@ -140,11 +139,6 @@ async function generateTitleCandidateImpl(
     },
     statusSink: this.createModelStatusSink(modelTraceContext, events),
     traceContext: modelTraceContext,
-    refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(this, {
-      abortSignal: titleAbortSignal,
-      model,
-      traceContext: modelTraceContext,
-    }),
   };
 
   const resultPromise = runWithModelInvocationContext(invocationContext, () =>

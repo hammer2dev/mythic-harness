@@ -1,10 +1,5 @@
-import { isAbsolute, join, resolve } from "node:path";
-import {
-  createInMemorySessionEventStore,
-  createNodeToolArtifactStore,
-} from "@zcode/adapters/storage";
-import { createNodeLoggerFactory } from "@zcode/adapters/logging";
 import { createConfig, resolvePath } from "@zcode/adapters/config";
+import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import {
   createNodeExecutionAdapter,
   resolveEffectiveBashShellSelection,
@@ -12,11 +7,24 @@ import {
 import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
 import { createNodeWebFetchHttpClientAdapter } from "@zcode/adapters/http";
 import { createJimpImageProcessorAdapter } from "@zcode/adapters/image";
-import { createPopplerPdfDocumentAdapter } from "@zcode/adapters/pdf";
+import { createNodeLoggerFactory } from "@zcode/adapters/logging";
 import { createNodeSessionMailboxAdapter } from "@zcode/adapters/mailbox";
-import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
-import { createNodeSkillAdapter } from "@zcode/adapters/skills";
 import { createMcpAdapter } from "@zcode/adapters/mcp";
+import { createPopplerPdfDocumentAdapter } from "@zcode/adapters/pdf";
+import { createNodeSkillAdapter } from "@zcode/adapters/skills";
+import {
+  createInMemorySessionEventStore,
+  createNodeToolArtifactStore,
+} from "@zcode/adapters/storage";
+import {
+  createRootTraceContext,
+  createSessionEvent,
+  createSessionId,
+  traceContextToLogContext,
+  type ExecutionShellSelection,
+  type MessageId,
+  type TraceContext,
+} from "@zcode/contracts";
 import {
   AgentRuntime,
   PermissionService,
@@ -24,38 +32,53 @@ import {
   type AmendWorkflowRunSettingsInput,
   type ResumeSessionResult,
 } from "@zcode/core";
-import { createModelTelemetry } from "@zcode/telemetry";
-import {
-  createRootTraceContext,
-  traceContextToLogContext,
-  type TraceContext,
-  createSessionId,
-  createSessionEvent,
-  type ExecutionShellSelection,
-  type MessageId,
-} from "@zcode/contracts";
 import { isRemoteWorkspaceIdentity, resolveZCodeRuntimeEnv } from "@zcode/shared";
 import {
   ZCODE_ATTACHMENT_FAULT_CODES,
   ZCodeAttachmentFaultError,
 } from "@zcode/shared/zcode-protocol-v4";
+import { createModelTelemetry } from "@zcode/telemetry";
+import { isAbsolute, join, resolve } from "node:path";
 
-import { createModelAdapter } from "../model-factory.js";
-import { StartupTimer, startupNow } from "../startup-logging.js";
+import { resolveZCodeBuiltinPromptCommand } from "../builtin-prompt-command.js";
+import { resolveZCodeCustomCommandPrompt } from "../custom-command-prompt.js";
 import { scheduleStartupLogRetentionCleanup } from "../log-retention.js";
-import type {
-  PrepareUserExecutionBoundary,
-  ResumeOptions,
-  ZCodeApp,
-  ZCodeAppOptions,
-} from "./types.js";
+import { createRuntimeAiSdkModelExecutionConfig } from "../model-config.js";
+import { createModelAdapter } from "../model-factory.js";
+import { collectDisabledPaths } from "../skill-command-overrides.js";
+import { StartupTimer, startupNow } from "../startup-logging.js";
+import { loadPluginAgentProfiles, loadZCodeAgentProfiles } from "../subagents.js";
 import {
   createConfigCliOverrides,
   isMessageEnabled,
-  resolveEffectiveLocale,
   resolveEffectiveConfigResult,
+  resolveEffectiveLocale,
 } from "./app-config-options.js";
+import { resolveBuiltInNodeReplMcpServers } from "./built-in-node-repl.js";
+import { resolveBundledSkillRoots } from "./bundled-skills.js";
+import { collectDynamicWorkflowDisabledSkillPaths } from "./dynamic-workflow-gate.js";
+import { createDynamicWorkflowRunProgressSink } from "./dynamic-workflow-run-progress-sink.js";
+import {
+  createDynamicWorkflowRunService,
+  isDynamicWorkflowTaskLinkStore,
+  resolveDynamicWorkflowJournalStore,
+} from "./dynamic-workflow-run-service.js";
+import { createDynamicWorkflowSnippetService } from "./dynamic-workflow-snippet-service.js";
+import { createInputFacade } from "./input-facade.js";
+import { createModelCatalogPort } from "./model-catalog-port.js";
+import {
+  createNodeReplBrowserBroker,
+  injectNodeReplBrowserBroker,
+  type NodeReplBrowserBroker,
+} from "./node-repl-browser-broker.js";
 import { getCliStorageRoot, getModelIoDir, projectIdFromDirectory } from "./paths.js";
+import { createPluginFacadeForApp } from "./plugin-facade.js";
+import { resolvePluginRuntimeFeatures } from "./plugin-runtime-features.js";
+import { ApiProviderModelRuntime } from "./provider-registry-model-runtime.js";
+import { resolveAppRuntimeConfig, runtimeConfigLogContext } from "./runtime-config.js";
+import { createScriptWorkflowAgentRuntime } from "./script-workflow-child-runtime.js";
+import { createScriptWorkflowBridge } from "./script-workflow-methods.js";
+import { createSessionFacade } from "./session-facade.js";
 import {
   asInputHistoryStore,
   asLocalSettingStore,
@@ -63,40 +86,6 @@ import {
   readProjectPermissionMode,
   readSessionModelSelection,
 } from "./session-store.js";
-import { createWorkflowFacade } from "./workflow-facade.js";
-import { createInputFacade } from "./input-facade.js";
-import { createPluginFacadeForApp } from "./plugin-facade.js";
-import { resolvePluginRuntimeFeatures } from "./plugin-runtime-features.js";
-import { createSessionFacade } from "./session-facade.js";
-import { resolveAppRuntimeConfig, runtimeConfigLogContext } from "./runtime-config.js";
-import { resolveBundledSkillRoots } from "./bundled-skills.js";
-import { collectDynamicWorkflowDisabledSkillPaths } from "./dynamic-workflow-gate.js";
-import { createWorkspaceHookRuntimeSecurity } from "./workspace-hook-trust.js";
-import { createScriptWorkflowBridge } from "./script-workflow-methods.js";
-import {
-  createDynamicWorkflowRunService,
-  isDynamicWorkflowTaskLinkStore,
-  resolveDynamicWorkflowJournalStore,
-} from "./dynamic-workflow-run-service.js";
-import { getWorkflowConcurrencyGovernor } from "./workflow-concurrency-governor.js";
-import { createDynamicWorkflowSnippetService } from "./dynamic-workflow-snippet-service.js";
-import { createModelCatalogPort } from "./model-catalog-port.js";
-import { createDynamicWorkflowRunProgressSink } from "./dynamic-workflow-run-progress-sink.js";
-import { createScriptWorkflowAgentRuntime } from "./script-workflow-child-runtime.js";
-import { workflowActorModelPolicy } from "./workflow-actor-model.js";
-import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
-import {
-  createNodeReplBrowserBroker,
-  injectNodeReplBrowserBroker,
-  type NodeReplBrowserBroker,
-} from "./node-repl-browser-broker.js";
-import { resolveBuiltInNodeReplMcpServers } from "./built-in-node-repl.js";
-import { resolveZCodeCustomCommandPrompt } from "../custom-command-prompt.js";
-import { resolveZCodeBuiltinPromptCommand } from "../builtin-prompt-command.js";
-import { collectDisabledPaths } from "../skill-command-overrides.js";
-import { loadPluginAgentProfiles, loadZCodeAgentProfiles } from "../subagents.js";
-import { createRuntimeAiSdkModelExecutionConfig } from "../model-config.js";
-import { ApiProviderModelRuntime } from "./provider-registry-model-runtime.js";
 import {
   completeAppStartup,
   debugRuntimeConfigResolved,
@@ -107,6 +96,17 @@ import {
   resolveStartupPlugins,
   startAppStartup,
 } from "./startup-marks.js";
+import type {
+  PrepareUserExecutionBoundary,
+  ResumeOptions,
+  ZCodeApp,
+  ZCodeAppOptions,
+} from "./types.js";
+import { workflowActorModelPolicy } from "./workflow-actor-model.js";
+import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
+import { getWorkflowConcurrencyGovernor } from "./workflow-concurrency-governor.js";
+import { createWorkflowFacade } from "./workflow-facade.js";
+import { createWorkspaceHookRuntimeSecurity } from "./workspace-hook-trust.js";
 
 function decodePromptAttachmentDataUrl(
   content: string,
@@ -762,7 +762,6 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       eventSink: options.eventSink,
       modelFactory,
       modelIoDir,
-      providerRuntimeHeadersPort: options.providerRuntimeHeadersPort,
       resolveEffectiveModelSelection: options.resolveEffectiveModelSelection,
       isRemoteWorkspace: () =>
         isRemoteWorkspaceIdentity(runtimeConfig.memory?.workspaceIdentity ?? ""),
@@ -773,7 +772,6 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       dynamicWorkflowSnippetPort,
       modelCatalogPort,
       automationPort: options.automationPort,
-      offPeakPort: options.offPeakPort,
       appVersion,
       traceContext,
     });

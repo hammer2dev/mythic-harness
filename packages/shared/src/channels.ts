@@ -8,7 +8,6 @@ import type {
   ResourceUsageSnapshot,
   SaveCliMcpToUserDirectoryRequest,
 } from "./index.js";
-import type { OAuthStateRegistration } from "./oauth.js";
 import type {
   BindRemoteWorkspaceSessionContextRequest,
   BotRemoteWorkspaceReconnectedEvent,
@@ -92,8 +91,6 @@ export const ServiceChannels = {
   ConversationShare: "conversation-share",
   /** 文件系统监视服务 */
   FileWatcher: "file-watcher",
-  /** OAuth 认证服务 */
-  OAuth: "oauth",
   /** 新 Provider Config 的设置读写 Facade */
   ProviderSettings: "provider-settings",
   /** 新 Provider Registry 的模型选择 Facade */
@@ -102,8 +99,6 @@ export const ServiceChannels = {
   ProviderProvisioningTarget: "provider-provisioning-target",
   /** 本地 usage 统计服务 */
   UsageStats: "usage-stats",
-  /** Coding Plan 状态服务 */
-  CodingPlanSubscription: "coding-plan-subscription",
   ClientConfig: "client-config",
   /** ZCode 客户端场景配置服务 */
   ClientScenes: "client-scenes",
@@ -135,8 +130,6 @@ export const ServiceChannels = {
   Feedback: "feedback",
   /** Composer 附件在 host-local 与 remote runtime 之间的预传服务 */
   PromptAttachmentTransfer: "prompt-attachment-transfer",
-  /** 闲时任务管理服务（与 automation 服务面独立） */
-  OffPeakTask: "off-peak-task",
   /** Onboarding 完成记录服务（本地持久化，后续上传服务器） */
   OnboardingRecord: "onboarding-record",
 } as const;
@@ -272,14 +265,8 @@ export const PlatformChannels = {
   OpenInFileManager: "zcode:open-in-file-manager",
   /** Renderer → Main：使用系统默认应用打开本地文件 */
   OpenExternalFile: "zcode:open-external-file",
-  /** Renderer → Main：上报 OAuth state 用于 deep link 路由 */
-  OAuthRegisterState: "zcode:oauth-register-state",
-  /** Main → Renderer：转发 deep link URL */
-  OAuthCallback: "zcode:oauth-callback",
   /** Main → Renderer：外部分享页请求导入 share code。 */
   ShareImport: "zcode:share-import",
-  /** Renderer → Main：OAuth 回调已处理完成，可继续后置启动流程 */
-  OAuthCallbackHandled: "zcode:oauth-callback-handled",
   /** Renderer → Main：renderer 已就绪，可接收缓存的 deep link */
   RendererReady: "zcode:renderer-ready",
   /** Renderer → Main：同步当前 renderer 的 telemetry 上下文 */
@@ -484,8 +471,6 @@ export const HostMessageTypes = {
   FeedbackLogArchiveResult: "feedback-log-archive-result",
   /** main → host：定时任务到点派发；会话内 cron 复用 targetTaskId，历史未绑定任务才建 session */
   CronRun: "cron-run",
-  /** main → host：闲时任务派发；首跑 createTask 新建 session，续跑带 conversationId/sessionId resume */
-  OffPeakRun: "off-peak-run",
   /** main → host：browser-use 命令执行结果（CDP 执行完回传，按 requestId 关联） */
   BrowserExecuteResult: "browser-execute-result",
   /** main → host：本地视频 canonical path 授权结果 */
@@ -573,12 +558,8 @@ export const HostResponseTypes = {
   FeedbackLogArchiveRequest: "feedback-log-archive-request",
   /** host → main：定时任务派发结果（成功回填 taskId/sessionId，失败带 transient/permanent） */
   CronRunResult: "cron-run-result",
-  /** host → main：闲时任务派发结果（成功回填 conversationId/sessionId，失败带 transient/permanent） */
-  OffPeakRunResult: "off-peak-run-result",
   /** host → main：manual run 已落库，请立即唤醒 scheduler 认领派发 */
   CronSchedulerWakeRequest: "cron-scheduler-wake-request",
-  /** host → main：闲时任务翻 schedulable，请立即唤醒 scheduler 认领派发（与 cron 消息独立） */
-  OffPeakSchedulerWakeRequest: "off-peak-scheduler-wake-request",
   /** host → main：执行一条 browser-use 命令（main 用 WebContentsView+CDP 执行，按 requestId 关联） */
   BrowserExecuteRequest: "browser-execute-request",
   /** host → main：请求授权 Agent 已精确校验的本地视频路径 */
@@ -805,20 +786,8 @@ export interface PlatformChannelMap {
     response: { success: boolean; error?: string };
   };
   // 单向 send（不是 invoke）：dragstart 必须同步发起，等不了 invoke 的往返。
-  [PlatformChannels.OAuthRegisterState]: {
-    request: OAuthStateRegistration;
-    response: void;
-  };
-  [PlatformChannels.OAuthCallback]: {
-    request: string;
-    response: void;
-  };
   [PlatformChannels.ShareImport]: {
     request: { shareCode: string };
-    response: void;
-  };
-  [PlatformChannels.OAuthCallbackHandled]: {
-    request: void;
     response: void;
   };
   [PlatformChannels.RendererReady]: {

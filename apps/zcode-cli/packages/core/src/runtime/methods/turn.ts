@@ -1,20 +1,9 @@
-import { applyTurnProjectWorkspace } from "./project-workspace.js";
 import { beginLocalTurnPreparation, type LocalTtftDetail } from "@zcode/contracts";
 import { runtimeInputMetadata } from "../../agent/runtime-input-presentation.js";
-import {
-  CoreErrorType,
-  HookEventName,
-  SessionEventType,
-  createChildTraceContext,
-  createQueryId,
-  createModelUsageSummaryFromEvents,
-  createMessageId,
-  createTurnId,
-  runWithContextAsync,
-  traceContextToLogContext,
-  TurnMachineImpl,
-  formatLocalIsoDate,
-} from "../deps.js";
+import { clearBrowserTurnState } from "../../repl/browser-turn-state.js";
+import { buildReferencedSessionContextReminderBody } from "../../session-context/read-session-context.js";
+import type { PromptRuntimeCommand } from "../command-queue.js";
+import { createRuntimeCommandId } from "../command-queue.js";
 import type {
   HookRunResult,
   MessageId,
@@ -25,46 +14,61 @@ import type {
   TurnState,
 } from "../deps.js";
 import {
-  parseCompactCommand,
-  parseRewindCommand,
-  createTurnAbortScope,
-  throwIfTurnAborted,
-  createTurnFailureError,
-  isTurnCancellationError,
+  CoreErrorType,
+  HookEventName,
+  SessionEventType,
+  TurnMachineImpl,
+  createChildTraceContext,
+  createMessageId,
+  createModelUsageSummaryFromEvents,
+  createQueryId,
+  createTurnId,
+  formatLocalIsoDate,
+  runWithContextAsync,
+  traceContextToLogContext,
+} from "../deps.js";
+import {
   appendTurnOutcomeEvent,
   buildDateChangeReminderBody,
   buildRuntimeUserEntriesFromTurn,
   buildUserContentFromTurn,
+  createTurnAbortScope,
+  createTurnFailureError,
+  isTurnCancellationError,
   logResolvedTurnAttachments,
+  parseCompactCommand,
+  parseRewindCommand,
   resolveTurnAttachments,
-  summarizeTurnAttachmentsForEvent,
   runtimeMetadataForSyntheticUserMessageSource,
+  summarizeTurnAttachmentsForEvent,
+  throwIfTurnAborted,
 } from "../helpers/index.js";
-import type { ActiveTurnSteeringState, ExecuteTurnOptions, TurnResult } from "../types.js";
-import type { ActiveTurnStartReservation } from "../types.js";
+import { scheduleProjectMemoryExtraction } from "../helpers/project-memory-extraction.js";
 import type { AgentRuntimeInternal } from "../internal.js";
-import { createRuntimeCommandId } from "../command-queue.js";
-import type { PromptRuntimeCommand } from "../command-queue.js";
-import { enqueueCancellableRuntimeCommand } from "./runtime-command-submit.js";
-import { buildReferencedSessionContextReminderBody } from "../../session-context/read-session-context.js";
-import { runRegularTurnLoop } from "./turn-loop.js";
-import {
-  maybeStartDeferredSessionTitleGeneration,
-  maybeStartSessionTitleGeneration,
-} from "./session-title.js";
-import type { RegularTurnLoopState } from "./turn-loop-state.js";
-import { finishOutputTokenRecovery } from "./turn-output-token-continuation.js";
-import { recordTurnUsageFact } from "./usage-observability.js";
-import { persistStableForkCompletionBoundary } from "./stable-fork-boundary.js";
+import type {
+  ActiveTurnStartReservation,
+  ActiveTurnSteeringState,
+  ExecuteTurnOptions,
+  TurnResult,
+} from "../types.js";
+import { appendBrowserTurnScreenshot } from "./browser-turn-screenshot.js";
+import { rebuildContextPrefix } from "./context-refresh.js";
 import {
   closeGoalStateChangeReminderDeferral,
   openGoalStateChangeReminderDeferral,
 } from "./goal-state-reminder.js";
-import { scheduleProjectMemoryExtraction } from "../helpers/project-memory-extraction.js";
-import { appendBrowserTurnScreenshot } from "./browser-turn-screenshot.js";
-import { clearBrowserTurnState } from "../../repl/browser-turn-state.js";
+import { applyTurnProjectWorkspace } from "./project-workspace.js";
+import { enqueueCancellableRuntimeCommand } from "./runtime-command-submit.js";
+import {
+  maybeStartDeferredSessionTitleGeneration,
+  maybeStartSessionTitleGeneration,
+} from "./session-title.js";
+import { persistStableForkCompletionBoundary } from "./stable-fork-boundary.js";
+import type { RegularTurnLoopState } from "./turn-loop-state.js";
+import { runRegularTurnLoop } from "./turn-loop.js";
 import { applySubmissionExecutionState, createTurnModel } from "./turn-model.js";
-import { rebuildContextPrefix } from "./context-refresh.js";
+import { finishOutputTokenRecovery } from "./turn-output-token-continuation.js";
+import { recordTurnUsageFact } from "./usage-observability.js";
 
 const TARGET_RUN_HEARTBEAT_MS = 15_000;
 
@@ -191,7 +195,6 @@ export async function executeTurnCommand(
         admittedModel =
           rewindCommand === null
             ? createTurnModel(this, {
-                requestDependencies: options?.modelExecution?.requestDependencies,
                 selection: admittedModelSelection,
               })
             : undefined;
@@ -311,14 +314,6 @@ export async function executeTurnCommand(
           input: displayInput,
           messageId: userMessageId,
           inputId: options?.inputId,
-          ...(options?.automationId
-            ? { automationId: options.automationId }
-            : options?.offPeakTaskId
-              ? {
-                  offPeakTaskId: options.offPeakTaskId,
-                  ...(options.offPeakRunType ? { offPeakRunType: options.offPeakRunType } : {}),
-                }
-              : {}),
           foregroundExecutionId: this.activeForegroundExecution?.foregroundExecutionId,
           queryId,
           inputSource: options?.inputSource,
@@ -536,9 +531,7 @@ export async function executeTurnCommand(
             displayInput,
             userMessageId,
             turnTraceContext,
-            {
-              deferIfProviderRuntimeHeadersRefresh: true,
-            },
+            {},
           );
           shouldRetryTitleGenerationAfterTurn = !titleGenerationStarted;
         }
@@ -563,8 +556,6 @@ export async function executeTurnCommand(
         loopState = {
           activeTurn,
           ...(options?.automationId ? { automationId: options.automationId } : {}),
-          // 闲时派发轮的身份进入 loop state，供工具执行边界 deny OffPeakCreate。
-          ...(options?.offPeakTaskId ? { offPeakTaskId: options.offPeakTaskId } : {}),
           anomalyWarningsInjected: 0,
           backgroundSubagentResultConsumed: options?.backgroundSubagentResultConsumed === true,
           workflowResultConsumed: options?.workflowResultConsumed === true,
@@ -580,7 +571,6 @@ export async function executeTurnCommand(
             ? {
                 subagentModelOverride: {
                   selection: options.intent.modelSelection,
-                  requestDependencies: options.modelExecution.requestDependencies,
                   background: options.modelExecution.subagents.background,
                 },
               }

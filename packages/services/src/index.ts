@@ -7,13 +7,6 @@ export {
   registerMemoryDiagnosticsProvider,
 } from "./memoryDiagnostics.js";
 export {
-  createAccountRequestAuthService,
-  type AccountRequestAuthInput,
-  type AccountRequestAuthMaterial,
-  type AccountRequestAuthResolver,
-  type IAccountRequestAuthService,
-} from "./model-provider/accountRequestAuthService.js";
-export {
   IModelSelectionService,
   IProviderSettingsService,
   type ModelSelectionView,
@@ -35,16 +28,10 @@ export type {
   ConversationShareFailureIssue,
   ConversationShareFailureIssueCode,
   ConversationShareImportProgress,
-  ConversationSharePreflightInput,
-  ConversationSharePreflightResult,
-  ConversationSharePublishProgress,
-  ConversationShareSelection,
   ConversationShareServiceErrorKind,
-  ConversationShareTurnPreflightResult,
   ImportConversationShareInput,
   ImportConversationShareResult,
   ImportedConversationShare,
-  PublishTextConversationInput,
 } from "./conversation-share/conversationShare.js";
 // Conversation share 的具体实现依赖 Node 文件系统，只能从 @zcode/services/node 引入；
 // 根入口必须保持 browser-safe，避免 renderer 解析到 node:* 模块。
@@ -210,16 +197,11 @@ export type { SessionRealtimePort } from "./session/sessionRealtimePort.js";
 // FileWatcher service — IFileWatcherService is both a type (interface) and value (descriptor)
 export { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 
-// OAuth service — IOAuthService is both a type (interface) and value (descriptor)
-export { IOAuthService } from "./oauth/oauth.js";
-
-// UsageStats service — IUsageStatsService is both a type (interface) and value (descriptor)
 export { IUsageStatsService } from "./usage-stats/usageStats.js";
 
 // Storage（资源管理器「存储」tab）：数据类型在 @zcode/shared；这里只导出服务接口与卷分组纯函数
 export type { IStorageService } from "./storage/contract.js";
 
-// CodingPlanSubscription service — ICodingPlanSubscriptionService is both a type (interface) and value (descriptor)
 export {
   IClientScenesService,
   type ClientSceneConfig,
@@ -228,15 +210,8 @@ export {
   type ClientSceneResponseBody,
   type ClientScenesResponse,
 } from "./client-scenes/clientScenes.js";
-export {
-  ICodingPlanSubscriptionService,
-  type OffPeakClientConfig,
-} from "./coding-plan-subscription/codingPlanSubscription.js";
 export { isValidCronExpr } from "./session/automationCronValidation.js";
 // 闲时任务管理服务（与 automation 服务面独立）；接口/描述符 browser-safe。
-export { IOffPeakTaskService } from "./session/offPeakTask.js";
-export type { OffPeakUpdateTaskParams } from "./session/offPeakTask.js";
-
 // Skills service — ISkillsService is both a type (interface) and value (descriptor)
 export { IMcpSyncService } from "./mcp-sync/mcpSync.js";
 export { IPluginSyncService } from "./plugin-sync/pluginSync.js";

@@ -5,13 +5,6 @@ export const modelExecutionSchema = z
   .object({
     memoryExtraction: z.literal("skip").optional(),
     selectionScope: z.literal("execution"),
-    requestAuth: z
-      .object({
-        apiKey: z.string().min(1).optional(),
-        headers: z.record(z.string().min(1), z.string().min(1)).optional(),
-      })
-      .strict()
-      .optional(),
     subagents: z
       .object({
         foregroundModel: z.literal("submission"),

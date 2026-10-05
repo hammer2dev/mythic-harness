@@ -19,6 +19,6 @@ export async function recordSlashCommandInHistory(
 
 function shouldRecordSlashCommand(command: SlashCommand): boolean {
   if (command.type !== "known") return true;
-  if (command.name !== "login") return true;
+  if (command.name !== "apikey") return true;
   return !API_KEY_LOGIN_PATTERN.test(command.args);
 }

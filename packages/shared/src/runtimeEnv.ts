@@ -225,3 +225,5 @@ function stringifyZCodeToolEnvPassthroughEnv(
     [ZCODE_TOOL_ENV_PASSTHROUGH_ENV_KEY]: JSON.stringify(Object.fromEntries(entries)),
   };
 }
+
+export const ZCODE_WORKSPACE_IDENTITY_ENV = "ZCODE_WORKSPACE_IDENTITY" as const;

@@ -1,10 +1,7 @@
 /* oxlint-disable eslint(max-lines) -- Share 的错误/预检公共契约与跨 RPC 脱敏规则必须保持在同一边界，避免 UI、Host 和 API 各自漂移。 */
 import type {
-  ConversationShareAccessMode,
-  ConversationShareCapabilities,
   ConversationShareContinuation,
   ConversationSharePreview,
-  ConversationShareRecord,
   Locale,
 } from "@zcode/shared";
 import { ServiceChannels } from "@zcode/shared";
@@ -14,57 +11,11 @@ import { Event as RpcEvent, type Event } from "@zcode/rpc";
 import { createServiceDescriptor } from "../descriptors.js";
 import type { ConversationShareClientErrorKind } from "./conversationShareHttpClient.js";
 
-export type ConversationShareSelection =
-  | { kind: "all" }
-  | { kind: "productTurns"; productTurnIds: string[] }
-  | { kind: "rowAnchors"; rowIds: number[] };
-
-export interface PublishTextConversationInput {
-  workspacePath: string;
-  workspaceIdentity?: string;
-  remoteSessionId?: string;
-  sessionId: string;
-  title: string;
-  accessMode: ConversationShareAccessMode;
-  selection: ConversationShareSelection;
-  clientRequestId: string;
-  disclosureAcceptedAt: number;
-  /** 界面语言；决定返回的 share_url 落在中文站还是英文站。缺省不改写服务端下发的链接。 */
-  locale?: Locale;
-}
-
-export interface ConversationSharePreflightInput {
-  workspacePath: string;
-  workspaceIdentity?: string;
-  remoteSessionId?: string;
-  sessionId: string;
-  selection: ConversationShareSelection;
-}
-
 export interface ConversationShareAllowedArtifact {
   type: string;
   extensions: readonly string[];
   mimeTypes: readonly string[];
   displayName?: string;
-}
-
-export interface ConversationShareTurnPreflightResult {
-  productTurnId: string;
-  turnFingerprint?: string;
-  blockingIssues: readonly ConversationShareFailureIssue[];
-  skippableWarnings: readonly ConversationShareFailureIssue[];
-  deferredIssues: readonly ConversationShareFailureIssue[];
-}
-
-export interface ConversationSharePreflightResult {
-  revision: number;
-  logEpoch: string;
-  capabilitiesFingerprint: string;
-  blockingIssues: readonly ConversationShareFailureIssue[];
-  skippableWarnings: readonly ConversationShareFailureIssue[];
-  deferredIssues: readonly ConversationShareFailureIssue[];
-  supportedArtifactTypes: readonly ConversationShareAllowedArtifact[];
-  turnResults: readonly ConversationShareTurnPreflightResult[];
 }
 
 export type ConversationShareServiceErrorKind =
@@ -131,7 +82,7 @@ export interface ConversationShareFailureIssue {
   actual?: number;
   limit?: number;
   retryAfterMs?: number;
-  phase?: ConversationSharePublishProgress["phase"] | "downloading" | "installing" | "committing";
+  phase?: ConversationShareImportProgress["phase"];
   allowedFormats?: readonly string[];
   allowedArtifacts?: readonly ConversationShareAllowedArtifact[];
   availability?:
@@ -360,19 +311,6 @@ export class ConversationShareServiceError extends Error {
   }
 }
 
-export interface ConversationSharePublishProgress {
-  operationId: string;
-  phase: "collecting" | "uploading" | "checking" | "complete";
-  completedArtifacts: number;
-  totalArtifacts: number;
-  /**
-   * 非阻断提示：发布照常继续，但这些结果物被跳过（例如正文引用的文件已不存在）。
-   * 已过 sanitizeConversationShareIssues 脱敏，可安全跨 RPC。
-   */
-  warnings?: readonly ConversationShareFailureIssue[];
-  omittedWarningCount?: number;
-}
-
 export interface ConversationShareImportProgress {
   operationId: string;
   phase: "downloading" | "installing" | "committing" | "complete";
@@ -422,13 +360,6 @@ export interface ImportConversationShareResult {
 }
 
 export interface IConversationShareService {
-  getCapabilities(): Promise<ConversationShareCapabilities>;
-  preflight(input: ConversationSharePreflightInput): Promise<ConversationSharePreflightResult>;
-  publish(
-    input: PublishTextConversationInput,
-    operationId: string,
-  ): Promise<ConversationShareRecord>;
-  onDynamicPublishProgress(operationId: string): Event<ConversationSharePublishProgress>;
   importShare(
     input: ImportConversationShareInput,
     operationId: string,
@@ -468,10 +399,6 @@ export function createUnsupportedConversationShareService(options: {
   };
   const noEvents = () => RpcEvent.None;
   return {
-    getCapabilities: reject("getCapabilities"),
-    preflight: reject("preflight"),
-    publish: reject("publish"),
-    onDynamicPublishProgress: noEvents,
     importShare: reject("importShare"),
     onDynamicImportProgress: noEvents,
     // 只读查询：不可用环境下返回 null 而不是抛错，会话里就是不渲染只读块。

@@ -1,5 +1,7 @@
-import type { Model, ModelInputMessage, ModelToolContract, TraceContext } from "../deps.js";
 import type { AgentTelemetryCausation, ModelApiOperation } from "@zcode/contracts";
+import type { RuntimeMessageEntry } from "../../agent/message-history.js";
+import type { ReadFileStateMap } from "../../tool/types.js";
+import type { Model, ModelInputMessage, ModelToolContract, TraceContext } from "../deps.js";
 import {
   PermissionService,
   createDenyPermissionBroker,
@@ -7,13 +9,10 @@ import {
   defaultPermissionConfig,
   traceContextToLogContext,
 } from "../deps.js";
-import type { RuntimeMessageEntry } from "../../agent/message-history.js";
-import type { ReadFileStateMap } from "../../tool/types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { createRuntimeModel, withModelInvocationContext } from "../methods/runtime-model.js";
 import { getSessionShellSelectionFromConfig } from "../methods/session-shell-environment.js";
 import { buildRuntimeProviderRequestMessages } from "./runtime-provider-request-messages.js";
-import { createRefreshRuntimeHeadersBeforeModelAttempt } from "../methods/model-runtime-headers.js";
-import { createRuntimeModel, withModelInvocationContext } from "../methods/runtime-model.js";
 
 export interface ProjectMemoryAgentContext {
   causation?: AgentTelemetryCausation;
@@ -54,11 +53,6 @@ export function captureProjectMemoryAgentContext(
     },
     modelRequestSessionType: "other",
     modelCall: { operation: input.operation },
-    refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(runtime, {
-      abortSignal: request.abortSignal,
-      model,
-      traceContext: input.traceContext,
-    }),
     traceContext: input.traceContext,
   }));
   return {

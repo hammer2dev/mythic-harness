@@ -26,7 +26,6 @@ import type {
   EmbeddedBrowserDataClearResult,
   EmbeddedBrowserOpenUrlRequest,
   Locale,
-  OAuthStateRegistration,
   OpenInEditorOptions,
   PostUpdateReleaseNotesPayload,
   RemoteConnectionRuntimeLog,
@@ -187,10 +186,6 @@ declare global {
       openInFileManager(path: string): Promise<{ success: boolean; error?: string }>;
       /** 使用系统默认应用打开本地文件 */
       openExternalFile(path: string): Promise<{ success: boolean; error?: string }>;
-      /** 上报 OAuth state 用于 deep link 路由 */
-      registerOAuthState(payload: OAuthStateRegistration): void;
-      /** 注册 OAuth deep link 回调，返回 disposer */
-      onOAuthCallback(cb: (url: string) => void): () => void;
       /** 通知 main process renderer 已就绪 */
       notifyRendererReady(): void;
       /** 同步当前 renderer 的 telemetry 上下文到 main process */

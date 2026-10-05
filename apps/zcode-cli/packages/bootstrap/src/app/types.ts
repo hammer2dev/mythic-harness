@@ -1,57 +1,26 @@
-import type { ZCodeToolExecResource, BackgroundBashOutputResult } from "@zcode/shared";
 import type { AiSdkModelAdapter } from "@zcode/adapters/model";
 import type {
-  AgentRuntime,
-  AgentRuntimeConfig,
-  ExecuteTurnOptions,
-  ExpertWorkflowCommandResult,
-  ProviderRuntimeHeadersPort,
-  PresentationSurface,
-  ResumeSessionResult,
-  StartSavedWorkflowRunResult,
-  AmendWorkflowRunSettingsInput,
-  AmendWorkflowRunSettingsResult,
-  TurnAttachment,
-  ModelExecutionContext,
-  TurnResult,
-  WorkflowAgentRunner,
-  WorkspaceCheckpointSummary,
-  WorkspaceForkResult,
-  WorkspaceGenerateTextInput,
-  WorkspaceHookReviewTarget,
-  WorkspaceHookPolicyProvider,
-} from "@zcode/core";
-import type {
-  WorkspaceHookReviewDecision,
-  WorkspaceHookTrustRevokeTarget,
-} from "@zcode/shared/zcode-protocol-v4";
-import type { ZCodeModelOption } from "@zcode/shared";
-import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
-export type { ZCodeModelOption } from "@zcode/shared";
-import type { ModelProviderSourceTitle } from "../model-config.js";
-import type { ZCodeInstalledPluginData } from "../plugins.js";
-import type {
+  AgentTelemetryRuntimeOwner,
   AutomationPort,
-  OffPeakPort,
   BackgroundTaskCancelResult,
+  BrowserControlPort,
   CollaborationMode,
   ContextSourcePort,
   DynamicWorkflowRunArtifact,
   DynamicWorkflowRunArtifactBytes,
   DynamicWorkflowRunArtifactItem,
+  DynamicWorkflowRunEvent,
+  DynamicWorkflowRunProgressPayload,
+  DynamicWorkflowRunResumeResult,
+  DynamicWorkflowRunSessionSummary,
   DynamicWorkflowRunWorkspaceNode,
   DynamicWorkflowRunWorkspaceNodeResult,
-  DynamicWorkflowRunEvent,
-  DynamicWorkflowRunResumeResult,
-  DynamicWorkflowRunProgressPayload,
-  DynamicWorkflowRunSessionSummary,
   ExecutionPort,
-  BrowserControlPort,
+  ExecutionShellSelection,
   FileSystemPort,
   GoalStatus,
   HttpClientPort,
   ImageProcessorPort,
-  PdfDocumentPort,
   InputDelivery,
   InputHistoryEntry,
   InputHistoryKind,
@@ -59,11 +28,16 @@ import type {
   LoggerFactory,
   McpPort,
   McpServerStatus,
+  MessageWithParts,
   ModelSelection,
+  ModelToolCall,
+  ModelUsage,
+  PdfDocumentPort,
   PermissionBrokerPort,
   PluginLoadOutcome,
   PluginMetadata,
   PluginReferenceCatalog,
+  QueryId,
   SessionEvent,
   SessionEventSink,
   SessionEventStorePort,
@@ -73,29 +47,57 @@ import type {
   SessionStorePort,
   SkillLoadOutcome,
   SkillPort,
+  SupportedLocale,
+  TodoItem,
   ToolArtifactReadResult,
   ToolArtifactStorePort,
-  TodoItem,
-  QueryId,
   TraceContext,
   TurnId,
-  TurnSteerResult,
   TurnInputIntentMetadata,
-  MessageWithParts,
-  ModelUsage,
-  ModelToolCall,
-  SupportedLocale,
+  TurnSteerResult,
   UiLocale,
   UiThemePreference,
   WorkflowEvent,
   WorkflowRunListItem,
-  ExecutionShellSelection,
+  WorkspaceHookPolicy,
 } from "@zcode/contracts";
-import type { NodeReplBrowserBroker } from "./node-repl-browser-broker.js";
+import type {
+  AgentRuntime,
+  AgentRuntimeConfig,
+  AmendWorkflowRunSettingsInput,
+  AmendWorkflowRunSettingsResult,
+  ExecuteTurnOptions,
+  ExpertWorkflowCommandResult,
+  ModelExecutionContext,
+  PresentationSurface,
+  ResumeSessionResult,
+  StartSavedWorkflowRunResult,
+  TurnAttachment,
+  TurnResult,
+  WorkflowAgentRunner,
+  WorkspaceCheckpointSummary,
+  WorkspaceForkResult,
+  WorkspaceGenerateTextInput,
+  WorkspaceHookPolicyProvider,
+  WorkspaceHookReviewTarget,
+} from "@zcode/core";
+import type {
+  BackgroundBashOutputResult,
+  ZCodeModelOption,
+  ZCodeToolExecResource,
+} from "@zcode/shared";
+import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
+import type {
+  WorkspaceHookReviewDecision,
+  WorkspaceHookTrustRevokeTarget,
+} from "@zcode/shared/zcode-protocol-v4";
+import type { ModelProviderSourceTitle } from "../model-config.js";
+import type { ZCodeInstalledPluginData } from "../plugins.js";
 import type { SessionTranscriptMessage } from "../session-transcript.js";
-import type { WorkspaceHookReviewCommandResult } from "./workspace-hook-review-controller.js";
-import type { AgentTelemetryRuntimeOwner, WorkspaceHookPolicy } from "@zcode/contracts";
+import type { NodeReplBrowserBroker } from "./node-repl-browser-broker.js";
 import type { ProviderRegistryModelSource } from "./provider-registry-model-runtime.js";
+import type { WorkspaceHookReviewCommandResult } from "./workspace-hook-review-controller.js";
+export type { ZCodeModelOption } from "@zcode/shared";
 
 export interface WorkspaceHookReviewHostContext {
   taskId: string;
@@ -144,11 +146,6 @@ export interface ZCodeAppOptions {
   modelIoFullRetentionEnabled?: boolean;
   /** 同进程嵌入宿主可注入完整的 borrowed 进程级 Owner；Endpoint 配置不得覆盖它。 */
   telemetryOwner?: AgentTelemetryRuntimeOwner;
-  /**
-   * provider runtime headers 端口：主 runtime 每次调用报自己的会话；child runtime 一律向父
-   * runtime 取派生实例。
-   */
-  providerRuntimeHeadersPort?: ProviderRuntimeHeadersPort;
   loggerFactory?: LoggerFactory;
   officialPluginRoots?: string[];
   pluginStorageRoot?: string;
@@ -180,7 +177,6 @@ export interface ZCodeAppOptions {
   uiLocale?: UiLocale;
   onWorkflowEvent?: (event: WorkflowEvent) => void | Promise<void>;
   automationPort?: AutomationPort;
-  offPeakPort?: OffPeakPort;
   /** 首次真实用户执行或 cold-resume fallback 时解析一次，之后由 app 生命周期缓存。 */
   resolveInitialBashShellSelection?: () => Promise<ExecutionShellSelection | undefined>;
   /** Trusted embedder policy; workspace/project files cannot populate this field. */
@@ -617,10 +613,6 @@ export interface ZCodeApp {
   setModel(
     modelId: string | ModelSelection,
     options?: {
-      /**
-       * per-turn（off-peak idle plan）：true = 仅切运行态——不写磁盘模型选择、
-       * 不产出 modelChange 聊天通知。用于 turn 级临时切换（应用/还原成对出现）。
-       */
       transient?: boolean;
     },
   ): Promise<{

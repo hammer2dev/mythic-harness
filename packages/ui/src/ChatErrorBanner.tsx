@@ -28,10 +28,7 @@ import { toast } from "./components/ui/toast.js";
 import { useFeedbackStore } from "@/feedback/feedbackStore.js";
 import { getProviderBusinessErrorMessageId } from "@/lib/providerBusinessError.js";
 import { buildErrorFeedbackDescription } from "@/lib/errorFeedbackDraft.js";
-import {
-  isSuspiciousEmptyModelResultMessage,
-  resolveOffPeakTicketExpiredBusinessCode,
-} from "@/lib/providerBusinessError.js";
+import { isSuspiciousEmptyModelResultMessage } from "@/lib/providerBusinessError.js";
 import type { ZCodeUiError } from "@/lib/zcodeUiError.js";
 
 const HISTORICAL_MODEL_UNAVAILABLE_MESSAGES = [
@@ -50,7 +47,6 @@ const LOCALIZED_ERROR_CODES = new Set([
   // 服务层错误 message 是跨进程兜底，不能作为最终 UI 语言来源。
   // 历史任务模型不可用要按稳定 code 本地化，避免英文界面显示中文提示。
   "ZCODE_RUNTIME_MODEL_UNAVAILABLE",
-  "ZCODE_BIGMODEL_TEAM_PLAN_MEMBER_REQUIRED",
 ]);
 
 const MODEL_CONFIG_MISSING_CODES = new Set([
@@ -75,8 +71,7 @@ export function resolveChatErrorBannerDisplayMessage(
     return intl.formatMessage({ id: "chat.error.noAvailableModel" });
   }
 
-  const providerBusinessCode =
-    resolveOffPeakTicketExpiredBusinessCode(error.code, error.message) ?? error.code;
+  const providerBusinessCode = error.code;
   const providerBusinessMessageId = getProviderBusinessErrorMessageId(providerBusinessCode);
   if (providerBusinessMessageId) {
     return intl.formatMessage({ id: providerBusinessMessageId });

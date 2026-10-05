@@ -2,7 +2,6 @@ import type { IBotsService } from "./bots/bots.js";
 import type { IBroadcastService } from "./broadcast/broadcast.js";
 import type { IClientConfigService } from "./client-config/clientConfig.js";
 import type { IClientScenesService } from "./client-scenes/clientScenes.js";
-import type { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
 import type { ICommandsService } from "./commands/commands.js";
 import type { IConversationShareService } from "./conversation-share/conversationShare.js";
 import type { ICredentialService } from "./credential/credential.js";
@@ -19,13 +18,11 @@ import type {
   IModelSelectionService,
   IProviderSettingsService,
 } from "./model-provider/providerFacadeServices.js";
-import type { IOAuthService } from "./oauth/oauth.js";
 import type { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
 import type { IPluginSyncService } from "./plugin-sync/pluginSync.js";
 import type { IPluginManagementService } from "./plugins/pluginManagement.js";
 import type { IPluginsService } from "./plugins/plugins.js";
 import type { IPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransfer.js";
-import { IOffPeakTaskService } from "./session/offPeakTask.js";
 import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
 import type { ISettingService } from "./setting/setting.js";
 import type { ISettingsSyncService } from "./settings-sync/settingsSync.js";
@@ -60,17 +57,13 @@ export interface IServiceAccessor {
   readonly conversationShareService: IConversationShareService;
   readonly botsService: IBotsService;
   readonly fileWatcherService: IFileWatcherService;
-  readonly oauthService: IOAuthService;
   /** 当前 Environment 的 Provider 配置与设置视图。 */
   readonly providerSettingsService: IProviderSettingsService;
   /** 当前 Environment Registry 发布的唯一模型选择 View。 */
   readonly modelSelectionService: IModelSelectionService;
   readonly usageStatsService: IUsageStatsService;
-  readonly codingPlanSubscriptionService: ICodingPlanSubscriptionService;
   readonly clientConfigService: IClientConfigService;
   readonly clientScenesService: IClientScenesService;
-  /** 闲时任务管理（独立服务面）。 */
-  readonly offPeakTaskService: IOffPeakTaskService;
   readonly skillsService: ISkillsService;
   readonly skillSyncService: ISkillSyncService;
   readonly mcpSyncService: IMcpSyncService;

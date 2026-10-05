@@ -50,7 +50,6 @@ interface TaskIndexRow {
   migration_source: string | null;
   forked_from_task_id: string | null;
   cron_automation_id: string | null;
-  off_peak_task_id: string | null;
   created_at: number;
   updated_at: number;
   unread_at: number | null;
@@ -155,8 +154,6 @@ function rowToMeta(row: TaskIndexRow): ZCodeTaskMeta {
         // cron 身份以 meta_json 为准；cron_automation_id 列是索引投影，仅作兜底：
         // 历史行 meta_json 里可能还没有该字段，回退读列，下次写入会自动回填进 meta_json。
         cronAutomationId: parsed.data.cronAutomationId ?? row.cron_automation_id ?? undefined,
-        // off-peak 身份同款策略：meta_json 为准、列兜底——存量迁移只写列即可生效。
-        offPeakTaskId: parsed.data.offPeakTaskId ?? row.off_peak_task_id ?? undefined,
         titleOverridden: row.title_overridden === 1,
       };
     }
@@ -184,7 +181,6 @@ function rowToMeta(row: TaskIndexRow): ZCodeTaskMeta {
     migrationSource: (row.migration_source as ZCodeTaskMeta["migrationSource"]) ?? undefined,
     forkedFromTaskId: row.forked_from_task_id ?? undefined,
     cronAutomationId: row.cron_automation_id ?? undefined,
-    offPeakTaskId: row.off_peak_task_id ?? undefined,
     unreadAt: row.unread_at ?? undefined,
     status: (row.task_status as ZCodeTaskMeta["status"]) ?? undefined,
   };
@@ -326,36 +322,6 @@ export class TaskIndexRepo {
     // Worker 已完成该路径的原始准备，业务连接不再重复全表修复。
     if (isTasksStoragePrepared(path, this.db)) return;
     if (!isTasksStorageMigrated(path, this.db)) runTasksDatabaseMigrations(this.db);
-    this.backfillOffPeakTaskMarkers();
-  }
-
-  /**
-   * 存量回填（幂等，每次 bootstrap 自愈）：打点上线前产生的 off-peak 会话行没有
-   * offPeakTaskId。off_peak_tasks 与 tasks 同库（tasks-index.sqlite），按 session 绑定
-   * join 只补投影列——rowToMeta 以列兜底即可生效，下次 syncTaskMeta 会自动回填 meta_json。
-   * 全新安装时 off_peak_tasks 可能尚未由 OffPeakTaskRepo 建表，需 guard。
-   */
-  private backfillOffPeakTaskMarkers(): void {
-    const database = this.getDatabase();
-    const hasOffPeakTable = database
-      .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'off_peak_tasks'`)
-      .get();
-    if (!hasOffPeakTable) {
-      return;
-    }
-    database
-      .prepare(
-        `UPDATE tasks SET off_peak_task_id = (
-          SELECT o.off_peak_task_id FROM off_peak_tasks o
-          WHERE o.session_id = tasks.task_id AND o.workspace_key = tasks.workspace_key
-        )
-        WHERE off_peak_task_id IS NULL
-          AND EXISTS (
-            SELECT 1 FROM off_peak_tasks o
-            WHERE o.session_id = tasks.task_id AND o.workspace_key = tasks.workspace_key
-          )`,
-      )
-      .run();
   }
 
   private getDatabase(): DatabaseSyncInstance {
@@ -413,7 +379,6 @@ export class TaskIndexRepo {
           migration_source,
           forked_from_task_id,
           cron_automation_id,
-          off_peak_task_id,
           created_at,
           updated_at,
           unread_at,
@@ -468,7 +433,6 @@ export class TaskIndexRepo {
           migration_source,
           forked_from_task_id,
           cron_automation_id,
-          off_peak_task_id,
           created_at,
           updated_at,
           unread_at,
@@ -536,7 +500,6 @@ export class TaskIndexRepo {
           migration_source,
           forked_from_task_id,
           cron_automation_id,
-          off_peak_task_id,
           created_at,
           updated_at,
           unread_at,
@@ -560,7 +523,6 @@ export class TaskIndexRepo {
           @migration_source,
           @forked_from_task_id,
           @cron_automation_id,
-          @off_peak_task_id,
           @created_at,
           @updated_at,
           @unread_at,
@@ -583,7 +545,6 @@ export class TaskIndexRepo {
           migration_source = excluded.migration_source,
           forked_from_task_id = excluded.forked_from_task_id,
           cron_automation_id = excluded.cron_automation_id,
-          off_peak_task_id = excluded.off_peak_task_id,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at,
           unread_at = CASE
@@ -616,8 +577,6 @@ export class TaskIndexRepo {
         forked_from_task_id: record.meta.forkedFromTaskId ?? null,
         // cron automation 身份从 meta 投影到索引列（meta_json 里也保留一份，见 serializeMetaJson）。
         cron_automation_id: record.meta.cronAutomationId ?? null,
-        // off-peak 身份同款投影。
-        off_peak_task_id: record.meta.offPeakTaskId ?? null,
         created_at: record.meta.createdAt,
         updated_at: record.meta.updatedAt,
         unread_at: record.meta.unreadAt ?? null,
@@ -682,8 +641,6 @@ export class TaskIndexRepo {
         // 同步运行态快照时保留已有 cron automation 身份：运行态 protocol snapshot 的 meta 不带 cron 标记，
         // 不用已存值兜底会在后续 sync 时把 cron 身份冲掉，导致 icon / 关联查询失效。
         cronAutomationId: params.meta.cronAutomationId ?? existingMeta?.cronAutomationId,
-        // off-peak 身份同款兜底：快照不带标记时保全既有归属。
-        offPeakTaskId: params.meta.offPeakTaskId ?? existingMeta?.offPeakTaskId,
         updatedAt,
         unreadAt: params.meta.unreadAt ?? existingMeta?.unreadAt,
       };
@@ -932,7 +889,6 @@ export class TaskIndexRepo {
           migration_source,
           forked_from_task_id,
           cron_automation_id,
-          off_peak_task_id,
           created_at,
           updated_at,
           unread_at,
@@ -1014,7 +970,6 @@ export class TaskIndexRepo {
           migration_source,
           forked_from_task_id,
           cron_automation_id,
-          off_peak_task_id,
           created_at,
           updated_at,
           unread_at,
@@ -1096,7 +1051,6 @@ export class TaskIndexRepo {
           migration_source,
           forked_from_task_id,
           cron_automation_id,
-          off_peak_task_id,
           created_at,
           updated_at,
           unread_at,

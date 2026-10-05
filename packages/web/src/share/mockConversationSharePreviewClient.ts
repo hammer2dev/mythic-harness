@@ -79,7 +79,7 @@ function previewFor(accessMode: ConversationShareAccessMode): ConversationShareP
 }
 
 export class MockConversationSharePreviewClient {
-  async getPreview(shareCode: string, accessToken?: string): Promise<ConversationSharePreview> {
+  async getPreview(shareCode: string): Promise<ConversationSharePreview> {
     if (shareCode === "mock-expired") {
       throw new ConversationSharePreviewClientError({
         kind: "expired",
@@ -96,7 +96,7 @@ export class MockConversationSharePreviewClient {
         code: 3211,
       });
     }
-    if (shareCode === "mock-private" && accessToken !== "mock-owner-token") {
+    if (shareCode === "mock-private") {
       throw new ConversationSharePreviewClientError({
         kind: "not_found",
         message: "Share not found",
@@ -117,7 +117,6 @@ export class MockConversationSharePreviewClient {
       return { ...previewFor("public_importable"), unsupportedRowCount: 1 };
     }
     if (shareCode === "mock-readonly") return previewFor("public_readonly");
-    if (shareCode === "mock-private") return previewFor("private");
     return previewFor("public_importable");
   }
 }
