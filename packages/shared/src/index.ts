@@ -188,6 +188,8 @@ export type {
   DesktopCommandId,
   DesktopTitleBarTheme,
   DesktopWindowChromeState,
+  // preload 从公共入口导入缩放类型，遗漏导出会导致类型解析失败。
+  DesktopZoomState,
   DockerContainerInfo,
   EditorInfo,
   EmbeddedBrowserDataClearResult,
@@ -206,6 +208,8 @@ export type {
   TaskNotificationPayload,
   UpdateCheckResultPayload,
   UpdateStatePayload,
+  WindowControlsOverlayMetrics,
+  WindowControlsOverlayReadyPayload,
   WSLDistro,
   ZCodeStdioTapDevState,
 } from "./platform.js";
