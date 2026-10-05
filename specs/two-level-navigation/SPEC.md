@@ -30,7 +30,7 @@
 
 AutomationsSection、SavedWorkflowsSection 与 PluginStorePage 提供可选 `navigationContainer?: HTMLElement | null`。未提供时保留嵌入式导航；提供时页面通过 React portal 将二级导航渲染至壳插槽，`null` 表示插槽尚未挂载。插槽不保存导航项或接受状态，不创建平行业务缓存。
 
-WorkspaceSidebar 可将现有 footer 渲染至一级栏的 footer 插槽。WorkspaceSidebarFooter 增加紧凑 rail 变体，设置页继续使用原布局。
+WorkspaceSidebar 将 footer 渲染至一级栏的 footer 插槽。设置同样沿用一级栏和二级导航插槽，具体规则见 [设置两级导航](../settings-two-level-navigation/SPEC.md)；无工作区时保留独立设置容器。
 
 ```mermaid
 sequenceDiagram

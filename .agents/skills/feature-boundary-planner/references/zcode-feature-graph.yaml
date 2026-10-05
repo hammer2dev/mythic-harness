@@ -453,12 +453,14 @@ nodes:
       - 两层导航
       - 一级栏
       - 二级栏
+      - 设置两级导航
     codeSeeds:
       - file: packages/ui/src/app-shell/WorkspaceShellLayout.tsx
         symbol: WorkspaceShellLayout
     invariants:
-      - The rail derives its active module from App.workspaceMainView; clicking the active module only expands the sidebar.
+      - The rail derives its business module from App.workspaceMainView and highlights settings from the existing settings tab. Clicking the active module expands the sidebar; selecting a business module from settings exits through the existing explicit-navigation marker.
       - Secondary navigation is rendered by each page through a portal, without copying business state to the shell.
+      - SettingsPage portals its existing grouped categories into a dedicated shell slot; the shell keeps the workspace content mounted and inert while settings is foreground.
       - Scheduled tasks and saved workflows have independent primary entries and navigation history kinds; saved workflows retain global/project directories while viewing details.
       - Plugin marketplace secondary navigation contains public/personal discovery and management entries, with sources at the bottom; catalog category groups remain in the public page body, without a category menu.
   - id: state.workspace-navigation
@@ -467,6 +469,8 @@ nodes:
     codeSeeds:
       - file: packages/ui/src/App.tsx
         symbol: App
+      - file: packages/ui/src/SettingsPage.tsx
+        symbol: SettingsPage
       - file: packages/ui/src/settings/AutomationsSection.tsx
         symbol: AutomationsSection
       - file: packages/ui/src/settings/saved-workflows/SavedWorkflowsSection.tsx
@@ -481,6 +485,7 @@ nodes:
       - AutomationsSection owns scheduled/idle view and tab; SavedWorkflowsSection owns workflow selection and projects existing savedWorkflowStore inventory into the secondary navigation. PluginStorePage owns the selected browse or management page.
       - PluginStoreBrowsePage owns segment/query/detail and no category selection state; PluginsSection owns management scope and editor state. Browse and management mount exclusively to avoid conflicting inventory initialization.
       - useAppPanels owns sidebar visibility; narrow and wide navigation share this state.
+      - The existing tab store owns settings activation and SettingsPage owns the selected category; settings shares shell sidebar visibility and width without introducing another owner.
 edges:
   - from: capability.multi-folder-projects
     to: state.workspace-projects
