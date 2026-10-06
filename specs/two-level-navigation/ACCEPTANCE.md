@@ -105,3 +105,18 @@ Node 24.14.0 执行的工作区基线检查通过：`dev` 与 `origin/dev` 同�
 - 改动模块为 ui，三个源码文件净减 72 行；没有新增状态所有者、协议或持久化路径。
 - Node 24.14.0 下 typecheck 通过，lint 为 0 errors / 60 warnings，架构 baseline 0 / new 0；现有市场目录与导航测试共 3 项通过，未新增测试矩阵。
 - 基线在单次 Git 代理配置下检查通过，与 origin/dev 同步；正文分类保留由现有测试验证。此前隔离服务／浏览器启动已被自动审批拒绝，本轮未重试、未执行界面验收。
+
+## 2026-10-06 收起侧栏粗边修复
+
+桌面端原收起宽度仍为 4px，透明侧栏使窗口底色透出；一级导航右边框与正文、底部终端的左边框还会叠加。本轮将 Desktop 和 Web 的收起占位统一为 0，正文及底部终端移除重复左边框，由一级导航提供唯一的 1px 分隔线。展开宽度偏好、调宽事件与内部面板边界保留。
+
+使用当前 UI 源码与已有 server 构建，在独立 HTTP/Web 环境完成关键交互验收。测试数据位于 `C:/Users/Administrator/AppData/Local/Temp/zcode-nav-edge-e2e-20261006-f32c/home`，工作区为同根目录下的 `workspace`；没有配置凭据、提交模型请求、运行任务或安装插件，也没有更改用户的 5174 开发实例。
+
+- 展开时二级栏宽 264px，可见分隔占位为 1px，正文左边框为 0px。
+- 收起后二级栏宽 0px，一级导航右沿与正文左沿均为 x=56，间隙为 0px；一级导航右边框为 1px，正文没有重复左边框。主代理已视觉检查完整截图与局部截图，粗灰带消失。
+- 点击一级项目入口恢复 264px；键盘右方向键调宽至 280px，再收起并重新展开仍恢复 280px，展开分隔保持 1px。
+- 证据保留于测试根目录：`collapsed-edge.png`、`collapsed-edge-detail.png` 和 `edge-metrics.json`。
+- Node 24.14.0 下工作区基线检查通过，与 `origin/dev` 同步；`pnpm typecheck` 通过；`pnpm lint` 为 0 errors / 17 项已有 warnings；`pnpm architecture:check --changed` 为 violations 0 / baseline 0 / new 0，目标 `ui` 模块为 `managed:false`。
+- 本轮临时浏览器页与 HTTP/Web 服务已关闭，3049、5193 端口均确认无监听；截图和测量记录保留。
+
+本轮仅实测隔离 Web 中的共享布局和收起、展开、键盘调宽动作。Electron 原生窗口、macOS、Linux、手机布局及底部终端未实测；桌面专属 4px 占位分支及终端重复左边框已通过源码检查移除。

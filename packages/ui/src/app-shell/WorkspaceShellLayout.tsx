@@ -370,7 +370,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     macOSMajorVersion: desktopWindowChromeState?.macOSMajorVersion,
   };
   const workspacePanelRadiusPx = resolveWorkspaceShellPanelRadiusPx(workspaceShellRadiusOptions);
-  const collapsedSidebarWidthPx = isMacDesktop || isWindowsDesktop || isLinuxDesktop ? 4 : 0;
   const [draftHeaderDropTargetController, setDraftHeaderDropTargetController] =
     useState<ConversationDropTargetController | null>(null);
   const fileTreeOpenRequestIdRef = useRef(0);
@@ -586,11 +585,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       // 拖拽中的宽度只是瞬时布局值，直接写 CSS 变量；释放时再提交 React state。
       shellElement.style.setProperty(
         WORKSPACE_SIDEBAR_PANEL_WIDTH_CSS_VAR,
-        `${isSidebarPanelVisible ? nextWidthPx : collapsedSidebarWidthPx}px`,
+        `${isSidebarPanelVisible ? nextWidthPx : 0}px`,
       );
       shellElement.style.setProperty(WORKSPACE_SIDEBAR_WIDTH_CSS_VAR, `${nextWidthPx}px`);
     },
-    [collapsedSidebarWidthPx, isSidebarPanelVisible],
+    [isSidebarPanelVisible],
   );
 
   useEffect(() => {
@@ -795,18 +794,12 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const workspaceShellSplitStyle = useMemo(
     () =>
       ({
-        "--workspace-sidebar-panel-width": `${
-          isSidebarPanelVisible ? workspaceSidebarPanelWidthPx : collapsedSidebarWidthPx
-        }px`,
+        // 一级图标栏已有右分隔线；收起宽度必须归零，避免旧 4px 占位透出粗灰带。
+        "--workspace-sidebar-panel-width": `${isSidebarPanelVisible ? workspaceSidebarPanelWidthPx : 0}px`,
         "--workspace-sidebar-width": `${workspaceSidebarPanelWidthPx}px`,
         "--workspace-panel-radius": `${workspacePanelRadiusPx}px`,
       }) as CSSProperties,
-    [
-      collapsedSidebarWidthPx,
-      isSidebarPanelVisible,
-      workspacePanelRadiusPx,
-      workspaceSidebarPanelWidthPx,
-    ],
+    [isSidebarPanelVisible, workspacePanelRadiusPx, workspaceSidebarPanelWidthPx],
   );
   const activePreviewPath = useMemo(() => {
     const activeSidePaneTab =
@@ -1765,11 +1758,10 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     <section
                       data-workspace-conversation-frame="true"
                       className={cn(
-                        // 外侧三边直接贴齐窗口；仅保留相邻面板之间及收起导航后的左侧边界。
+                        // 一级栏负责左侧分隔线；正文只保留与右侧面板、终端之间的边界。
                         "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border-border bg-background",
                         isSidePaneVisible && "border-r",
                         isTerminalVisible && "border-b",
-                        (!isSidebarVisible || isNarrowNavigation) && "border-l",
                       )}
                     >
                       {shouldRenderWorkspaceHeader ? (
@@ -2057,11 +2049,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                   </ResizablePanel>
                   {workspaceMainView === "chat" ? (
                     <AnimatedTerminalPanel
-                      frameClassName={cn(
-                        "border-t border-border",
-                        isSidePaneVisible && "border-r",
-                        (!isSidebarVisible || isNarrowNavigation) && "border-l",
-                      )}
+                      frameClassName={cn("border-t border-border", isSidePaneVisible && "border-r")}
                       services={services}
                       workspaceAbsPath={workspaceAbsPath}
                       workspaceIdentity={workspaceIdentity}
