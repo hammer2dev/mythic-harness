@@ -1,5 +1,5 @@
 import { memo, type Ref } from "react";
-import { Blocks, CalendarClock, Cpu, Folder, Workflow } from "lucide-react";
+import { CalendarClock, Cpu, Folder, GitBranch, Puzzle } from "lucide-react";
 import { TID_AUTOMATIONS_OPEN } from "@zcode/shared";
 import type { WorkspaceMainView } from "@/app-shell/types.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
@@ -25,6 +25,7 @@ export const WorkspacePrimaryNavigation = memo(function WorkspacePrimaryNavigati
 }) {
   const { intl } = useZCodeIntl();
   const { enabled: dynamicWorkflowEnabled } = useDynamicWorkflowAvailability();
+  // 分支线、拼图和芯片以不同轮廓区分入口，避免小尺寸下方框组合图标难以辨认。
   const entries = [
     {
       view: "chat",
@@ -41,13 +42,13 @@ export const WorkspacePrimaryNavigation = memo(function WorkspacePrimaryNavigati
     {
       view: "workflows",
       label: "workspaceNavigation.workflows",
-      icon: Workflow,
+      icon: GitBranch,
       testId: "workspace-primary-workflows",
     },
     {
       view: "plugin-store",
       label: "workspace.openPluginsSettings",
-      icon: Blocks,
+      icon: Puzzle,
       testId: "plugin-store-sidebar-open",
     },
     {
