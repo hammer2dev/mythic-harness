@@ -1,5 +1,5 @@
 import { memo, type Ref } from "react";
-import { Blocks, CalendarClock, Folder, Workflow } from "lucide-react";
+import { Blocks, CalendarClock, Cpu, Folder, Workflow } from "lucide-react";
 import { TID_AUTOMATIONS_OPEN } from "@zcode/shared";
 import type { WorkspaceMainView } from "@/app-shell/types.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
@@ -49,6 +49,12 @@ export const WorkspacePrimaryNavigation = memo(function WorkspacePrimaryNavigati
       label: "workspace.openPluginsSettings",
       icon: Blocks,
       testId: "plugin-store-sidebar-open",
+    },
+    {
+      view: "model-gateway",
+      label: "workspaceNavigation.modelGateway",
+      icon: Cpu,
+      testId: "workspace-primary-model-gateway",
     },
   ] as const;
 

@@ -5,6 +5,8 @@
  * 由 zcodeSessionStore 持有实例并驱动 UI 状态。
  */
 
+import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
+
 interface WorkspaceNavEntryBase {
   workspacePath: string;
   workspaceIdentity?: string;
@@ -37,11 +39,17 @@ export interface PluginStoreNavEntry extends WorkspaceNavEntryBase {
   kind: "plugin-store";
 }
 
+export type ModelGatewayNavEntry = WorkspaceNavEntryBase &
+  ModelGatewayOpenTarget & {
+    kind: "model-gateway";
+  };
+
 export type WorkspaceNavEntry =
   | TaskNavEntry
   | AutomationsNavEntry
   | WorkflowsNavEntry
-  | PluginStoreNavEntry;
+  | PluginStoreNavEntry
+  | ModelGatewayNavEntry;
 
 export interface TaskNavigationHistory {
   entries: WorkspaceNavEntry[];
@@ -71,6 +79,10 @@ export function isPluginStoreNavEntry(entry: WorkspaceNavEntry): entry is Plugin
   return entry.kind === "plugin-store";
 }
 
+export function isModelGatewayNavEntry(entry: WorkspaceNavEntry): entry is ModelGatewayNavEntry {
+  return entry.kind === "model-gateway";
+}
+
 function isSameNavEntry(left: WorkspaceNavEntry, right: WorkspaceNavEntry): boolean {
   if (
     left.kind !== right.kind ||
@@ -87,6 +99,10 @@ function isSameNavEntry(left: WorkspaceNavEntry, right: WorkspaceNavEntry): bool
       left.automationId === rightAutomations.automationId &&
       left.automationTab === rightAutomations.automationTab
     );
+  }
+  if (left.kind === "model-gateway") {
+    const rightGateway = right as ModelGatewayNavEntry;
+    return left.section === rightGateway.section && left.providerId === rightGateway.providerId;
   }
   return true;
 }
@@ -173,6 +189,21 @@ export function pushPluginStoreNavEntry(
     kind: "plugin-store",
     workspacePath,
     ...(workspaceIdentity ? { workspaceIdentity } : {}),
+  });
+}
+
+export function pushModelGatewayNavEntry(
+  history: TaskNavigationHistory,
+  workspacePath: string,
+  workspaceIdentity?: string,
+  target: ModelGatewayOpenTarget = { section: "modelProvider" },
+): TaskNavigationHistory {
+  return pushEntry(history, {
+    kind: "model-gateway",
+    workspacePath,
+    ...(workspaceIdentity ? { workspaceIdentity } : {}),
+    section: target.section,
+    ...(target.providerId ? { providerId: target.providerId } : {}),
   });
 }
 

@@ -8,7 +8,7 @@ import {
   getProviderFormApiKeyManagementUrl,
   getProviderFormLabel,
 } from "@/lib/providerSettingsFormTypes.js";
-import type { SettingsModelProviderTarget } from "@/lib/settingsNavigation.js";
+import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
 import { InlineEditableProviderCard } from "./model-provider-section/InlineEditableProviderCard.js";
 import { ProviderTemplatePicker } from "./model-provider-section/ProviderTemplatePicker.js";
@@ -32,7 +32,7 @@ export function ModelProviderSection({
   workspacePath?: string;
   connectivityWorkspacePath?: string;
   connectivityWorkspaceRequired?: boolean;
-  pendingModelProviderTarget?: SettingsModelProviderTarget;
+  pendingModelProviderTarget?: Required<Pick<ModelGatewayOpenTarget, "providerId">>;
   onConsumePendingModelProviderTarget?: () => void;
 } = {}) {
   const { intl, locale } = useZCodeIntl();

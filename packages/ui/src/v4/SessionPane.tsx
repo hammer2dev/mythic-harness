@@ -180,8 +180,7 @@ import {
 } from "@/v4/chatLoadingVisibility.js";
 import type { ZCodeUiError } from "@/lib/zcodeUiError.js";
 import { isProviderNotReadyError } from "@/lib/chatPrepareError.js";
-import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
-import { useOptionalTabStore } from "@/store/TabStoreProvider.js";
+import { requestModelGatewayOpen } from "@/lib/modelGatewayNavigation.js";
 import type {
   OpenPlanDetailSideTabRequest,
   OpenScopedPlanDetailSideTabRequest,
@@ -850,7 +849,6 @@ export function SessionPane({
     () => createComposerSubmissionConfig(draftConfig, modelSelectionView) !== null,
     [draftConfig, modelSelectionView],
   );
-  const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
   // 首发 commandId 在 accepted 时已存在，也是 completion 的 message_id；不必等回复完成。
   const reportDraftCreated = useCallback(
     (createdSessionId: string, source: SessionCreateSource, messageId: string) => {
@@ -3365,9 +3363,8 @@ export function SessionPane({
     sendSubmissionError,
   ]);
   const handleOpenModelSettings = useCallback(() => {
-    setPendingSettingsSectionIntent("modelProvider");
-    openSettingsTab();
-  }, [openSettingsTab]);
+    requestModelGatewayOpen({ section: "modelProvider" });
+  }, []);
   const recoverableCommand = recoverableCommands[0] ?? null;
   const handleDismissPendingRecovery = useCallback(() => {
     if (!recoverableCommand) return;

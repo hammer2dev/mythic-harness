@@ -96,6 +96,7 @@ import {
 } from "@/workspace-file-tree/model.js";
 import type { WorkspaceMainView, WorkspaceShellLayoutProps } from "@/app-shell/types.js";
 import { SettingsPage } from "@/SettingsPage.js";
+import { ModelGatewayPage } from "@/ModelGatewayPage.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 
 const WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX = 264;
@@ -205,6 +206,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   workspaceReadOnlyReason,
   workspaceMainView,
   pluginStoreOpenVersion,
+  modelGatewayTarget,
+  onConsumeModelGatewayProviderTarget,
   openAutomationId,
   openAutomationTab,
   onWorkspaceMainViewChange,
@@ -212,6 +215,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenAutomations,
   handleOpenWorkflows,
   handleOpenPluginStore,
+  handleOpenModelGateway,
   onConnectRemote,
   onSelectRemoteProject,
   onCancelRemoteProject,
@@ -860,6 +864,12 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         onLeaveSettingsForNavigation();
         onReturnToWorkspace?.();
       }
+      // 从设置回到网关也属于重新进入；只有网关已在前台时才保留当前二级页。
+      if (view === "model-gateway") {
+        if (isWorkspaceVisible && workspaceMainView === view) return;
+        handleOpenModelGateway({ section: "modelProvider" });
+        return;
+      }
       if (view === workspaceMainView) return;
       if (view === "automations") handleOpenAutomations();
       else if (view === "workflows") handleOpenWorkflows();
@@ -872,6 +882,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       handleOpenAutomations,
       handleOpenWorkflows,
       handleOpenPluginStore,
+      handleOpenModelGateway,
       handleSelectTask,
       handleToggleSidebar,
       isSidebarVisible,
@@ -1912,6 +1923,35 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                               </div>
                             </AutomationsMainBreadcrumbFrame>
                           </main>
+                        ) : workspaceMainView === "model-gateway" ? (
+                          <main className="flex h-full min-h-0 flex-1 flex-col bg-background">
+                            <AutomationsMainBreadcrumbFrame
+                              isDesktop={Boolean(isDesktop)}
+                              reserveNavigationSpace={!isSidebarVisible || isNarrowNavigation}
+                              sectionLabel={intl.formatMessage({
+                                id: "workspaceNavigation.modelGateway",
+                              })}
+                              ariaLabel={intl.formatMessage({ id: "settings.breadcrumbLabel" })}
+                            >
+                              <ScopedErrorBoundary
+                                scope="model-gateway-main"
+                                resetKeys={workspaceOnlyResetKeys}
+                                variant="panel"
+                                className="flex min-h-0 flex-1 flex-col"
+                              >
+                                <ModelGatewayPage
+                                  target={modelGatewayTarget}
+                                  onNavigate={handleOpenModelGateway}
+                                  onConsumeProviderTarget={onConsumeModelGatewayProviderTarget}
+                                  navigationContainer={secondaryNavigationContainer}
+                                  onNavigationSelect={closeNarrowNavigation}
+                                  workspacePath={workspaceAbsPath}
+                                  workspaceIdentity={workspaceIdentity}
+                                  workspaceRemoteSessionId={workspaceRemoteSessionId}
+                                />
+                              </ScopedErrorBoundary>
+                            </AutomationsMainBreadcrumbFrame>
+                          </main>
                         ) : workspaceMainView === "plugin-store" ? (
                           <main className="flex h-full min-h-0 flex-1 flex-col bg-background">
                             <AutomationsMainBreadcrumbFrame
@@ -2052,7 +2092,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                 isDesktop={isDesktop}
                 isMacDesktop={isMacDesktop}
                 isWindowsDesktop={isWindowsDesktop}
-                captionWorkspacePath={workspaceAbsPath}
                 onBack={onReturnToWorkspace}
                 onCreateTask={onCreateTask}
                 navigationContainer={settingsNavigationContainer}

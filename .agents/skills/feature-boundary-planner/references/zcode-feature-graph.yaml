@@ -454,6 +454,7 @@ nodes:
       - 一级栏
       - 二级栏
       - 设置两级导航
+      - 模型网关
     codeSeeds:
       - file: packages/ui/src/app-shell/WorkspaceShellLayout.tsx
         symbol: WorkspaceShellLayout
@@ -463,6 +464,7 @@ nodes:
       - SettingsPage portals its existing grouped categories into a dedicated shell slot; the shell keeps the workspace content mounted and inert while settings is foreground.
       - Scheduled tasks and saved workflows have independent primary entries and navigation history kinds; saved workflows retain global/project directories while viewing details.
       - Plugin marketplace secondary navigation contains public/personal discovery and management entries, with sources at the bottom; catalog category groups remain in the public page body, without a category menu.
+      - Model gateway has model settings and usage statistics as secondary sections. Entering from another primary module selects model settings; clicking the current primary entry preserves the section and expands the sidebar. Navigation history restores the recorded section and workspace identity.
   - id: state.workspace-navigation
     kind: state-owner
     label: App main view and page-local selection
@@ -471,6 +473,8 @@ nodes:
         symbol: App
       - file: packages/ui/src/SettingsPage.tsx
         symbol: SettingsPage
+      - file: packages/ui/src/ModelGatewayPage.tsx
+        symbol: ModelGatewayPage
       - file: packages/ui/src/settings/AutomationsSection.tsx
         symbol: AutomationsSection
       - file: packages/ui/src/settings/saved-workflows/SavedWorkflowsSection.tsx
@@ -486,6 +490,7 @@ nodes:
       - PluginStoreBrowsePage owns segment/query/detail and no category selection state; PluginsSection owns management scope and editor state. Browse and management mount exclusively to avoid conflicting inventory initialization.
       - useAppPanels owns sidebar visibility; narrow and wide navigation share this state.
       - The existing tab store owns settings activation and SettingsPage owns the selected category; settings shares shell sidebar visibility and width without introducing another owner.
+      - App owns modelGatewayTarget; ModelGatewayPage renders it without a second section state. ModelProviderSection keeps its editor state and root Host services; usage statistics use the current workspace Host and retain existing error semantics.
 edges:
   - from: capability.multi-folder-projects
     to: state.workspace-projects

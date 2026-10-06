@@ -1290,6 +1290,10 @@ const enUS: Record<string, string> = {
   "workspaceNavigation.label": "Main navigation",
   "workspaceNavigation.scheduledTasks": "Scheduled tasks",
   "workspaceNavigation.workflows": "Workflows",
+  "workspaceNavigation.modelGateway": "Model gateway",
+  "modelGateway.usageScope.local": "Scope: all sessions on the local host, across projects.",
+  "modelGateway.usageScope.remote":
+    "Scope: all sessions on the current remote host, across projects.",
   "workspaceSidebar.newConversation": "New task",
   "workspaceSidebar.reorderSection": "Move {section} section",
   "workspaceSidebar.addProject": "Add project",
@@ -1693,7 +1697,6 @@ const enUS: Record<string, string> = {
   "settings.navLabel": "Sections",
   "settings.sidebar.group.basics": "Basics",
   "settings.sidebar.group.agentCapabilities": "Agent capabilities",
-  "settings.sidebar.group.dataAndStats": "Data and statistics",
   "settings.nav.generalDescription": "Language and current window experience",
   "settings.nav.appearanceDescription": "Theme, UI font size, and code presentation",
   "settings.themeCardTitle": "Theme",

@@ -26,6 +26,7 @@ import {
   type SessionCreateSource,
 } from "@zcode/shared";
 import type { ZCodeUiError } from "@/lib/zcodeUiError.js";
+import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
 import type {
   AutomationsNavigationTab,
   TaskNavigationHistory,
@@ -422,6 +423,12 @@ export interface ZCodeSessionStoreState {
   taskNavPushPluginStore: (workspacePath: string, workspaceIdentity?: string) => void;
   /** 记录工作流主视图导航，沿用同一 workspace 历史。 */
   taskNavPushWorkflows: (workspacePath: string, workspaceIdentity?: string) => void;
+  /** 记录模型网关子页导航，沿用工作区身份与原历史栈。 */
+  taskNavPushModelGateway: (
+    workspacePath: string,
+    workspaceIdentity?: string,
+    target?: ModelGatewayOpenTarget,
+  ) => void;
   /** 后退，返回目标 entry；到头了返回 null */
   taskNavGoBack: () => WorkspaceNavEntry | null;
   /** 前进，返回目标 entry；到头了返回 null */

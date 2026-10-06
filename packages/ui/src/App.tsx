@@ -21,6 +21,11 @@ import type { TaskChatMessage as TestChatMessage } from "@/lib/taskChatMessageTy
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { getPathLeaf } from "@/lib/path.js";
 import { addPluginStoreOpenListener, requestPluginStoreOpen } from "@/lib/pluginStoreNavigation.js";
+import {
+  addModelGatewayOpenListener,
+  consumeModelGatewayOpenTarget,
+  type ModelGatewayOpenTarget,
+} from "@/lib/modelGatewayNavigation.js";
 import { resolveWorkspaceSwitchDraftProvider } from "@/lib/workspaceDraftProvider.js";
 import { useTestActions } from "@/test-actions.js";
 import type { TestActions } from "@/test-actions.js";
@@ -800,6 +805,9 @@ export function App({
     AutomationsNavigationTarget["automationTab"]
   > | null>(null);
   const [pluginStoreOpenVersion, setPluginStoreOpenVersion] = useState(0);
+  const [modelGatewayTarget, setModelGatewayTarget] = useState<ModelGatewayOpenTarget>({
+    section: "modelProvider",
+  });
   const handleNavigateToTaskMain = useCallback(() => {
     setWorkspaceMainView("chat");
   }, []);
@@ -821,6 +829,20 @@ export function App({
     preserveNextSettingsExit();
     setWorkspaceMainView("plugin-store");
   }, [preserveNextSettingsExit]);
+  const handleNavigateToModelGatewayMain = useCallback(
+    (target: ModelGatewayOpenTarget) => {
+      preserveNextSettingsExit();
+      setModelGatewayTarget({
+        section: target.section,
+        ...(target.providerId ? { providerId: target.providerId } : {}),
+      });
+      setWorkspaceMainView("model-gateway");
+    },
+    [preserveNextSettingsExit],
+  );
+  const handleConsumeModelGatewayProviderTarget = useCallback(() => {
+    setModelGatewayTarget((target) => ({ section: target.section }));
+  }, []);
   const handleOpenAutomationConsumed = useCallback(() => {
     setOpenAutomationId(null);
     setOpenAutomationTab(null);
@@ -830,6 +852,7 @@ export function App({
     handleOpenAutomations,
     handleOpenWorkflows,
     handleOpenPluginStore,
+    handleOpenModelGateway,
     handleTaskNavBack,
     handleTaskNavForward,
     canGoBack,
@@ -845,6 +868,7 @@ export function App({
     onNavigateToAutomations: handleNavigateToAutomationsMain,
     onNavigateToWorkflows: handleNavigateToWorkflowsMain,
     onNavigateToPluginStore: handleNavigateToPluginStoreMain,
+    onNavigateToModelGateway: handleNavigateToModelGatewayMain,
   });
   const handleOpenPluginStoreRequest = useCallback(() => {
     // 管理页移入市场后，直达入口需要同时退出设置覆盖层，并保留这次显式导航。
@@ -867,6 +891,24 @@ export function App({
     () => addPluginStoreOpenListener(handleOpenPluginStoreRequest),
     [handleOpenPluginStoreRequest],
   );
+  const handleOpenModelGatewayRequest = useCallback(
+    (target: ModelGatewayOpenTarget) => {
+      // 直达入口已迁出设置；先保留显式导航，再由原命令退出设置并记录目标子页。
+      preserveNextSettingsExit();
+      if (!isSidebarVisible) handleToggleSidebar();
+      handleOpenModelGateway(target);
+    },
+    [handleOpenModelGateway, handleToggleSidebar, isSidebarVisible, preserveNextSettingsExit],
+  );
+  useEffect(() => {
+    const dispose = addModelGatewayOpenListener((target) => {
+      consumeModelGatewayOpenTarget();
+      handleOpenModelGatewayRequest(target);
+    });
+    const pendingTarget = consumeModelGatewayOpenTarget();
+    if (pendingTarget) handleOpenModelGatewayRequest(pendingTarget);
+    return dispose;
+  }, [handleOpenModelGatewayRequest]);
   const handleSelectAdjacentConversation = useCallback(
     (direction: "previous" | "next") => {
       runVisibleWorkspaceCommand(() => {
@@ -1080,6 +1122,8 @@ export function App({
         workspaceReadOnlyReason={workspaceReadOnlyReason}
         workspaceMainView={workspaceMainView}
         pluginStoreOpenVersion={pluginStoreOpenVersion}
+        modelGatewayTarget={modelGatewayTarget}
+        onConsumeModelGatewayProviderTarget={handleConsumeModelGatewayProviderTarget}
         openAutomationId={openAutomationId}
         openAutomationTab={openAutomationTab}
         onWorkspaceMainViewChange={setWorkspaceMainView}
@@ -1087,6 +1131,7 @@ export function App({
         handleOpenAutomations={handleOpenAutomations}
         handleOpenWorkflows={handleOpenWorkflows}
         handleOpenPluginStore={handleOpenPluginStoreRequest}
+        handleOpenModelGateway={handleOpenModelGateway}
         onConnectRemote={onConnectRemote}
         onSelectRemoteProject={onSelectRemoteProject}
         onCancelRemoteProject={onCancelRemoteProject}

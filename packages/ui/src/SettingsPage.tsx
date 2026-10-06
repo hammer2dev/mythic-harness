@@ -34,10 +34,7 @@ import {
   consumePendingSettingsPluginStoreTarget,
   resolveSettingsSection,
   writeLastSettingsSectionPreference,
-  consumePendingSettingsModelProviderTarget,
 } from "@/lib/settingsNavigation.js";
-import { ModelProviderSection } from "@/settings/ModelProviderSection.js";
-import { UsageStatsSection } from "@/settings/UsageStatsSection.js";
 import { SubagentsSection } from "@/settings/SubagentsSection.js";
 import { AutomationsSection } from "@/settings/AutomationsSection.js";
 import { PluginsSection } from "@/settings/PluginsSection.js";
@@ -69,7 +66,7 @@ import { ServiceProvider, useServices } from "@/hooks/useServices.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
-import { resolveModelProviderConnectivityWorkspacePath } from "@/lib/modelProviderConnectivityTarget.js";
+import { requestModelGatewayOpen } from "@/lib/modelGatewayNavigation.js";
 import {
   createSettingsPageConfig,
   GeneralSectionContent,
@@ -154,7 +151,6 @@ export function SettingsPage({
   isWindowsDesktop,
   isMacDesktop,
   windowsWindowControlsRightPaddingPx: _windowsWindowControlsRightPaddingPx,
-  captionWorkspacePath,
   onBack,
   onCreateTask,
   navigationContainer,
@@ -170,7 +166,6 @@ export function SettingsPage({
   isWindowsDesktop?: boolean;
   isMacDesktop?: boolean;
   windowsWindowControlsRightPaddingPx?: number;
-  captionWorkspacePath?: string | null;
   onBack?: () => void;
   onCreateTask?: (request?: CreateTaskRequest) => void;
   onOpenWorkspace?: () => void;
@@ -182,9 +177,6 @@ export function SettingsPage({
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesInlineWindowControls = Boolean(isWindowsDesktop || isLinuxDesktop);
   const platform = usePlatform();
-  const [pendingModelProviderTarget, setPendingModelProviderTarget] = useState<
-    import("@/lib/settingsNavigation.js").SettingsModelProviderTarget | undefined
-  >(consumePendingSettingsModelProviderTarget());
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(() => {
     const initialSection = consumeInitialSettingsSection("general");
     const visibleInitialSection = resolveSettingsSectionForPlatform(
@@ -213,16 +205,6 @@ export function SettingsPage({
   const setNotificationEnabled = useZCodeStore((state) => state.setNotificationEnabled);
   const notificationSoundEnabled = useZCodeStore((state) => state.notificationSoundEnabled);
   const setNotificationSoundEnabled = useZCodeStore((state) => state.setNotificationSoundEnabled);
-  // 原只拉 bigmodel family 的企业 pricing，zai team plan 在使用统计页
-  // 永远拿不到 team project 上下文；后续又误用 Individual Provider 的权益作为 Team
-  // 商品门禁，导致仅有 Team Plan 的账号仍然没有 Usage 来源。企业商品只依赖对应的
-  // Team Account Provider，个人额度继续依赖 Individual Provider，避免两个产品身份串线。
-  /*
-   * 使用统计是账号级 sources，不再绑定当前 workspace 连接方式。
-   * 旧入口只会写入 "codingPlan" 意图；等 sources 加载后需要落到真实来源。
-   * 剩余额度「更多」等入口会先写入来源偏好（当前 coding plan 类型/团队项目），
-   * 解析时优先选中该来源，缺失或已不可用时回退第一份真实来源。
-   */
   const setNewUserOnboardingOpen = useZCodeStore((state) => state.setNewUserOnboardingOpen);
   const requestOnboardingDialog = () => setNewUserOnboardingOpen(true);
   const setActiveSettingsSection = useCallback(
@@ -234,8 +216,9 @@ export function SettingsPage({
     [activeSection],
   );
   const handleOpenModelProviderSettings = useCallback(() => {
-    setActiveSettingsSection("modelProvider");
-  }, [setActiveSettingsSection]);
+    requestModelGatewayOpen({ section: "modelProvider" });
+    onBack?.();
+  }, [onBack]);
   const activeWorkspacePath = useTabStore((state) => state.activeWorkspacePath);
   const tabs = useTabStore((state) => state.tabs);
   const workspaceTabs = useMemo(() => tabs.filter(isWorkspaceTab), [tabs]);
@@ -243,38 +226,6 @@ export function SettingsPage({
   // 这里改为读取 tabStore 维护的“最近激活 workspace identity”，让插件管理继续命中正确远端。
   const activeWorkspaceIdentity = useTabStore(
     (state) => state.activeWorkspaceIdentity ?? undefined,
-  );
-  const activeWorkspaceTab = useTabStore((state) => {
-    const workspacePath = state.activeWorkspacePath;
-    if (!workspacePath) {
-      return null;
-    }
-    const workspaceIdentity = state.activeWorkspaceIdentity ?? undefined;
-    const matchingTabs = state.tabs
-      .filter(isWorkspaceTab)
-      .filter((tab) => tab.workspacePath === workspacePath);
-    return (
-      matchingTabs.find((tab) =>
-        workspaceIdentity ? tab.workspaceIdentity === workspaceIdentity : !tab.workspaceIdentity,
-      ) ??
-      matchingTabs[0] ??
-      null
-    );
-  });
-  const localModelProviderConnectivityWorkspacePath = useMemo(
-    () =>
-      resolveModelProviderConnectivityWorkspacePath({
-        activeWorkspacePath,
-        activeWorkspaceIdentity,
-        activeWorkspaceTab,
-        workspaceTabs,
-      }),
-    [activeWorkspaceIdentity, activeWorkspacePath, activeWorkspaceTab, workspaceTabs],
-  );
-  const isRemoteModelProviderWorkspace = Boolean(
-    activeWorkspaceIdentity?.trim() ||
-    activeWorkspaceTab?.remoteSessionId?.trim() ||
-    activeWorkspaceTab?.remoteTarget,
   );
   const selectDirectory = useSelectDirectory();
   const services = useServices();
@@ -333,16 +284,11 @@ export function SettingsPage({
   const [hostPlatform, setHostPlatform] = useState("");
   useEffect(
     () =>
-      addPendingSettingsSectionListener((section, detail) => {
+      addPendingSettingsSectionListener((section) => {
         // SettingsPage 已打开时再次从 quickpick 点设置入口，
         // 页面不会重新挂载，之前写入的 pending section 无人消费，看起来像点击没反应。
         // 这里订阅同窗口跳转意图，立即切换当前设置分区。
         setActiveSettingsSection(section, activeSection);
-        if (section === "modelProvider" && detail?.modelProviderId) {
-          setPendingModelProviderTarget({
-            providerId: detail.modelProviderId,
-          });
-        }
       }),
     [activeSection, setActiveSettingsSection],
   );
@@ -1406,19 +1352,6 @@ export function SettingsPage({
                       />
                     ) : activeSection === "shortcuts" ? (
                       <ShortcutSettingsSection isDesktop={Boolean(isDesktop)} />
-                    ) : activeSection === "modelProvider" ? (
-                      <ServiceProvider services={localHostServices}>
-                        {/* 模型配置属于本机全局事实源；激活远端 workspace 时也不能注入远端 Host。 */}
-                        <ModelProviderSection
-                          workspacePath={activeWorkspacePath ?? captionWorkspacePath ?? ""}
-                          connectivityWorkspacePath={localModelProviderConnectivityWorkspacePath}
-                          connectivityWorkspaceRequired={isRemoteModelProviderWorkspace}
-                          pendingModelProviderTarget={pendingModelProviderTarget}
-                          onConsumePendingModelProviderTarget={() =>
-                            setPendingModelProviderTarget(undefined)
-                          }
-                        />
-                      </ServiceProvider>
                     ) : activeSection === "memory" ? (
                       <ServiceProvider services={localHostServices}>
                         {/* Memory catalog 始终使用本地 Host，避免远程 workspace 误读本机数据。 */}
@@ -1436,8 +1369,6 @@ export function SettingsPage({
                         workspaceIdentity={activeWorkspaceIdentity}
                         isDesktop={isDesktop}
                       />
-                    ) : activeSection === "usage" ? (
-                      <UsageStatsSection />
                     ) : activeSection === "subagents" ? (
                       <SubagentsSection
                         onManageModels={handleOpenModelProviderSettings}

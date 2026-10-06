@@ -40,8 +40,7 @@ import {
   shouldShowManageModelsAction,
 } from "@/chat-input-toolbar/modelSelection.js";
 import { resolveV4ModelTriggerDisplay } from "@/v4/composer/modelTriggerDisplay.js";
-import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
-import { useTabStore } from "@/store/TabStoreProvider.js";
+import { requestModelGatewayOpen } from "@/lib/modelGatewayNavigation.js";
 import type { ModelSelectionView } from "@zcode/services";
 import type { ModelSelectionState } from "@/hooks/useModelSelectionView.js";
 import { useToolbarConfigOptions } from "@/hooks/useZCodeConfig.js";
@@ -139,8 +138,6 @@ function V4ComposerModelControlsImpl({
     null,
     workspaceIdentity,
   );
-  // 配置面存活服务读（过渡归宿 = 配置面 v4 化）：连接方式选中键喂 BigModel Team Plan 门控豁免。
-  const openSettingsTab = useTabStore((state) => state.openSettingsTab);
   const modelTriggerRef = useRef<HTMLSpanElement | null>(null);
   const thoughtTriggerRef = useRef<HTMLSpanElement | null>(null);
   // Ctrl+M 热键：递增 openRequestKey 请求 ModelConfigSelect 打开菜单（旧 handleOpenModelMenuShortcut 语义）。
@@ -197,11 +194,10 @@ function V4ComposerModelControlsImpl({
     return buildRegistryModelSelectGroups(displayProvider, modelSelectionView);
   }, [displayProvider, intl, modelSelectionView]);
 
-  // 修复：恢复「管理模型」入口（老版 onManageModels = 打开设置页并定位模型供应商区）。
+  // 管理模型与缺模型修复共用模型网关入口，避免继续打开已迁出的设置分类。
   const handleOpenModelProviderSettings = useCallback(() => {
-    setPendingSettingsSectionIntent("modelProvider");
-    openSettingsTab();
-  }, [openSettingsTab]);
+    requestModelGatewayOpen({ section: "modelProvider" });
+  }, []);
   const showManageModelsAction = shouldShowManageModelsAction(handleOpenModelProviderSettings);
   const manageModelsLabel = intl.formatMessage({
     id: "chat.toolbar.model.manageModels",

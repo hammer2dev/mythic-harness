@@ -7,13 +7,11 @@ export type SettingsSectionId =
   | "appearance"
   | "migration"
   | "browser"
-  | "modelProvider"
   | "memory"
   | "plugin"
   | "mcp"
   | "skill"
   | "plugins"
-  | "usage"
   | "subagents"
   | "commands"
   | "hooks"
@@ -26,7 +24,6 @@ const SETTINGS_SECTION_INTENT_KEY = "zcode-settings-section-intent",
   SETTINGS_PLUGIN_TAB_INTENT_KEY = "zcode-settings-plugin-tab-intent",
   SETTINGS_PLUGIN_ORIGIN_INTENT_KEY = "zcode-settings-plugin-origin-intent",
   SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY = "zcode-settings-plugin-scope-key-intent";
-const SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY = "zcode-settings-model-provider-id-intent";
 const SETTINGS_SECTION_INTENT_EVENT = "zcode:settings-section-intent",
   SETTINGS_LAST_SECTION_STORAGE_KEY = "zcode-settings-last-section";
 const HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionId>([
@@ -47,11 +44,6 @@ interface SettingsSectionIntentEventDetail {
   section: SettingsSectionId;
   pluginTab?: SettingsPluginTabTarget;
   pluginScopeKey?: string;
-  modelProviderId?: string;
-}
-
-export interface SettingsModelProviderTarget {
-  providerId: string;
 }
 
 function isSettingsSectionId(value: string): value is SettingsSectionId {
@@ -60,13 +52,11 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
     value === "appearance" ||
     value === "migration" ||
     value === "browser" ||
-    value === "modelProvider" ||
     value === "memory" ||
     value === "plugin" ||
     value === "mcp" ||
     value === "skill" ||
     value === "plugins" ||
-    value === "usage" ||
     value === "subagents" ||
     value === "commands" ||
     value === "hooks" ||
@@ -178,19 +168,12 @@ export function consumeInitialSettingsSection(
   fallbackSection: SettingsSectionId = "general",
 ): SettingsSectionId {
   const lastSection = readLastSettingsSectionPreference(fallbackSection);
-  // 普通打开设置页以前把 consumePendingSettingsSection 的 fallback 写死为
-  // modelProvider，导致没有显式跳转意图时也总进“模型供应商”。这里先读上次停留分区，
-  // 再让 quickpick / 管理模型这类一次性意图覆盖它，保留显式入口的直达语义。
+  // 普通打开设置页恢复上次分类，显式设置导航的一次性意图优先。
   return resolveSettingsSection(consumePendingSettingsSection(lastSection), lastSection);
 }
 
 export function setPendingSettingsSection(section: SettingsSectionId): void {
   setPendingSettingsSectionIntent(section);
-}
-
-export function setPendingSettingsUsageIntent(): void {
-  // 使用统计入口只负责打开 Usage 分区，不强行覆盖用户要看的具体统计 tab。
-  setPendingSettingsSectionIntent("usage");
 }
 
 export function setPendingSettingsPluginIntent(
@@ -218,7 +201,6 @@ export function setPendingSettingsSectionIntent(
   options: {
     pluginTab?: SettingsPluginTabTarget;
     pluginScopeKey?: string;
-    modelProviderId?: string;
   } = {},
 ): void {
   const pluginStoreTarget = resolveSettingsPluginStoreTarget(section, options);
@@ -233,11 +215,6 @@ export function setPendingSettingsSectionIntent(
 
   try {
     window.sessionStorage.setItem(SETTINGS_SECTION_INTENT_KEY, section);
-    if (options.modelProviderId) {
-      window.sessionStorage.setItem(SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY, options.modelProviderId);
-    } else {
-      window.sessionStorage.removeItem(SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY);
-    }
   } catch {
     // 忽略浏览器存储异常，不影响主流程。
   }
@@ -250,7 +227,6 @@ export function setPendingSettingsSectionIntent(
         section,
         pluginTab: options.pluginTab,
         pluginScopeKey: options.pluginScopeKey?.trim() || undefined,
-        modelProviderId: options.modelProviderId,
       },
     }),
   );
@@ -263,7 +239,6 @@ function clearPendingSettingsSectionIntent(): void {
 
   try {
     window.sessionStorage.removeItem(SETTINGS_SECTION_INTENT_KEY);
-    window.sessionStorage.removeItem(SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY);
     window.sessionStorage.removeItem(SETTINGS_PLUGIN_TAB_INTENT_KEY);
     window.sessionStorage.removeItem(SETTINGS_PLUGIN_ORIGIN_INTENT_KEY);
     window.sessionStorage.removeItem(SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY);
@@ -311,28 +286,6 @@ export function consumePendingSettingsPluginStoreTarget(): PluginStoreOpenTarget
     return target;
   } catch {
     return null;
-  }
-}
-
-export function consumePendingSettingsModelProviderTarget():
-  | SettingsModelProviderTarget
-  | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  try {
-    const providerId = window.sessionStorage.getItem(SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY);
-    window.sessionStorage.removeItem(SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY);
-    if (!providerId?.trim()) {
-      return undefined;
-    }
-    return {
-      providerId: providerId.trim(),
-    };
-  } catch {
-    // 忽略浏览器存储异常，不影响主流程。
-    return undefined;
   }
 }
 

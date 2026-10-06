@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
 import type {
   ZCodeProvider,
   SessionCreateSource,
@@ -108,13 +109,20 @@ export interface GitChangeSummary {
   removed: number;
 }
 
-export type WorkspaceMainView = "chat" | "automations" | "workflows" | "plugin-store";
+export type WorkspaceMainView =
+  | "chat"
+  | "automations"
+  | "workflows"
+  | "plugin-store"
+  | "model-gateway";
 
 export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackService"> {
   onLeaveSettingsForNavigation: () => void;
   workspaceReadOnlyReason?: string;
   workspaceMainView: WorkspaceMainView;
   pluginStoreOpenVersion: number;
+  modelGatewayTarget: ModelGatewayOpenTarget;
+  onConsumeModelGatewayProviderTarget: () => void;
   openAutomationId: string | null;
   openAutomationTab: Exclude<AutomationsNavigationTab, "workflow"> | null;
   onWorkspaceMainViewChange: (view: WorkspaceMainView) => void;
@@ -122,6 +130,7 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   handleOpenAutomations: OpenAutomationsMain;
   handleOpenWorkflows: () => void;
   handleOpenPluginStore: () => void;
+  handleOpenModelGateway: (target: ModelGatewayOpenTarget) => void;
   workspaceShellZCodeState: WorkspaceShellZCodeState;
   isMacFullscreen: boolean;
   desktopWindowChromeState: DesktopWindowChromeState | null;

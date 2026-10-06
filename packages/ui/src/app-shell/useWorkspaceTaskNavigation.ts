@@ -6,6 +6,7 @@ import {
   canGoForward as navCanGoForward,
   isAutomationsNavEntry,
   isPluginStoreNavEntry,
+  isModelGatewayNavEntry,
   isWorkflowsNavEntry,
   type AutomationsNavigationTab,
 } from "@/lib/taskNavigationHistory.js";
@@ -27,6 +28,7 @@ import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
 import { bumpTaskListMembershipVersion } from "@/v4/taskListMembershipVersion.js";
 import { resolveProjectNavigationTarget } from "@/lib/projectNavigationTarget.js";
+import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
 
 export interface WorkflowsNavigationTarget {
   workspacePath: string;
@@ -38,6 +40,8 @@ export interface AutomationsNavigationTarget extends WorkflowsNavigationTarget {
   automationTab?: Exclude<AutomationsNavigationTab, "workflow">;
 }
 
+export type ModelGatewayNavigationTarget = WorkflowsNavigationTarget & ModelGatewayOpenTarget;
+
 export function useWorkspaceTaskNavigation({
   intl,
   workspaceAbsPath,
@@ -47,6 +51,7 @@ export function useWorkspaceTaskNavigation({
   onNavigateToAutomations,
   onNavigateToWorkflows,
   onNavigateToPluginStore,
+  onNavigateToModelGateway,
 }: {
   intl: { formatMessage: (descriptor: { id: string }) => string };
   workspaceAbsPath: string;
@@ -56,6 +61,7 @@ export function useWorkspaceTaskNavigation({
   onNavigateToAutomations?: (target: AutomationsNavigationTarget) => void;
   onNavigateToWorkflows?: (target: WorkflowsNavigationTarget) => void;
   onNavigateToPluginStore?: (target: Omit<AutomationsNavigationTarget, "automationId">) => void;
+  onNavigateToModelGateway?: (target: ModelGatewayNavigationTarget) => void;
 }) {
   // 跨 workspace 选择会先同步切换 tab，但本次 React render 捕获的 ambient
   // services 仍可能属于旧 remote attachment。local 目标必须固定从 window base attachment
@@ -67,6 +73,7 @@ export function useWorkspaceTaskNavigation({
   const taskNavPushAutomations = useZCodeSessionStore((s) => s.taskNavPushAutomations);
   const taskNavPushWorkflows = useZCodeSessionStore((s) => s.taskNavPushWorkflows);
   const taskNavPushPluginStore = useZCodeSessionStore((s) => s.taskNavPushPluginStore);
+  const taskNavPushModelGateway = useZCodeSessionStore((s) => s.taskNavPushModelGateway);
   const taskNavGoBack = useZCodeSessionStore((s) => s.taskNavGoBack);
   const taskNavGoForward = useZCodeSessionStore((s) => s.taskNavGoForward);
   const removeTaskFromNavHistory = useZCodeSessionStore((s) => s.removeTaskFromNavHistory);
@@ -266,6 +273,45 @@ export function useWorkspaceTaskNavigation({
     onNavigateToPluginStore?.({ workspacePath: workspaceAbsPath, workspaceIdentity });
   }, [onNavigateToPluginStore, taskNavPushPluginStore, workspaceAbsPath, workspaceIdentity]);
 
+  const activateModelGatewayWorkspace = useCallback(
+    (targetWorkspacePath: string, targetWorkspaceIdentity?: string) => {
+      // 历史任务 cwd 可能已不是项目主目录；只按 tab 路径激活会失败，
+      // 导致网关直达留在设置层，或历史回放继续使用另一 Host。
+      const projectTarget = resolveProjectNavigationTarget(tabStoreApi.getState(), {
+        workspacePath: targetWorkspacePath,
+        workspaceIdentity: targetWorkspaceIdentity,
+      });
+      if (projectTarget) {
+        tabStoreApi.getState().activateProjectTask(projectTarget.tab.id, projectTarget.scope);
+      } else {
+        activateTabByPath(
+          targetWorkspacePath,
+          targetWorkspaceIdentity ? { workspaceIdentity: targetWorkspaceIdentity } : undefined,
+        );
+      }
+    },
+    [activateTabByPath, tabStoreApi],
+  );
+
+  const handleOpenModelGateway = useCallback(
+    (target: ModelGatewayOpenTarget = { section: "modelProvider" }) => {
+      activateModelGatewayWorkspace(workspaceAbsPath, workspaceIdentity);
+      taskNavPushModelGateway(workspaceAbsPath, workspaceIdentity, target);
+      onNavigateToModelGateway?.({
+        workspacePath: workspaceAbsPath,
+        ...(workspaceIdentity ? { workspaceIdentity } : {}),
+        ...target,
+      });
+    },
+    [
+      activateModelGatewayWorkspace,
+      onNavigateToModelGateway,
+      taskNavPushModelGateway,
+      workspaceAbsPath,
+      workspaceIdentity,
+    ],
+  );
+
   const handleTaskNavBack = useCallback(() => {
     const currentWorkspaceState = useZCodeSessionStore
       .getState()
@@ -329,6 +375,11 @@ export function useWorkspaceTaskNavigation({
         onNavigateToPluginStore?.(currentEntry);
         return;
       }
+      if (isModelGatewayNavEntry(currentEntry)) {
+        activateModelGatewayWorkspace(currentEntry.workspacePath, currentEntry.workspaceIdentity);
+        onNavigateToModelGateway?.(currentEntry);
+        return;
+      }
       const navWorkspaceState = useZCodeSessionStore
         .getState()
         .getWorkspaceState(currentEntry.workspacePath, currentEntry.workspaceIdentity);
@@ -353,12 +404,14 @@ export function useWorkspaceTaskNavigation({
 
     toast(intl.formatMessage({ id: "taskNav.noMoreBack" }));
   }, [
+    activateModelGatewayWorkspace,
     activateTabByPath,
     handleSelectTask,
     intl,
     onNavigateToAutomations,
     onNavigateToWorkflows,
     onNavigateToPluginStore,
+    onNavigateToModelGateway,
     removeTaskFromNavHistory,
     taskNavGoBack,
     workspaceAbsPath,
@@ -426,6 +479,11 @@ export function useWorkspaceTaskNavigation({
         onNavigateToPluginStore?.(currentEntry);
         return;
       }
+      if (isModelGatewayNavEntry(currentEntry)) {
+        activateModelGatewayWorkspace(currentEntry.workspacePath, currentEntry.workspaceIdentity);
+        onNavigateToModelGateway?.(currentEntry);
+        return;
+      }
       const navWorkspaceState = useZCodeSessionStore
         .getState()
         .getWorkspaceState(currentEntry.workspacePath, currentEntry.workspaceIdentity);
@@ -449,12 +507,14 @@ export function useWorkspaceTaskNavigation({
 
     toast(intl.formatMessage({ id: "taskNav.noMoreForward" }));
   }, [
+    activateModelGatewayWorkspace,
     activateTabByPath,
     handleSelectTask,
     intl,
     onNavigateToAutomations,
     onNavigateToWorkflows,
     onNavigateToPluginStore,
+    onNavigateToModelGateway,
     removeTaskFromNavHistory,
     taskNavGoForward,
     workspaceAbsPath,
@@ -475,6 +535,7 @@ export function useWorkspaceTaskNavigation({
     handleOpenAutomations,
     handleOpenWorkflows,
     handleOpenPluginStore,
+    handleOpenModelGateway,
     handleTaskNavBack,
     handleTaskNavForward,
     canGoBack,

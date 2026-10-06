@@ -11,10 +11,12 @@ import {
   pushAutomationsNavEntry,
   pushWorkflowsNavEntry,
   pushPluginStoreNavEntry,
+  pushModelGatewayNavEntry,
   removeTaskFromHistory,
   type AutomationsNavigationTab,
   type WorkspaceNavEntry,
 } from "@/lib/taskNavigationHistory.js";
+import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
 import type { ZCodeSessionStoreState } from "./zcodeSessionStoreTypes.js";
 
 type SetFn = (
@@ -66,6 +68,21 @@ export function createNavigationSlice(set: SetFn, get: GetFn) {
           state.taskNavHistory,
           workspacePath,
           workspaceIdentity,
+        ),
+      }));
+    },
+
+    taskNavPushModelGateway: (
+      workspacePath: string,
+      workspaceIdentity?: string,
+      target?: ModelGatewayOpenTarget,
+    ) => {
+      set((state) => ({
+        taskNavHistory: pushModelGatewayNavEntry(
+          state.taskNavHistory,
+          workspacePath,
+          workspaceIdentity,
+          target,
         ),
       }));
     },

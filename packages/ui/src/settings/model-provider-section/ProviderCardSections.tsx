@@ -543,7 +543,8 @@ export function ProviderModelsSection({
           />
         </div>
       ) : (
-        <div className="mt-1 flex h-12 items-center justify-start gap-2 rounded-lg border border-dashed border-border px-4 text-left text-ui-base text-foreground-subtle">
+        <div className="mt-1 flex min-h-12 items-center justify-start gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-left text-ui-base text-foreground-subtle">
+          {/* 窄屏提示会换行，最小高度替代固定高度，避免文字溢出虚线框。 */}
           <InfoIcon className="size-4 shrink-0" aria-hidden="true" />
           {intl.formatMessage({ id: "settings.modelProvider.modelsEmpty" })}
         </div>

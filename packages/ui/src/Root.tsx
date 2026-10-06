@@ -731,7 +731,6 @@ function RootInner({
     isDesktop,
     isMacDesktop,
     isWindowsDesktop,
-    captionWorkspacePath: activeWorkspacePath,
     onBack: activeWorkspacePath ? handleBackFromSettings : undefined,
     onCreateTask: handleCreateTask,
     onOpenWorkspace: handleOpenWorkspace,
