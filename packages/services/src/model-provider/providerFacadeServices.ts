@@ -1,7 +1,6 @@
 import type { Event } from "@zcode/rpc";
 import { ServiceChannels } from "@zcode/shared";
 import {
-  type ModelConfigObject,
   type ModelId,
   type ModelSelection,
   type ModelSelectionFacade,
@@ -35,6 +34,10 @@ export interface IProviderSettingsService {
     input?: Parameters<ProviderSettingsFacade["createPersonalProvider"]>[0],
   ): Promise<ProviderSettingsCreationResult>;
   resolveModelConfig(input: ResolveModelConfigInput): Promise<ModelConfigResolution>;
+  listAvailableModels(input: {
+    providerId: ProviderId;
+    basedOnRevision: number;
+  }): Promise<readonly ModelId[]>;
   savePersonalProviderOverlay(
     providerId: ProviderId,
     config: ProviderConfigObject,
@@ -46,11 +49,9 @@ export interface IProviderSettingsService {
     providerId: ProviderId,
     modelIds: readonly ModelId[],
   ): Promise<ProviderSettingsView>;
-  addPersonalModel(
+  addPersonalModels(
     providerId: ProviderId,
-    modelId: ModelId,
-    config: ModelConfigObject,
-    useRecommendedConfig?: boolean,
+    modelIds: readonly ModelId[],
   ): Promise<ProviderSettingsView>;
   renamePersonalModel(
     providerId: ProviderId,
@@ -110,6 +111,7 @@ export function createProviderSettingsService(
   facade: ProviderSettingsFacade,
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
+  readCatalog?: (config: ProviderConfigObject) => Promise<readonly ModelId[]>,
 ): IProviderSettingsService {
   return {
     onDidChange: toEvent((listener) => facade.onDidChange(listener)),
@@ -129,6 +131,15 @@ export function createProviderSettingsService(
       await ensureReady();
       return facade.resolveModelConfig(input);
     },
+    listAvailableModels: async (input) => {
+      await ensureReady();
+      if (!readCatalog) throw new Error("Model directory is unavailable");
+      const connection = await facade.readProviderConnection(
+        input.providerId,
+        input.basedOnRevision,
+      );
+      return readCatalog(connection);
+    },
     savePersonalProviderOverlay: async (providerId, config, metadata) => {
       await ensureReady();
       return facade.savePersonalProviderOverlay(providerId, config, metadata);
@@ -145,9 +156,9 @@ export function createProviderSettingsService(
       await ensureReady();
       return facade.reorderPersonalModels(providerId, modelIds);
     },
-    addPersonalModel: async (providerId, modelId, config, useRecommendedConfig) => {
+    addPersonalModels: async (providerId, modelIds) => {
       await ensureReady();
-      return facade.addPersonalModel(providerId, modelId, config, useRecommendedConfig);
+      return facade.addPersonalModels(providerId, modelIds);
     },
     renamePersonalModel: async (providerId, currentModelId, nextModelId) => {
       await ensureReady();

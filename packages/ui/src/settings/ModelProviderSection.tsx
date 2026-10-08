@@ -3,11 +3,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { Button } from "@/components/ui/button.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useModelProviders } from "@/hooks/useModelProviders.js";
-import { usePlatform } from "@/hooks/usePlatform.js";
-import {
-  getProviderFormApiKeyManagementUrl,
-  getProviderFormLabel,
-} from "@/lib/providerSettingsFormTypes.js";
+import { getProviderFormLabel } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelGatewayOpenTarget } from "@/lib/modelGatewayNavigation.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
 import { InlineEditableProviderCard } from "./model-provider-section/InlineEditableProviderCard.js";
@@ -36,7 +32,6 @@ export function ModelProviderSection({
   onConsumePendingModelProviderTarget?: () => void;
 } = {}) {
   const { intl, locale } = useZCodeIntl();
-  const platform = usePlatform();
   const confirmDialog = useConfirmDialog();
   const model = useModelProviders({
     workspacePath,
@@ -121,7 +116,7 @@ export function ModelProviderSection({
           onSave={async (provider) => {
             await model.saveProvider(provider);
           }}
-          onAddPersonalModel={model.addPersonalModel}
+          onAddPersonalModels={model.addPersonalModels}
           onSavePersonalModelDraft={model.savePersonalModelDraft}
           onSetPersonalModelEnabled={model.setPersonalModelEnabled}
           onDeletePersonalModel={model.deletePersonalModel}
@@ -135,12 +130,6 @@ export function ModelProviderSection({
           }
           onReorderModelIds={(ids) => model.reorderProviderModels(selected.providerId, ids)}
           onTestModel={model.testModelConnectivity}
-          presetApiKeyUrl={getProviderFormApiKeyManagementUrl(selected)}
-          onOpenPresetApiKey={() => {
-            const url = getProviderFormApiKeyManagementUrl(selected);
-            if (url) void platform.openExternal(url);
-          }}
-          nameEditable
         />
       ) : null}
     </ModelProviderSectionLayout>

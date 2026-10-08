@@ -244,7 +244,7 @@ export class ProviderConfigResolver {
           "models",
           modelId,
         ]);
-        const modelIssues = registryModelResult.ok ? [] : registryModelResult.issues;
+        const modelIssues = [...(registryModelResult.ok ? [] : registryModelResult.issues)];
         issues.push(...modelIssues);
         const modelEnabled = modelConfig.enabled === true;
         const executable = providerExecutable && modelEnabled && modelIssues.length === 0;

@@ -30,56 +30,47 @@ export function useModelConfigResolution({
   enabledRef.current = enabled;
   const inheritedSignatureRef = useRef<string | null>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resolveCurrent = useCallback(
-    async (restore?: {
-      isCurrent: () => boolean;
-      apply: (resolution: ModelConfigResolution) => void;
-    }): Promise<ModelConfigResolution | undefined> => {
-      const normalizedModelId = modelId.trim();
-      if (
-        !open ||
-        !resolve ||
-        !normalizedModelId ||
-        (!restore && (!enabled || normalizedModelId === originalModelId))
-      ) {
-        return undefined;
+  const resolveCurrent = useCallback(async (): Promise<ModelConfigResolution | undefined> => {
+    const normalizedModelId = modelId.trim();
+    if (
+      !open ||
+      !resolve ||
+      !normalizedModelId ||
+      !enabled ||
+      normalizedModelId === originalModelId
+    ) {
+      return undefined;
+    }
+    const generation = ++generationRef.current;
+    const isCurrent = () =>
+      generationRef.current === generation &&
+      identityRef.current === identity &&
+      enabledRef.current === enabled;
+    setResolving(true);
+    try {
+      const resolution = await resolve(normalizedModelId);
+      if (!isCurrent()) return undefined;
+      const inheritedSignature = JSON.stringify(resolution.inheritedConfig);
+      if (resolution.issues.length === 0 && inheritedSignatureRef.current !== inheritedSignature) {
+        inheritedSignatureRef.current = inheritedSignature;
+        setDefaultsLoaded(true);
+        if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = setTimeout(() => {
+          feedbackTimerRef.current = null;
+          setDefaultsLoaded(false);
+        }, 3_500);
       }
-      const generation = ++generationRef.current;
-      const isCurrent = () =>
-        generationRef.current === generation &&
-        identityRef.current === identity &&
-        (restore ? restore.isCurrent() : enabledRef.current === enabled);
-      setResolving(true);
-      try {
-        const resolution = await resolve(normalizedModelId);
-        if (!isCurrent()) return undefined;
-        const inheritedSignature = JSON.stringify(resolution.inheritedConfig);
-        if (
-          resolution.issues.length === 0 &&
-          inheritedSignatureRef.current !== inheritedSignature
-        ) {
-          inheritedSignatureRef.current = inheritedSignature;
-          setDefaultsLoaded(true);
-          if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
-          feedbackTimerRef.current = setTimeout(() => {
-            feedbackTimerRef.current = null;
-            setDefaultsLoaded(false);
-          }, 3_500);
-        }
-        const nextResult = { modelId: normalizedModelId, identity, resolution };
-        setResult(nextResult);
-        restore?.apply(resolution);
-        return resolution;
-      } catch (error) {
-        // 旧恢复请求的错误也必须服从身份/编辑代次，不能覆盖用户后来的字段反馈。
-        if (!isCurrent()) return undefined;
-        throw error;
-      } finally {
-        if (generationRef.current === generation) setResolving(false);
-      }
-    },
-    [enabled, identity, modelId, open, originalModelId, resolve],
-  );
+      const nextResult = { modelId: normalizedModelId, identity, resolution };
+      setResult(nextResult);
+      return resolution;
+    } catch (error) {
+      // 旧请求的错误也必须服从身份/编辑代次，不能覆盖用户后来的字段反馈。
+      if (!isCurrent()) return undefined;
+      throw error;
+    } finally {
+      if (generationRef.current === generation) setResolving(false);
+    }
+  }, [enabled, identity, modelId, open, originalModelId, resolve]);
 
   const idle = useIdleTrigger(() => resolveCurrent());
 
@@ -100,7 +91,7 @@ export function useModelConfigResolution({
       if (!open) inheritedSignatureRef.current = null;
       return;
     }
-    // 恢复成功与开启智能模式同批提交，沿用同一结果，不紧接着再发一次自动解析。
+    // 同一草稿的解析结果已到达时，避免再次调度。
     if (result?.identity === identity) return;
     idle.schedule();
   }, [
@@ -130,13 +121,6 @@ export function useModelConfigResolution({
       generationRef.current += 1;
       idle.cancel();
       setResult(null);
-    },
-    restore: (intent: {
-      isCurrent: () => boolean;
-      apply: (resolution: ModelConfigResolution) => void;
-    }) => {
-      idle.cancel();
-      return resolveCurrent(intent);
     },
     defaultsLoaded,
     flush: idle.flush,

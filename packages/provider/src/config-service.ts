@@ -306,15 +306,12 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
     });
   }
 
-  async addPersonalModel(
+  async addPersonalModels(
     providerId: ProviderId,
-    modelId: ModelId,
-    config: ModelConfig,
+    modelIds: readonly ModelId[],
     membership?: ProviderModelMembership,
-    useRecommendedConfig?: boolean,
   ): Promise<ProviderConfigLayerSnapshot> {
     const normalizedProviderId = normalizeId("providerId", providerId);
-    const normalizedModelId = normalizeId("modelId", modelId);
     const zcodeBuiltin = await this.#zcodeBuiltinSource.read();
     return this.#updatePersonal((current) => {
       assertMembershipCurrent(membership, normalizedProviderId, current);
@@ -322,31 +319,32 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
       const builtinModelIds =
         membership?.inheritedModelIds ??
         resolveProviderBuiltinModelIds(zcodeBuiltin, current.providers, normalizedProviderId);
-      if (builtinModelIds.includes(normalizedModelId)) {
-        throw new Error(`Model 已存在: ${normalizedProviderId}/${normalizedModelId}`);
-      }
       const currentModelIds = provider.personalModelIds ?? [];
-      if (currentModelIds.includes(normalizedModelId)) {
-        throw new Error(`Model 已存在: ${normalizedProviderId}/${normalizedModelId}`);
+      const addedModelIds = modelIds.map((modelId) => normalizeId("modelId", modelId));
+      if (addedModelIds.length === 0) throw new Error("Model 列表不能为空");
+      const occupiedIds = new Set([...builtinModelIds, ...currentModelIds]);
+      // 整批在同一次锁内更新中校验；若中途发现冲突，不会先保存前面的型号。
+      for (const modelId of addedModelIds) {
+        if (occupiedIds.has(modelId)) {
+          throw new Error(`Model 已存在: ${normalizedProviderId}/${modelId}`);
+        }
+        occupiedIds.add(modelId);
       }
+      const nextModelIds = [...currentModelIds, ...addedModelIds];
+      const models = addedModelIds.reduce(
+        (rules, modelId) =>
+          rules.setExact(normalizedProviderId, modelId, new ModelConfig({ enabled: true })),
+        current.models,
+      );
       return {
         providers: current.providers.set(
           normalizedProviderId,
-          provider.withPersonalModelIds([...currentModelIds, normalizedModelId]).withModelOrder(
+          provider.withPersonalModelIds(nextModelIds).withModelOrder(
             // 添加不能重新按成员名单排序，否则会丢掉用户已经保存的顺序。
-            normalizeModelOrder(
-              builtinModelIds,
-              [...currentModelIds, normalizedModelId],
-              provider.modelOrder ?? [],
-            ),
+            normalizeModelOrder(builtinModelIds, nextModelIds, provider.modelOrder ?? []),
           ),
         ),
-        models: current.models.setExact(
-          normalizedProviderId,
-          normalizedModelId,
-          config.overlay(new ModelConfig({ enabled: true })),
-          useRecommendedConfig,
-        ),
+        models,
         providerOrder: current.providerOrder,
       };
     });
@@ -420,7 +418,7 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
         throw new Error(`Model 不存在: ${id}/${model}`);
       }
       // 启停曾复用完整草稿保存，可能覆盖其他编辑或被固定配置完整性阻挡。
-      // 在事务内只修改最新 enabled；不改变模式、成员和其他模型字段。
+      // 在事务内只修改最新 enabled；不改变成员和其他模型字段。
       const config = (current.models.getExact(id, model) ?? new ModelConfig({})).overlay(
         new ModelConfig({ enabled }),
       );
@@ -439,7 +437,6 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
     nextModelId: ModelId,
     config: ModelConfig,
     expectedPersonalRevision: string,
-    useRecommendedConfig?: boolean,
     membership?: ProviderModelMembership,
   ): Promise<ProviderConfigLayerSnapshot> {
     const normalizedProviderId = normalizeId("providerId", providerId);
@@ -453,10 +450,6 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
           `Personal Provider Config revision conflict: expected ${expectedPersonalRevision}, current ${current.revision}`,
         );
       }
-      const recommended =
-        useRecommendedConfig ??
-        current.models.getExactRule(normalizedProviderId, originalId)?.type !==
-          "manual-provider-model";
       const provider = current.providers.get(normalizedProviderId);
       const builtinModelIds =
         membership?.inheritedModelIds ??
@@ -497,10 +490,10 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
         );
         models = models.renameExactModel(normalizedProviderId, originalId, nextId);
       }
-      models =
-        recommended && isStructurallyEmpty(config.toJSON())
-          ? models.deleteExact(normalizedProviderId, nextId)
-          : models.setExact(normalizedProviderId, nextId, config, recommended);
+      // 清空所有手动字段后删除精确规则，恢复内置继承，避免留下空覆盖。
+      models = isStructurallyEmpty(config.toJSON())
+        ? models.deleteExact(normalizedProviderId, nextId)
+        : models.setExact(normalizedProviderId, nextId, config);
       return { providers, models, providerOrder: current.providerOrder };
     });
   }

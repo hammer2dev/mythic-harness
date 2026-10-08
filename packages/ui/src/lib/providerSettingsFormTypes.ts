@@ -36,8 +36,6 @@ export interface ProviderSettingsFormModel {
   /** Personal Rule 叠加前的 Built-in Rule 解析结果，用于编辑器表达继承与稀疏覆盖。 */
   inheritedConfig?: ModelConfigObject;
   personalConfig: ModelConfigObject;
-  /** 缺省或 true 表示跟随 Built-in 推荐配置；false 表示固定个人配置。 */
-  useRecommendedConfig?: boolean;
   config: ModelConfigObject;
   hasPersonalConfig: boolean;
   executable: boolean;
@@ -55,12 +53,4 @@ export function getProviderFormApiKey(
   provider: Pick<ProviderSettingsFormProvider, "config">,
 ): string {
   return isApiKeyAccess(provider.config.access) ? (provider.config.access.apiKey ?? "") : "";
-}
-
-export function getProviderFormApiKeyManagementUrl(
-  provider: Pick<ProviderSettingsFormProvider, "config">,
-): string | undefined {
-  return isApiKeyAccess(provider.config.access)
-    ? (provider.config.access.apiKeyManagementUrl ?? undefined)
-    : undefined;
 }

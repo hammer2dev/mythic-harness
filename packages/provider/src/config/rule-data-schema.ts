@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { modelConfigDataSchema } from "@zcode/shared/model-config";
-import { manualModelConfigSchema } from "./manual-model-config.js";
-export { manualModelConfigSchema, type ManualModelConfig } from "./manual-model-config.js";
 import {
   apiKeyAccessDataSchema,
   personalProviderApiDataSchema,
@@ -48,9 +46,6 @@ export const providerModelConfigRuleSchema = templateModelConfigRuleSchema
   .extend({
     providerId: idSchema,
   });
-export const manualProviderModelConfigRuleSchema = providerModelConfigRuleSchema.extend({
-  config: manualModelConfigSchema,
-});
 
 export const builtinModelConfigRulesSchema = z
   .object({
@@ -62,26 +57,8 @@ export const builtinModelConfigRulesSchema = z
   })
   .strict();
 export const personalModelConfigRulesSchema = z
-  .object({
-    providerModelRules: z.array(providerModelConfigRuleSchema),
-    manualProviderModelRules: z.array(manualProviderModelConfigRuleSchema),
-  })
-  .strict()
-  .superRefine((rules, context) => {
-    // 不能通过最后一次覆盖掩盖矛盾模式；身份用元组编码，避免模型 ID 自带分隔符碰撞。
-    const smartIds = new Set(
-      rules.providerModelRules.map((rule) => JSON.stringify([rule.providerId, rule.modelId])),
-    );
-    rules.manualProviderModelRules.forEach((rule, index) => {
-      if (smartIds.has(JSON.stringify([rule.providerId, rule.modelId]))) {
-        context.addIssue({
-          code: "custom",
-          path: ["manualProviderModelRules", index],
-          message: "同一 Provider/Model 不能同时声明智能和手动配置",
-        });
-      }
-    });
-  });
+  .object({ providerModelRules: z.array(providerModelConfigRuleSchema) })
+  .strict();
 
 // 身份、模板引用和实例名属于规则，不再成为可向执行配置叠加的叶子。
 export const providerConfigRuleSchema = z
@@ -94,11 +71,10 @@ export const providerConfigRuleSchema = z
   })
   .strict();
 export const providerTemplateConfigRuleSchema = providerTemplateDataSchema.extend({
-  config: providerConfigDataSchema
-    .pick({ logo: true, access: true, api: true, builtinModelIds: true })
-    .extend({
-      access: apiKeyAccessDataSchema.omit({ apiKey: true }).nullable().optional(),
-    }),
+  // 模板只提供连接默认值；模型成员由用户明确添加，避免固定列表阻止删除。
+  config: providerConfigDataSchema.pick({ logo: true, access: true, api: true }).extend({
+    access: apiKeyAccessDataSchema.omit({ apiKey: true }).nullable().optional(),
+  }),
 });
 export const builtinProviderConfigRuleSchema = providerConfigRuleSchema.extend({
   config: providerConfigDataSchema.omit({ personalModelIds: true, modelOrder: true }).extend({
@@ -168,7 +144,6 @@ export type ModelApiMatchConfigRuleData = z.infer<typeof modelApiMatchConfigRule
 export type ProviderSiteMatchConfigRuleData = z.infer<typeof providerSiteMatchConfigRuleSchema>;
 export type TemplateModelConfigRuleData = z.infer<typeof templateModelConfigRuleSchema>;
 export type ProviderModelConfigRuleData = z.infer<typeof providerModelConfigRuleSchema>;
-export type ManualProviderModelConfigRuleData = z.infer<typeof manualProviderModelConfigRuleSchema>;
 export type BuiltinModelConfigRulesData = z.infer<typeof builtinModelConfigRulesSchema>;
 export type PersonalModelConfigRulesData = z.infer<typeof personalModelConfigRulesSchema>;
 export type ProviderConfigRuleData = z.infer<typeof providerConfigRuleSchema>;

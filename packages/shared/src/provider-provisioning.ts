@@ -15,7 +15,6 @@ export const providerProvisioningPersonalConfigSchema = z
     modelConfigRules: z
       .object({
         providerModelRules: z.array(z.unknown()),
-        manualProviderModelRules: z.array(z.unknown()),
       })
       .strict(),
     providerOrder: z.array(nonEmptyString).optional(),

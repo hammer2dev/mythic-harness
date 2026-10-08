@@ -21,6 +21,7 @@ import { resolvePendingProviderDraftSave, type ProviderDraftValues } from "./Pro
 import {
   ProviderApiKeySection,
   ProviderCardHeader,
+  ProviderNameSection,
   ProviderConnectionSection,
   ProviderModelsSection,
 } from "./ProviderCardSections.js";
@@ -138,7 +139,7 @@ function projectModelsToOrder(
 export function InlineEditableProviderCard({
   provider,
   onSave,
-  onAddPersonalModel,
+  onAddPersonalModels,
   onSavePersonalModelDraft,
   onSetPersonalModelEnabled,
   onDeletePersonalModel,
@@ -146,22 +147,14 @@ export function InlineEditableProviderCard({
   onTestModel,
   onReorderModelIds,
   readOnlyEndpoints,
-  presetApiKeyUrl,
-  onOpenPresetApiKey,
   statusSection,
-  nameEditable,
   headerVisible = true,
   headerActionsVisible,
   settingsRevision,
 }: {
   provider: ProviderSettingsFormProvider;
   onSave: (config: ProviderSettingsFormProvider) => void | Promise<void>;
-  onAddPersonalModel?: (
-    providerId: string,
-    modelId: string,
-    config: ProviderSettingsFormModel["personalConfig"],
-    useRecommendedConfig?: boolean,
-  ) => Promise<unknown>;
+  onAddPersonalModels?: (providerId: string, modelIds: readonly string[]) => Promise<unknown>;
   onSavePersonalModelDraft?: (input: SavePersonalModelDraftInput) => Promise<unknown>;
   onSetPersonalModelEnabled?: (
     providerId: string,
@@ -173,17 +166,13 @@ export function InlineEditableProviderCard({
   onTestModel?: (providerId: string, modelId: string) => Promise<ModelConnectivityResult>;
   onReorderModelIds?: (modelIds: string[]) => Promise<void>;
   readOnlyEndpoints?: boolean;
-  presetApiKeyUrl?: string;
-  onOpenPresetApiKey?: () => void;
   statusSection?: ReactNode;
-  nameEditable?: boolean;
   headerVisible?: boolean;
   headerActionsVisible?: boolean;
   settingsRevision?: number;
 }) {
   const { intl } = useZCodeIntl();
   const { dismissFeedback, showFeedback } = useProviderDetailFeedback();
-  const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(getProviderFormLabel(provider));
   const [apiFormat, setApiFormat] = useState<ProviderApiType>(
     provider.config.api?.type ?? "anthropic-messages",
@@ -202,7 +191,6 @@ export function InlineEditableProviderCard({
   );
   const reorderModelIdsTargetRef = useRef(onReorderModelIds);
   reorderModelIdsTargetRef.current = onReorderModelIds;
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const nameCompositionActiveRef = useRef(false);
   const nameEditProviderIdRef = useRef<string | null>(null);
   const technicalInputCompositionActiveRef = useRef(false);
@@ -212,6 +200,7 @@ export function InlineEditableProviderCard({
   const dirtyProviderFieldsRef = useRef(new Set<keyof ProviderDraftValues>());
   const draftRevisionRef = useRef(0);
   const lastSubmittedDraftSignatureRef = useRef<string | null>(null);
+  const submittedDraftSaveRef = useRef<Promise<void> | null>(null);
   const providerDisplayName = resolveModelProviderDisplayName(provider);
   const saveNotificationRef = useRef({
     providerId: provider.providerId,
@@ -243,7 +232,6 @@ export function InlineEditableProviderCard({
       providerIdRef.current = provider.providerId;
       nameEditProviderIdRef.current = null;
       nameCompositionActiveRef.current = false;
-      setEditingName(false);
       draftRevisionRef.current += 1;
       dirtyProviderFieldsRef.current.clear();
       lastSubmittedDraftSignatureRef.current = null;
@@ -419,7 +407,11 @@ export function InlineEditableProviderCard({
         ...draftRef.current,
         nameValue: nameConfirmed ? draftRef.current.nameValue : getProviderFormLabel(provider),
       });
-      if (lastSubmittedDraftSignatureRef.current === signature) return;
+      // blur/闲时保存与获取目录可能重叠；相同草稿等待原保存，失败不能读取旧连接。
+      if (lastSubmittedDraftSignatureRef.current === signature) {
+        await submittedDraftSaveRef.current;
+        return;
+      }
       lastSubmittedDraftSignatureRef.current = signature;
 
       // Linux 下点击左侧供应商切换时，输入框 blur 与 Popover 关闭顺序不稳定，
@@ -429,11 +421,13 @@ export function InlineEditableProviderCard({
         providerId: provider.providerId,
         reason,
       });
-      await saveProviderWithCleanupGuard(nextProvider, () => {
+      const saving = saveProviderWithCleanupGuard(nextProvider, () => {
         if (lastSubmittedDraftSignatureRef.current === signature) {
           lastSubmittedDraftSignatureRef.current = null;
         }
       });
+      submittedDraftSaveRef.current = saving;
+      await saving;
     },
     [provider, readOnlyEndpoints, saveProviderWithCleanupGuard],
   );
@@ -495,11 +489,12 @@ export function InlineEditableProviderCard({
 
   const handleNameValueChange = useCallback(
     (value: string) => {
+      nameEditProviderIdRef.current = provider.providerId;
       markDraftDirty("nameValue");
       draftRef.current.nameValue = value;
       setNameValue(value);
     },
-    [markDraftDirty],
+    [markDraftDirty, provider.providerId],
   );
 
   const handleBaseUrlValueChange = useCallback(
@@ -526,7 +521,6 @@ export function InlineEditableProviderCard({
     // Esc/切换供应商先取消编辑意图，随后发生的 blur 不得补发保存。
     if (nameEditProviderIdRef.current !== provider.providerId) return;
     nameEditProviderIdRef.current = null;
-    setEditingName(false);
     const trimmed = draftRef.current.nameValue.trim();
     const currentLabel = getProviderFormLabel(provider);
     if (trimmed && trimmed !== currentLabel) {
@@ -556,18 +550,10 @@ export function InlineEditableProviderCard({
         draftRef.current.nameValue = label;
         dirtyProviderFieldsRef.current.delete("nameValue");
         setNameValue(label);
-        setEditingName(false);
       }
     },
     [provider],
   );
-
-  const handleStartEditName = useCallback(() => {
-    nameEditProviderIdRef.current = provider.providerId;
-    nameCompositionActiveRef.current = false;
-    setEditingName(true);
-    requestAnimationFrame(() => nameInputRef.current?.focus());
-  }, [provider.providerId]);
 
   const saveConnection = useCallback(
     () => void commitPendingDraft("connection-blur").catch(() => undefined),
@@ -653,9 +639,6 @@ export function InlineEditableProviderCard({
             originalModelId: currentModel.modelId,
             nextModelId: trimmed,
             personalConfig: structuredClone(nextModel.personalConfig),
-            ...(nextModel.useRecommendedConfig === undefined
-              ? {}
-              : { useRecommendedConfig: nextModel.useRecommendedConfig }),
             basedOnRevision,
           });
         },
@@ -705,24 +688,17 @@ export function InlineEditableProviderCard({
     [onSetPersonalModelEnabled, provider.providerId, runSaveOperation],
   );
 
-  const handleAddModel = useCallback(
-    async (model: ProviderSettingsFormModel) => {
-      if (!onAddPersonalModel) throw new Error("当前设置入口未装配 Personal Model 添加能力");
-      const added = { ...model, modelId: model.modelId.trim(), hasPersonalConfig: true };
-      if (!added.modelId) return;
+  const handleAddModels = useCallback(
+    async (modelIds: readonly string[]) => {
+      if (!onAddPersonalModels) throw new Error("Model batch creation is unavailable");
       await runSaveOperation(
         async () => {
-          await onAddPersonalModel(
-            provider.providerId,
-            added.modelId,
-            structuredClone(added.personalConfig),
-            added.useRecommendedConfig,
-          );
+          await onAddPersonalModels(provider.providerId, modelIds);
         },
-        { modelId: added.modelId, draftOwnsRetry: true },
+        { draftOwnsRetry: true },
       );
     },
-    [onAddPersonalModel, provider.providerId, runSaveOperation],
+    [onAddPersonalModels, provider.providerId, runSaveOperation],
   );
 
   const handleReorderModelIds = useCallback(
@@ -755,20 +731,6 @@ export function InlineEditableProviderCard({
         <ProviderCardHeader
           providerName={headerProviderName}
           logo={provider.config.logo}
-          editingName={editingName}
-          nameValue={nameValue}
-          nameInputRef={nameInputRef}
-          nameEditable={nameEditable}
-          onNameChange={handleNameValueChange}
-          onNameBlur={handleNameBlur}
-          onNameKeyDown={handleNameKeyDown}
-          onNameCompositionStart={() => {
-            nameCompositionActiveRef.current = true;
-          }}
-          onNameCompositionEnd={() => {
-            nameCompositionActiveRef.current = false;
-          }}
-          onStartEditName={handleStartEditName}
           onDelete={onDelete ? handleDeleteProvider : undefined}
           actionsVisible={headerActionsVisible}
           providerToggle={
@@ -806,6 +768,18 @@ export function InlineEditableProviderCard({
       {statusSection}
 
       <div className="space-y-3">
+        <ProviderNameSection
+          value={nameValue}
+          onChange={handleNameValueChange}
+          onBlur={handleNameBlur}
+          onKeyDown={handleNameKeyDown}
+          onCompositionStart={() => {
+            nameCompositionActiveRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            nameCompositionActiveRef.current = false;
+          }}
+        />
         {
           <ProviderConnectionSection
             provider={provider}
@@ -825,8 +799,6 @@ export function InlineEditableProviderCard({
           <ProviderApiKeySection
             apiKeyValue={apiKeyValue}
             apiKeyVisible={apiKeyVisible}
-            presetApiKeyUrl={presetApiKeyUrl}
-            onOpenPresetApiKey={onOpenPresetApiKey}
             onApiKeyChange={handleApiKeyValueChange}
             onApiKeyBlur={handleApiKeyBlur}
             onApiKeyKeyDown={handleTextCommitKeyDown}
@@ -848,9 +820,17 @@ export function InlineEditableProviderCard({
           onModelCommit={handleModelCommit}
           onModelEnabledChange={handleModelEnabledChange}
           onDeleteModel={handleDeleteModel}
-          onAddModel={handleAddModel}
+          onAddModels={handleAddModels}
           onReorderModelIds={onReorderModelIds ? handleReorderModelIds : undefined}
           settingsRevision={settingsRevision ?? 0}
+          connectionKey={JSON.stringify([
+            apiFormat,
+            baseUrlValue,
+            apiKeyValue,
+            provider.config.api?.headers,
+          ])}
+          connectionReady={Boolean(baseUrlValue.trim() && apiKeyValue.trim())}
+          prepareConnection={() => commitPendingDraft("model-catalog")}
         />
       </div>
     </div>

@@ -90,18 +90,13 @@ export function parseZCodeBuiltinModelConfigRules(input: unknown): ModelConfigRu
 
 export function parsePersonalModelConfigRules(input: unknown): ModelConfigRules {
   const parsed = personalModelConfigRulesSchema.parse(input);
-  return new ModelConfigRules([
-    ...parsed.providerModelRules.map((rule) => ({
+  return new ModelConfigRules(
+    parsed.providerModelRules.map((rule) => ({
       ...rule,
       type: "provider-model" as const,
       config: createModelConfig(rule.config),
     })),
-    ...parsed.manualProviderModelRules.map((rule) => ({
-      ...rule,
-      type: "manual-provider-model" as const,
-      config: createModelConfig(rule.config),
-    })),
-  ]);
+  );
 }
 
 function createProviderRules(rules: readonly ProviderConfigRuleData[]): ProviderConfigMap {

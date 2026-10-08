@@ -1,11 +1,8 @@
 import { z } from "zod";
 import { modelSelectionSchema } from "@zcode/shared/model-selection";
-import { completeModelConfigDataSchema, modelConfigDataSchema } from "@zcode/shared/model-config";
 import {
   parsePersonalModelConfigRules,
   parsePersonalProviderConfigMap,
-  extractManualModelConfig,
-  manualModelConfigSchema,
   type ProviderConfigLayerUpdate,
 } from "@zcode/provider";
 
@@ -71,42 +68,12 @@ export function decodeProviderConfigFile(input: unknown): ProviderConfigLayerUpd
   const parsed = storedProviderConfigSchema.parse(candidate);
   return Object.freeze({
     providers: parsePersonalProviderConfigMap(parsed.config.providerConfigRules),
-    models: parsePersonalModelConfigRules(
-      normalizeLegacyManualRules(parsed.config.modelConfigRules),
-    ),
+    models: parsePersonalModelConfigRules(parsed.config.modelConfigRules),
     providerOrder: parsed.config.providerOrder,
     ...(parsed.config.defaultModelSelection === undefined
       ? {}
       : { defaultModelSelection: parsed.config.defaultModelSelection }),
   });
-}
-
-const legacyCompleteManualSchema = completeModelConfigDataSchema.extend({
-  enabled: modelConfigDataSchema.shape.enabled,
-});
-
-// 旧编辑器曾把 MFJS 当作手动必填项；隐藏后仅在文件边界识别旧合法形状，
-// 提取现行可编辑字段，避免整个个人配置加载失败或继续冻结系统能力。
-const legacyEditableManualSchema = manualModelConfigSchema.extend({
-  properties: manualModelConfigSchema.shape.properties.extend({
-    requiresMfjsToolSchema:
-      completeModelConfigDataSchema.shape.properties.shape.requiresMfjsToolSchema,
-  }),
-});
-
-function normalizeLegacyManualRules(input: unknown): unknown {
-  if (!isRecord(input) || !Array.isArray(input.manualProviderModelRules)) return input;
-  return {
-    ...input,
-    manualProviderModelRules: input.manualProviderModelRules.map((rule: unknown) => {
-      if (!isRecord(rule) || manualModelConfigSchema.safeParse(rule.config).success) return rule;
-      // 仅识别旧完整形状，不把未知/损坏配置通过删字段伪装成成功；公共写入入口仍严格拒绝隐藏叶子。
-      const legacy = z
-        .union([legacyCompleteManualSchema, legacyEditableManualSchema])
-        .safeParse(rule.config);
-      return legacy.success ? { ...rule, config: extractManualModelConfig(legacy.data) } : rule;
-    }),
-  };
 }
 
 export function encodeProviderConfigFile(update: ProviderConfigLayerUpdate) {

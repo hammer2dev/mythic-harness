@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProviderSettingsFormModel } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
 import { Loader2Icon, Trash2, Unplug } from "lucide-react";
@@ -19,6 +19,7 @@ export function ModelRowInput({
   providerName = providerId,
   providerEnabled = true,
   providerAccess,
+  connectionKey,
   inputTestId,
   deleteTestId,
   onCommit,
@@ -33,6 +34,7 @@ export function ModelRowInput({
   providerName?: string;
   providerEnabled?: boolean;
   providerAccess?: ProviderConfigObject["access"];
+  connectionKey: string;
   inputTestId?: string;
   deleteTestId?: string;
   onCommit: (model: ProviderSettingsFormModel, basedOnRevision: number) => void | Promise<void>;
@@ -46,7 +48,12 @@ export function ModelRowInput({
   onTest?: (model: string) => Promise<ModelConnectivityResult>;
 }) {
   const { intl, locale } = useZCodeIntl();
-  const { showFeedback } = useProviderDetailFeedback();
+  const { showFeedback, dismissFeedback } = useProviderDetailFeedback();
+  const testKey = `model-test:${providerId}:${model.modelId}`;
+  const testIdentity = JSON.stringify([connectionKey, model.config]);
+  const currentTestIdentity = useRef(testIdentity);
+  currentTestIdentity.current = testIdentity;
+  useEffect(() => () => dismissFeedback(testKey), [testIdentity, testKey, dismissFeedback]);
   const [isTesting, setIsTesting] = useState(false);
   const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
   const [metadataSaving, setMetadataSaving] = useState(false);
@@ -139,8 +146,8 @@ export function ModelRowInput({
       return;
     }
 
-    const modelId = draft.idValue.trim();
-    const dedupeKey = `model-test:${providerId}:${modelId}`;
+    const modelId = model.modelId;
+    const dedupeKey = testKey;
     showFeedback({
       key: dedupeKey,
       message: intl.formatMessage(
@@ -153,6 +160,8 @@ export function ModelRowInput({
     setIsTesting(true);
     try {
       const result = await onTest(modelId);
+      // 配置变更后的测试回包不能继续标记新配置为通过。
+      if (currentTestIdentity.current !== testIdentity) return;
       if (result.success) {
         showFeedback({
           key: dedupeKey,
@@ -187,6 +196,7 @@ export function ModelRowInput({
         });
       }
     } catch (error) {
+      if (currentTestIdentity.current !== testIdentity) return;
       showFeedback({
         key: dedupeKey,
         message: intl.formatMessage(
@@ -211,7 +221,9 @@ export function ModelRowInput({
   }, [
     onTest,
     isTesting,
-    draft.idValue,
+    model.modelId,
+    testIdentity,
+    testKey,
     intl,
     providerId,
     providerName,
@@ -232,11 +244,11 @@ export function ModelRowInput({
         })
       : null);
   const shouldShowTestButton = Boolean(onTest);
-  const testDisabled = !providerEnabled || isTesting || !draft.idValue.trim() || !onTest;
-  const contextWindowLabel = formatModelContextWindowLabel(
-    model.config.properties?.contextWindow ?? 0,
-    locale,
-  );
+  const testDisabled = !providerEnabled || isTesting || !model.executable || !onTest;
+  const contextWindowLabel =
+    model.config.properties?.contextWindow == null
+      ? "—"
+      : formatModelContextWindowLabel(model.config.properties.contextWindow, locale);
   const contextWindowAccessibleLabel = intl.formatMessage(
     { id: "settings.modelProvider.contextWindowBadgeLabel" },
     { value: contextWindowLabel },
@@ -288,16 +300,6 @@ export function ModelRowInput({
           </Button>
         ) : null}
         <ProviderModelMetadataDialog
-          onRestore={() => {
-            setDraftErrorField(null);
-            setCommitErrorMessage(null);
-            void editor
-              .restore()
-              .catch((error) =>
-                setCommitErrorMessage(error instanceof Error ? error.message : String(error)),
-              );
-          }}
-          mode="edit"
           open={metadataDialogOpen}
           draft={draft}
           draftErrorMessage={draftErrorMessage}
@@ -308,12 +310,12 @@ export function ModelRowInput({
           onDraftChange={updateDraft}
           onCommit={handleMetadataDialogCommit}
           saving={metadataSaving}
-          modelConfigResolutionPending={editor.pending}
           modelDefaultsLoaded={editor.defaultsLoaded}
           onModelIdBlur={() => {
             void editor.flush().catch(() => undefined);
           }}
           modelIdReadOnly={model.builtin}
+          needsConfiguration={Boolean(model.issues?.length)}
         />
         {onDelete ? (
           <Button

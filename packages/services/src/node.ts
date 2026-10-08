@@ -548,6 +548,7 @@ export function createLocalServices(options: {
     | Pick<IZCodeAgentService, "testModelConnectivity">
     | undefined;
   const providerRuntime = createProviderRuntimeFromConfigRuntime({
+    fetchModels: hostApiNetworkTransport.fetch,
     configRuntime: providerConfigRuntime,
     modelSelectionConfiguredDefaultSource,
     disposeModelSelectionConfiguredDefaultSource: () =>

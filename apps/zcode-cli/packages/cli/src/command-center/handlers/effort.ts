@@ -23,7 +23,7 @@ export async function handleEffortCommand(
     };
   }
 
-  if (levels.length === 0) {
+  if (levels.length <= 1) {
     return {
       mode: deps.getMode?.(),
       response: "Reasoning effort selection is not available for the current model.",

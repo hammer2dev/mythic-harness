@@ -61,11 +61,7 @@ export function ProviderModelReasoningSettings({
           label={intl.formatMessage({ id: "settings.modelProvider.reasoningLevelMapping" })}
           labelHelp={<ModelConfigHelp field="reasoningLevelMapping" />}
           value={draft.reasoningLevelMapValue}
-          effectiveValue={
-            draft.useRecommendedConfigValue === false
-              ? undefined
-              : (inheritedConfig?.optionSpecs?.reasoningLevel?.map ?? undefined)
-          }
+          effectiveValue={inheritedConfig?.optionSpecs?.reasoningLevel?.map ?? undefined}
           overridden={
             overrideFields
               ? overrideFields.has("reasoningLevelMapValue")

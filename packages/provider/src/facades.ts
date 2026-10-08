@@ -64,12 +64,10 @@ export interface ProviderSettingsMutationTarget {
     modelIds: readonly ModelId[],
     membership?: ProviderModelMembership,
   ): Promise<unknown>;
-  addPersonalModel(
+  addPersonalModels(
     providerId: ProviderId,
-    modelId: ModelId,
-    config: ModelConfig,
+    modelIds: readonly ModelId[],
     membership?: ProviderModelMembership,
-    useRecommendedConfig?: boolean,
   ): Promise<unknown>;
   renamePersonalModel(
     providerId: ProviderId,
@@ -88,7 +86,6 @@ export interface ProviderSettingsMutationTarget {
     nextModelId: ModelId,
     config: ModelConfig,
     expectedPersonalRevision: string,
-    useRecommendedConfig?: boolean,
     membership?: ProviderModelMembership,
   ): Promise<unknown>;
   setPersonalModelEnabled(
@@ -108,7 +105,6 @@ export interface ProviderSettingsModelCandidateView {
   readonly builtin: boolean;
   readonly effectiveBuiltinConfig: ModelConfigObject;
   readonly personalExactConfig?: ModelConfigObject;
-  readonly useRecommendedConfig?: boolean;
   readonly effectiveConfig: RegistryModelConfigObject | ModelConfigObject;
   readonly enabled: boolean;
   readonly executable: boolean;
@@ -141,7 +137,6 @@ export interface SavePersonalModelDraftInput {
   readonly originalModelId: ModelId;
   readonly nextModelId: ModelId;
   readonly personalConfig: ModelConfigObject;
-  readonly useRecommendedConfig?: boolean;
   readonly basedOnRevision: number;
 }
 
@@ -251,9 +246,9 @@ export class ProviderSettingsFacade {
       return Object.freeze({
         inheritedConfig: config.toJSON(),
         effectiveConfig: config.toJSON(),
-        issues: Object.freeze([
-          ...config.validateComplete(["providers", input.providerId, "models", input.modelId]),
-        ]),
+        issues: Object.freeze(
+          config.validateComplete(["providers", input.providerId, "models", input.modelId]),
+        ),
       });
     }
 
@@ -273,8 +268,8 @@ export class ProviderSettingsFacade {
         input.modelId,
       );
     }
-    // 此入口预览智能配置草稿；固定模式不请求推荐，重新开启时不能沿用旧固定标记。
-    personalRules = personalRules.setExact(input.providerId, input.modelId, personalConfig, true);
+    // 预览与执行共享真实型号的规则解析和个人稀疏覆盖。
+    personalRules = personalRules.setExact(input.providerId, input.modelId, personalConfig);
     const config = ModelConfigRules.composeEffective(
       snapshot.config.zcodeBuiltinModelRules,
       personalRules,
@@ -288,9 +283,9 @@ export class ProviderSettingsFacade {
     return Object.freeze({
       inheritedConfig: inheritedConfig.toJSON(),
       effectiveConfig: config.toJSON(),
-      issues: Object.freeze([
-        ...config.validateComplete(["providers", input.providerId, "models", input.modelId]),
-      ]),
+      issues: Object.freeze(
+        config.validateComplete(["providers", input.providerId, "models", input.modelId]),
+      ),
     });
   }
 
@@ -352,20 +347,12 @@ export class ProviderSettingsFacade {
     );
   }
 
-  addPersonalModel(
+  addPersonalModels(
     providerId: ProviderId,
-    modelId: ModelId,
-    config: ModelConfigObject,
-    useRecommendedConfig?: boolean,
+    modelIds: readonly ModelId[],
   ): Promise<ProviderSettingsView> {
-    return this.#mutateProvider(providerId, "add-model", (target) =>
-      target.addPersonalModel(
-        providerId,
-        modelId,
-        parseModelConfig(config),
-        this.#modelMembership(providerId),
-        useRecommendedConfig,
-      ),
+    return this.#mutateProvider(providerId, "add-models", (target) =>
+      target.addPersonalModels(providerId, modelIds, this.#modelMembership(providerId)),
     );
   }
 
@@ -405,7 +392,6 @@ export class ProviderSettingsFacade {
         input.nextModelId,
         parsedConfig,
         snapshot.config.personalRevision,
-        input.useRecommendedConfig,
         this.#modelMembership(input.providerId, snapshot),
       );
     });
@@ -474,6 +460,18 @@ export class ProviderSettingsFacade {
     };
     void result.then(cleanup, cleanup);
     return result;
+  }
+
+  async readProviderConnection(
+    providerId: ProviderId,
+    basedOnRevision: number,
+  ): Promise<ProviderConfigObject> {
+    await this.waitForProviderOperations(providerId);
+    const view = this.getView();
+    if (view.revision !== basedOnRevision) throw new Error("Provider Settings revision conflict");
+    const provider = view.providers.find((item) => item.providerId === providerId);
+    if (!provider) throw new Error("Provider is unavailable");
+    return provider.effectiveConfig;
   }
 
   async waitForProviderOperations(providerId: ProviderId): Promise<void> {
@@ -594,19 +592,12 @@ function createProviderSettingsView(input: {
             provider.providerId,
             model.modelId,
           );
-          const personalModelRule = input.personalModels.getExactRule(
-            provider.providerId,
-            model.modelId,
-          );
           return Object.freeze({
             kind: model.kind,
             modelId: model.modelId,
             builtin: model.source === "builtin",
             effectiveBuiltinConfig: model.effectiveBuiltinConfig.toJSON(),
             ...(personalModelConfig ? { personalExactConfig: personalModelConfig.toJSON() } : {}),
-            ...(personalModelRule
-              ? { useRecommendedConfig: personalModelRule.type !== "manual-provider-model" }
-              : {}),
             effectiveConfig: model.config.toJSON(),
             enabled: model.enabled,
             executable: model.executable,

@@ -1,3 +1,4 @@
+import { createModelCatalogReader } from "./modelCatalog.js";
 import {
   NodeModelSelectionConfigRepository,
   createNodeModelSelectionFacade,
@@ -22,10 +23,12 @@ import {
 } from "./providerFacadeServices.js";
 
 export interface ProviderRuntimeOptions extends ProviderConfigRuntimeOptions {
+  readonly fetchModels?: typeof fetch;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
 }
 
 export interface ProviderRuntimeDependencies {
+  readonly fetchModels?: typeof fetch;
   readonly configRuntime: ProviderConfigRuntime;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
   readonly modelSelectionConfiguredDefaultSource?: ModelSelectionConfiguredDefaultSource;
@@ -38,6 +41,7 @@ export class ProviderRuntime {
   readonly registryService: ProviderRegistryService;
   readonly providerSettings: IProviderSettingsService;
   readonly modelSelection: IModelSelectionService;
+  readonly #catalog: ReturnType<typeof createModelCatalogReader>;
   readonly #configRuntime: ProviderConfigRuntime;
   readonly #modelSelectionRuntime: IModelSelectionService & { dispose(): void };
   readonly #disposeModelSelectionConfiguredDefaultSource?: () => void;
@@ -55,10 +59,12 @@ export class ProviderRuntime {
     const mutations = createSettingsMutationTarget(this.#configRuntime, this.registryService);
     const ensureReady = () => this.start();
     const settingsFacade = new ProviderSettingsFacade(this.registryService, mutations);
+    this.#catalog = createModelCatalogReader(dependencies.fetchModels ?? globalThis.fetch);
     this.providerSettings = createProviderSettingsService(
       settingsFacade,
       ensureReady,
       dependencies.testConnectivity,
+      this.#catalog.read,
     );
     this.#modelSelectionRuntime = createModelSelectionService(
       createNodeModelSelectionFacade(this.registryService),
@@ -82,6 +88,7 @@ export class ProviderRuntime {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#catalog.dispose();
     this.#modelSelectionRuntime.dispose();
     this.registryService.dispose();
     this.#disposeModelSelectionConfiguredDefaultSource?.();
@@ -103,7 +110,7 @@ function createSettingsMutationTarget(
     reorderPersonalModels: (providerId, modelIds, membership) =>
       configService.reorderPersonalModels(providerId, modelIds, membership),
     // 手工四参数转发曾丢掉新增的配置模式；直接绑定完整签名，避免装配层截断写入意图。
-    addPersonalModel: configService.addPersonalModel.bind(configService),
+    addPersonalModels: configService.addPersonalModels.bind(configService),
     renamePersonalModel: (providerId, currentModelId, nextModelId, membership) =>
       configService.renamePersonalModel(providerId, currentModelId, nextModelId, membership),
     deletePersonalModel: (providerId, modelId, membership) =>
@@ -116,7 +123,6 @@ function createSettingsMutationTarget(
       nextModelId,
       config,
       expectedPersonalRevision,
-      useRecommendedConfig,
       membership,
     ) =>
       configService.savePersonalModelDraft(
@@ -125,7 +131,6 @@ function createSettingsMutationTarget(
         nextModelId,
         config,
         expectedPersonalRevision,
-        useRecommendedConfig,
         membership,
       ),
     refresh: (reason) => registryService.refresh(reason),
@@ -134,7 +139,7 @@ function createSettingsMutationTarget(
 }
 
 export function createProviderRuntime(options: ProviderRuntimeOptions): ProviderRuntime {
-  const { testConnectivity, ...configRuntimeOptions } = options;
+  const { testConnectivity, fetchModels, ...configRuntimeOptions } = options;
   const configRuntime = createProviderConfigRuntime(configRuntimeOptions);
   const modelSelectionConfiguredDefaultSource = new NodeModelSelectionConfigRepository({
     personalRepository: configRuntime.personalRepository,
@@ -142,6 +147,7 @@ export function createProviderRuntime(options: ProviderRuntimeOptions): Provider
   return createProviderRuntimeFromConfigRuntime({
     configRuntime,
     testConnectivity,
+    fetchModels,
     modelSelectionConfiguredDefaultSource,
     disposeModelSelectionConfiguredDefaultSource: () =>
       modelSelectionConfiguredDefaultSource.dispose(),

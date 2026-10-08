@@ -13,6 +13,8 @@ export function thoughtLevelsToEffortOptions(
   levels: readonly string[],
   locale?: UiLocale,
 ): TuiEffortOption[] {
+  // 单一 default 是执行必需的内部值，没有可供用户切换的档位。
+  if (levels.length <= 1) return [];
   const effortCopy = getZCodeCopy(locale).tui.effort;
   return levels.map((level) => ({
     id: level,

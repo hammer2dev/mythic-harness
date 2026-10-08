@@ -2389,7 +2389,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.modelDeleteFailure": "Failed to delete {provider} / {model}: {error}",
   "settings.modelProvider.modelSaveFailure": "Failed to save {provider} / {model}: {error}",
   "settings.modelProvider.cancel": "Cancel",
-  "settings.modelProvider.name": "Name",
+  "settings.modelProvider.name": "Provider name",
   "settings.modelProvider.namePlaceholder": "e.g. DeepSeek",
   "settings.modelProvider.addProviderTitle": "Add model provider",
   "settings.modelProvider.addProviderDescription":
@@ -2401,8 +2401,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.catalogProviderEmpty": "No providers found",
   "settings.modelProvider.addProviderAction": "Add provider",
   "settings.modelProvider.templatePickerTitle": "Add provider",
-  "settings.modelProvider.templateGroup.zhipu": "Zhipu",
-  "settings.modelProvider.templateGroup.other": "Other",
   "settings.modelProvider.templatePickerBack": "Back to provider details",
   "settings.modelProvider.addProviderModelReminder":
     "Add at least one model before adding the provider.",
@@ -2424,7 +2422,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.apiKey": "API key",
   "settings.modelProvider.apiKeyPlaceholder": "Enter API key",
   "settings.modelProvider.apiKeyDisabledHint": "Set an API key to enable this provider.",
-  "settings.modelProvider.getApiKey": "Get API key",
   "settings.modelProvider.viewUsage": "View usage",
   "settings.modelProvider.or": "or",
   "settings.modelProvider.connectionMode": "Connection mode",
@@ -2435,13 +2432,9 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.readyStatus": "Ready",
   "settings.modelProvider.enableProvider": "Enable provider",
   "settings.modelProvider.disableProvider": "Disable provider",
-  "settings.modelProvider.renameProvider": "Rename",
   "settings.modelProvider.enableAction": "Enable",
   "settings.modelProvider.disableAction": "Disable",
   "settings.modelProvider.restoreDefaultAction": "Restore default",
-  "settings.modelProvider.followRecommendedConfig": "Smart configuration",
-  "settings.modelProvider.restoreConfig": "Restore",
-  "settings.modelProvider.resetForm": "Reset form",
   "settings.modelProvider.fieldHelp": "About {field}",
   "settings.modelProvider.help.contextWindow":
     "The context capacity the model can process at once, in tokens. ZCode uses this to manage context.\nDo not exceed the model's actual limit.",
@@ -2459,8 +2452,6 @@ const enUS: Record<string, string> = {
     "Use a CEL expression to map the current reasoning level, `reasoningLevel`, to model API request fields. The JSON object returned by the expression is merged into the outgoing request body.",
   "settings.modelProvider.help.advanced":
     "**MFJS tool schema**: Enables Moonshot Flavored JSON Schema compatibility, commonly used by Moonshot's Kimi model API. Enable only when the model API requires this format.",
-  "settings.modelProvider.help.followRecommendedConfig":
-    "Matches recommended configuration using the model ID, Base URL, and API format. ZCode continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
   "settings.modelProvider.modelDefaultsLoaded": "Smart configuration matched for this model",
   "settings.modelProvider.modelConfigIncomplete": "Model configuration is incomplete",
   "settings.modelProvider.models": "Model list",
@@ -2644,7 +2635,8 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.testModel.modelUnavailable":
     "This model is currently unavailable for connectivity testing.",
   "settings.modelProvider.testModel.connectingWithIdentity": "Testing {provider} / {model}",
-  "settings.modelProvider.testModel.successWithIdentity": "{provider} / {model} connected",
+  "settings.modelProvider.testModel.successWithIdentity":
+    "{provider} / {model} basic request passed",
   "settings.modelProvider.testModel.failed": "Connection failed",
   "settings.modelProvider.testModel.failedWithIdentity":
     "Failed to connect {provider} / {model}: {reason}",
@@ -5559,6 +5551,37 @@ const enUS: Record<string, string> = {
   "scheduledPreview.toast.running": "Running “{title}”…",
   "scheduledPreview.toast.view": "View",
   "scheduledPreview.addSchedule": "Add schedule",
+  "settings.modelProvider.missingLimits":
+    "Configuration needed: set context and maximum output limits.",
+  "settings.modelProvider.completeConfiguration": "Complete configuration",
+  "settings.modelProvider.catalog.fetch": "Fetch model list",
+  "settings.modelProvider.catalog.loading": "Fetching…",
+  "settings.modelProvider.catalog.fetched":
+    "Fetched {count} models. Click Add model to choose one.",
+  "settings.modelProvider.catalog.connectionRequired":
+    "Enter an API address, key and format first.",
+  "settings.modelProvider.catalog.select": "Search and select a model",
+  "settings.modelProvider.catalog.selected":
+    "{count, plural, one {# model selected} other {# models selected}}",
+  "settings.modelProvider.catalog.addSelected":
+    "Add {count, plural, one {# model} other {# models}}",
+  "settings.modelProvider.catalog.removeSelection": "Deselect {model}",
+  "settings.modelProvider.catalog.addHint":
+    "Known models are configured automatically. Unrecognized models need configuration after adding.",
+  "settings.modelProvider.catalog.search": "Search model IDs",
+  "settings.modelProvider.catalog.noMatch": "No matching models",
+  "settings.modelProvider.catalog.added": "Added",
+  "settings.modelProvider.catalog.useList": "Select from list",
+  "settings.modelProvider.catalog.manual": "Cannot find your model? Enter its ID manually",
+  "settings.modelProvider.catalog.failed": "Fetching failed. Retry or enter a model ID manually.",
+  "settings.modelProvider.catalog.empty":
+    "The gateway returned no models. You can enter an ID manually.",
+  "settings.modelProvider.catalog.idle":
+    "Click Fetch model list on the provider page to load available models.",
+  "settings.modelProvider.configured": "Configured",
+  "settings.modelProvider.needsConfiguration":
+    "Configuration needed: set the context window and maximum output limit.",
+  "settings.modelProvider.outputMapping": "Output limit mapping",
 };
 
 export default enUS;

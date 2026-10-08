@@ -18,14 +18,11 @@ import {
   type modelConfigDataSchema,
 } from "@zcode/shared/model-config";
 import { validateConfigSchema } from "./schema-validation.js";
-import { clearManualModelConfig } from "./manual-model-config.js";
 import {
   providerModelConfigRuleSchema,
-  manualProviderModelConfigRuleSchema,
   personalModelConfigRulesSchema,
   builtinModelConfigRulesSchema,
   type ProviderModelConfigRuleData,
-  type ManualProviderModelConfigRuleData,
   type TemplateModelConfigRuleData,
   type ModelMatchConfigRuleData,
   type ModelApiMatchConfigRuleData,
@@ -336,7 +333,6 @@ export class ModelConfig extends ConfigOverlay<ModelConfig> {
 
 type RuleWithConfig<T> = Readonly<Omit<T, "config"> & { config: ModelConfig }>;
 export type ProviderModelConfigRule = RuleWithConfig<ProviderModelConfigRuleData>;
-export type ManualProviderModelConfigRule = RuleWithConfig<ManualProviderModelConfigRuleData>;
 export type TemplateModelConfigRule = RuleWithConfig<TemplateModelConfigRuleData>;
 export type ModelMatchConfigRule = RuleWithConfig<ModelMatchConfigRuleData>;
 export type ModelApiMatchConfigRule = RuleWithConfig<ModelApiMatchConfigRuleData>;
@@ -345,15 +341,11 @@ export type ProviderSiteMatchConfigRule = RuleWithConfig<ProviderSiteMatchConfig
 /** type 只标识内存执行规则的来源层，不写入配置文件；分组不能再按字段有无猜测。 */
 export type ModelConfigRule =
   | (ProviderModelConfigRule & { readonly type: "provider-model" })
-  | (ManualProviderModelConfigRule & { readonly type: "manual-provider-model" })
   | (TemplateModelConfigRule & { readonly type: "template-model" })
   | (ModelMatchConfigRule & { readonly type: "model" })
   | (ModelApiMatchConfigRule & { readonly type: "model-api" })
   | (ProviderSiteMatchConfigRule & { readonly type: "provider-site" });
-type ExactModelConfigRule = Extract<
-  ModelConfigRule,
-  { type: "provider-model" | "manual-provider-model" }
->;
+type ExactModelConfigRule = Extract<ModelConfigRule, { type: "provider-model" }>;
 
 export interface ModelConfigRuleResolutionInput {
   readonly providerId: string;
@@ -389,14 +381,8 @@ export class ModelConfigRules {
     const baseUrl = input.baseUrl == null ? undefined : normalizeBaseURLForRuleMatch(input.baseUrl);
     for (const rule of this.#rules) {
       if (isExactModelRule(rule)) {
-        if (rule.providerId !== input.providerId || rule.modelId !== input.modelId) continue;
-        // 手动规则要求所有可编辑叶子齐全，因此可直接覆盖；系统叶子继续来自当前身份的规则。
-        // 清空整份基线会既丢失系统映射，也迫使 UI 把旧模型的隐藏配置复制进个人规则。
-        result = (
-          rule.type === "manual-provider-model"
-            ? ModelConfig.fromData(clearManualModelConfig(result.toJSON()))
-            : result
-        ).overlay(rule.config);
+        if (rule.providerId === input.providerId && rule.modelId === input.modelId)
+          result = result.overlay(rule.config);
         continue;
       }
       if (rule.type === "template-model") {
@@ -404,14 +390,13 @@ export class ModelConfigRules {
           result = result.overlay(rule.config);
         continue;
       }
-      // 只放宽推荐规则匹配，不改真实请求里的模型 ID。
       if (!matchesRule(rule.modelMatch, input.modelId, true)) continue;
       if (
         (rule.type === "model-api" || rule.type === "provider-site") &&
-        rule.apiTypeMatch !== undefined
-      ) {
-        if (input.apiType == null || !matchesRule(rule.apiTypeMatch, input.apiType)) continue;
-      }
+        rule.apiTypeMatch !== undefined &&
+        (input.apiType == null || !matchesRule(rule.apiTypeMatch, input.apiType))
+      )
+        continue;
       if (
         rule.type === "provider-site" &&
         (baseUrl === undefined || !matchesRule(rule.baseUrlMatch, baseUrl))
@@ -419,41 +404,34 @@ export class ModelConfigRules {
         continue;
       result = result.overlay(rule.config);
     }
+    if (
+      result.optionSpecs?.reasoningLevel?.values?.length === 1 &&
+      result.optionSpecs.reasoningLevel.values[0] === "default" &&
+      this.getExact(input.providerId, input.modelId)?.optionSpecs?.reasoningLevel?.map == null
+    )
+      result = result.overlay(
+        ModelConfig.fromData({ optionSpecs: { reasoningLevel: { map: "{}" } } }),
+      );
     return result;
   }
 
-  setExact(
-    providerId: string,
-    modelId: string,
-    config: ModelConfig,
-    useRecommendedConfig?: boolean,
-  ): ModelConfigRules {
-    const previous = this.getExactRule(providerId, modelId);
-    const manual =
-      useRecommendedConfig === undefined
-        ? previous?.type === "manual-provider-model"
-        : !useRecommendedConfig;
-    // 保存入口复用整条规则 schema，不再另写一份“完整但忽略 enabled”的校验。
-    const data = { providerId, modelId, config: config.toJSON() };
-    (manual ? manualProviderModelConfigRuleSchema : providerModelConfigRuleSchema).parse(data);
+  setExact(providerId: string, modelId: string, config: ModelConfig): ModelConfigRules {
+    providerModelConfigRuleSchema.parse({
+      providerId,
+      modelId,
+      config: config.toJSON(),
+    });
     const replacement: ExactModelConfigRule = {
-      type: manual ? "manual-provider-model" : "provider-model",
+      type: "provider-model",
       providerId,
       modelId,
       config,
     };
-    const result: ModelConfigRule[] = [];
-    let replaced = false;
-    for (const rule of this.#rules) {
-      if (isExactModelRule(rule) && rule.providerId === providerId && rule.modelId === modelId) {
-        if (!replaced) result.push(replacement);
-        replaced = true;
-      } else {
-        result.push(rule);
-      }
-    }
-    if (!replaced) result.push(replacement);
-    return new ModelConfigRules(result);
+    const rules = this.#rules.filter(
+      (rule) =>
+        !isExactModelRule(rule) || rule.providerId !== providerId || rule.modelId !== modelId,
+    );
+    return new ModelConfigRules([...rules, replacement]);
   }
 
   deleteExact(providerId: string, modelId: string): ModelConfigRules {
@@ -496,15 +474,6 @@ export class ModelConfigRules {
     return result;
   }
 
-  getExactRule(providerId: string, modelId: string): ExactModelConfigRule | undefined {
-    for (let index = this.#rules.length - 1; index >= 0; index -= 1) {
-      const rule = this.#rules[index]!;
-      if (isExactModelRule(rule) && rule.providerId === providerId && rule.modelId === modelId)
-        return rule;
-    }
-    return undefined;
-  }
-
   toZCodeBuiltinJSON(): BuiltinModelConfigRulesData {
     return builtinModelConfigRulesSchema.parse({
       modelRules: this.#collect("model"),
@@ -516,18 +485,14 @@ export class ModelConfigRules {
   }
 
   toPersonalJSON(): PersonalModelConfigRulesData {
-    // 完整规则必须在编码边界再校验，不能把直接构造的不完整手动值写入文件。
+    // 稀疏覆盖在编码边界按当前存储合同校验。
     return personalModelConfigRulesSchema.parse({
       providerModelRules: this.#collect("provider-model"),
-      manualProviderModelRules: this.#collect("manual-provider-model"),
     });
   }
 
   toJSON() {
-    return {
-      ...this.toZCodeBuiltinJSON(),
-      manualProviderModelRules: this.#collect("manual-provider-model"),
-    };
+    return this.toZCodeBuiltinJSON();
   }
 
   #collect<T extends ModelConfigRule["type"]>(type: T) {
@@ -538,7 +503,7 @@ export class ModelConfigRules {
 }
 
 function isExactModelRule(rule: ModelConfigRule): rule is ExactModelConfigRule {
-  return rule.type === "provider-model" || rule.type === "manual-provider-model";
+  return rule.type === "provider-model";
 }
 
 function matchesRule(pattern: string, value: string, ignoreCase = false): boolean {

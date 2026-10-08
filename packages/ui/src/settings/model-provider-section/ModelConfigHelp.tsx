@@ -12,8 +12,7 @@ type ModelConfigHelpField =
   | "capabilities"
   | "reasoningLevelsOrdered"
   | "reasoningLevelMapping"
-  | "advanced"
-  | "followRecommendedConfig";
+  | "advanced";
 
 export function ModelConfigInputLabel({
   field,

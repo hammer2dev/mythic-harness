@@ -54,7 +54,6 @@ export async function readProvisionablePersonalConfig(
       if (
         personal.providers.keys().length === 0 &&
         rules.providerModelRules.length === 0 &&
-        rules.manualProviderModelRules.length === 0 &&
         !personal.providerOrder?.length &&
         personal.defaultModelSelection === undefined
       )

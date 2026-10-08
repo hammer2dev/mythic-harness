@@ -14,7 +14,7 @@ export function resolveModelThoughtOption(params: {
   );
   const model = provider?.models.find((candidate) => candidate.modelId === params.modelId);
   const reasoning = model?.config.optionSpecs.reasoningLevel;
-  if (!reasoning || reasoning.values.length === 0) return null;
+  if (!reasoning || reasoning.values.length <= 1) return null;
 
   return {
     id: "thought_level",
