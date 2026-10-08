@@ -224,3 +224,30 @@ pnpm exec tsx --test packages/services/test/builtinModelMetadata.test.ts package
 - CLI `pnpm --dir apps/zcode-cli typecheck` 通过，27 项使用缓存；保留 Turbo 安装位置与 CLI lockfile 缺项的环境提示。
 - CLI `pnpm --dir apps/zcode-cli lint` 未通过；Contracts、Core、Adapters、Telemetry 等未改文件存在 `max-lines` 错误，未扩大本次提交范围整改。不能将 CLI 独立 Lint 记为通过。
 - 当前 53 个文本改动文件格式检查通过。上述已有失败与前节 CLI Key 测试失败保持记录，不用删除其他测试或放宽规则使检查通过。
+
+## 2026-10-08 硅基流动模板验收
+
+对应 [供应商模板规则](./TEMPLATE-CONSOLIDATION.md)。本轮内置 revision 更新为 34，新增 `siliconflow` 一个模板，中文为“硅基流动”、英文为“SiliconFlow”，位于 OpenCode 后；当前为自定义入口加 13 个品牌。前一轮 revision 33 的 12 品牌验收事实保持原样。
+
+### 实际界面验证
+
+使用独立临时个人配置与最新源码构建的 HTTP 3065、Web 5199 完成关键 E2E。API Key 始终为空，修改地址为合成 `.invalid` 域名；未点击获取目录或测试模型，未请求真实供应商 API，未操作用户配置或真实桌面开发程序。
+
+| 场景           | 实际结果                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| 菜单入口       | 恰好 14 项，原顺序保留，硅基流动只有一个入口且位于 OpenCode 后                                          |
+| 默认连接       | 新建名称为“硅基流动”，地址为 `https://api.siliconflow.cn/v1`，API 格式为 Chat Completions，模型列表为空 |
+| 品牌图标       | 菜单、供应商列表与详情显示紫色官网图形；图片实际加载成功，两处原始宽度为 193，未显示 Package 回退图标   |
+| 编辑与重新进入 | 将名称、合成 URL 与 API 格式修改后，个人配置正确落盘；完整刷新并重开详情，三项值均保留，模型列表仍为空  |
+
+测试目录为 `C:/Users/Administrator/AppData/Local/Temp/zcode-siliconflow-template-e2e-20261008-c3575b10`。三张截图已实际检查：`output/playwright/template-menu-14.png`、`siliconflow-defaults-empty.png`、`siliconflow-edited-reopened.png`。验收后通过界面确认删除唯一测试供应商，个人配置恢复为 0 个供应商、0 条模型规则；命名浏览器、HTTP 与 Vite 均已关闭，3065、5199 无监听，本轮两项服务进程均已结束。
+
+### 工程检查与限制
+
+- Node 使用 24.14.0；根 `pnpm typecheck` 通过。
+- `pnpm lint` 为 0 错误、17 条未改文件中的原有告警；`pnpm architecture:check --changed` 为 0 违规。
+- 内置配置关键模板测试 1/1 通过；修改前，新增的 13 模板预期对原 12 模板数据失败，实施后通过。
+- 本轮 9 个文本文件格式检查和 `git diff --check` 通过；官方 SVG 原字节保留。状态与保存路径沿用原 Host 配置服务，改动仅涉及模板数据、UI 资源映射及规范和验收记录。
+- freshness 的远端 fetch 因 GitHub 连接重置失败；`--no-fetch` 检查通过。当前相对 `origin/main` 为 ahead 26、behind 0，并与已保存的 `origin/feature/model-gateway-config` 同步，未将 fetch 记为通过。
+- 本轮首次启动仍记录到既有 `OnboardingDialog` Hook 顺序及局部 ErrorBoundary 错误，完整刷新后未再出现；隔离 HTTP 仍有 `window-controller` 缺失告警。新增模板的关键界面场景均已实际通过，不据此声称页面全程无错误。
+- 未验证真实目录、模型推理、原生 Electron、手机远控或跨 Host 分发。本轮没有提交或推送代码，其他个人配置与本地改动保持原状。

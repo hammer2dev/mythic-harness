@@ -47,6 +47,7 @@ export function ProviderTemplatePicker({
     "xai",
     "openrouter",
     "opencode-go-responses",
+    "siliconflow",
   ];
   const orderedTemplates = [
     ...preferredIds.flatMap((id) => templates.filter((template) => template.templateId === id)),

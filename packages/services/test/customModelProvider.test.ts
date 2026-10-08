@@ -17,13 +17,18 @@ test("bundled configuration has one template per brand and no account providers"
   });
   try {
     const config = await source.read();
-    assert.equal(config.providerTemplates?.keys().length, 12);
+    assert.equal(config.providerTemplates?.keys().length, 13);
     for (const id of ["zai-api", "bigmodel-api"])
       assert.ok(config.providerTemplates?.keys().includes(id));
     assert.equal(config.providerTemplates?.has("zai-standard-api"), false);
     assert.equal(config.providerTemplates?.has("bigmodel-standard-api"), false);
     const templates = config.providerTemplates!.entries();
-    assert.equal(new Set(templates.map(([, template]) => template.config.logo?.key)).size, 12);
+    assert.equal(new Set(templates.map(([, template]) => template.config.logo?.key)).size, 13);
+    const siliconflow = config.providerTemplates!.get("siliconflow")!;
+    assert.equal(siliconflow.templateNameMap["zh-CN"], "硅基流动");
+    assert.equal(siliconflow.templateNameMap["en-US"], "SiliconFlow");
+    assert.equal(siliconflow.config.api?.baseUrl, "https://api.siliconflow.cn/v1");
+    assert.equal(siliconflow.config.api?.type, "openai-chat-completions");
     const opencode = config.providerTemplates!.get("opencode-go-responses")!;
     assert.equal(opencode.templateNameMap["en-US"], "OpenCode");
     assert.equal(opencode.config.api?.baseUrl, "https://opencode.ai/zen/go/v1");

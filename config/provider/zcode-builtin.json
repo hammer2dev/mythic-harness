@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 33,
+  "revision": 34,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -253,6 +253,26 @@
             "logo": {
               "type": "builtin",
               "key": "opencode"
+            }
+          }
+        },
+        {
+          "templateId": "siliconflow",
+          "templateNameMap": {
+            "zh-CN": "硅基流动",
+            "en-US": "SiliconFlow"
+          },
+          "config": {
+            "access": {
+              "type": "api-key"
+            },
+            "api": {
+              "type": "openai-chat-completions",
+              "baseUrl": "https://api.siliconflow.cn/v1"
+            },
+            "logo": {
+              "type": "builtin",
+              "key": "siliconflow"
             }
           }
         }

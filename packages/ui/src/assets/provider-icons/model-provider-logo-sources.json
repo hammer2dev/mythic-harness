@@ -3,6 +3,15 @@
   "reviewedAt": "2026-10-08",
   "logos": [
     {
+      "brand": "SiliconFlow",
+      "file": "model-provider-siliconflow.svg",
+      "providerIds": ["siliconflow"],
+      "sourceUrl": "https://static02.siliconflow.cn/www/cn/res/20260615/SiliconFlow_LOGO.zip",
+      "sourcePage": "https://www.siliconflow.cn/brand",
+      "sourceOwner": "SiliconFlow",
+      "normalization": "Official icon-only SVG siliconflow_logo_SVG/siliconflow_Single graphic LOGO.svg from the brand ZIP, unchanged. Transparent 193x112 graphic, fill #6E29F5. Retrieved 2026-10-08."
+    },
+    {
       "brand": "OpenRouter",
       "file": "model-provider-openrouter-light.svg",
       "darkFile": "model-provider-openrouter-dark.svg",
