@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-09-02",
+  "reviewedAt": "2026-10-08",
   "logos": [
     {
       "brand": "OpenRouter",
@@ -16,7 +16,7 @@
       "brand": "OpenCode",
       "file": "model-provider-opencode-light.svg",
       "darkFile": "model-provider-opencode-dark.svg",
-      "providerIds": ["opencode-zen-responses", "opencode-zen-messages", "opencode-zen-chat"],
+      "providerIds": ["opencode-go-responses"],
       "sourceUrl": "https://opencode.ai/brand",
       "sourceOwner": "OpenCode",
       "normalization": "Official 300x300 square SVG downloads, unchanged. Decoded logoLightSquareSvg / logoDarkSquareSvg from brand page asset index-CmefrukV.js. Retrieved 2026-09-07."
@@ -64,7 +64,7 @@
     {
       "brand": "Alibaba Model Studio",
       "file": "model-provider-alibaba-cloud.png",
-      "providerIds": ["qwen-alibaba-model-studio-cn", "qwen-alibaba-model-studio-intl"],
+      "providerIds": ["qwen-alibaba-model-studio-cn"],
       "sourceUrl": "https://github.com/aliyun.png?size=512",
       "sourcePage": "https://github.com/aliyun",
       "sourceOwner": "Alibaba Cloud",

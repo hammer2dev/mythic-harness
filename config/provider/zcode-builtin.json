@@ -1,90 +1,69 @@
 {
   "schemaVersion": 1,
-  "revision": 32,
+  "revision": 33,
   "config": {
     "providerConfigRules": {
       "templateRules": [
         {
-          "templateId": "zai-api",
+          "templateId": "openai",
           "templateNameMap": {
-            "zh-CN": "Z.ai Coding Plan",
-            "en-US": "Z.ai Coding Plan"
+            "zh-CN": "OpenAI",
+            "en-US": "OpenAI"
           },
           "config": {
             "access": {
               "type": "api-key",
-              "apiKeyManagementUrl": "https://z.ai/manage-apikey/apikey-list"
+              "apiKeyManagementUrl": "https://platform.openai.com/api-keys"
+            },
+            "api": {
+              "type": "openai-responses",
+              "baseUrl": "https://api.openai.com/v1"
+            },
+            "logo": {
+              "type": "builtin",
+              "key": "openai"
+            }
+          }
+        },
+        {
+          "templateId": "anthropic",
+          "templateNameMap": {
+            "zh-CN": "Anthropic",
+            "en-US": "Anthropic"
+          },
+          "config": {
+            "access": {
+              "type": "api-key",
+              "apiKeyManagementUrl": "https://console.anthropic.com/settings/keys"
             },
             "api": {
               "type": "anthropic-messages",
-              "baseUrl": "https://api.z.ai/api/anthropic"
+              "baseUrl": "https://api.anthropic.com/v1"
             },
             "logo": {
               "type": "builtin",
-              "key": "zai"
+              "key": "anthropic"
             }
           }
         },
         {
-          "templateId": "zai-standard-api",
+          "templateId": "deepseek",
           "templateNameMap": {
-            "zh-CN": "Z.ai API",
-            "en-US": "Z.ai API"
+            "zh-CN": "DeepSeek",
+            "en-US": "DeepSeek"
           },
           "config": {
             "access": {
               "type": "api-key",
-              "apiKeyManagementUrl": "https://z.ai/manage-apikey/apikey-list"
-            },
-            "api": {
-              "type": "openai-chat-completions",
-              "baseUrl": "https://api.z.ai/api/paas/v4"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "zai"
-            }
-          }
-        },
-        {
-          "templateId": "bigmodel-api",
-          "templateNameMap": {
-            "zh-CN": "BigModel Coding Plan",
-            "en-US": "BigModel Coding Plan"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://bigmodel.cn/coding-plan/personal/overview"
+              "apiKeyManagementUrl": "https://platform.deepseek.com/api_keys"
             },
             "api": {
               "type": "anthropic-messages",
-              "baseUrl": "https://open.bigmodel.cn/api/anthropic"
+              "baseUrl": "https://api.deepseek.com/anthropic"
             },
             "logo": {
               "type": "builtin",
-              "key": "bigmodel"
-            }
-          }
-        },
-        {
-          "templateId": "bigmodel-standard-api",
-          "templateNameMap": {
-            "zh-CN": "BigModel API",
-            "en-US": "BigModel API"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://bigmodel.cn/usercenter/proj-mgmt/apikeys"
-            },
-            "api": {
-              "type": "openai-chat-completions",
-              "baseUrl": "https://open.bigmodel.cn/api/paas/v4"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "bigmodel"
+              "key": "deepseek"
             }
           }
         },
@@ -131,31 +110,52 @@
           }
         },
         {
-          "templateId": "deepseek",
+          "templateId": "bigmodel-api",
           "templateNameMap": {
-            "zh-CN": "DeepSeek",
-            "en-US": "DeepSeek"
+            "zh-CN": "BigModel",
+            "en-US": "BigModel"
           },
           "config": {
             "access": {
               "type": "api-key",
-              "apiKeyManagementUrl": "https://platform.deepseek.com/api_keys"
+              "apiKeyManagementUrl": "https://bigmodel.cn/coding-plan/personal/overview"
             },
             "api": {
               "type": "anthropic-messages",
-              "baseUrl": "https://api.deepseek.com/anthropic"
+              "baseUrl": "https://open.bigmodel.cn/api/anthropic"
             },
             "logo": {
               "type": "builtin",
-              "key": "deepseek"
+              "key": "bigmodel"
+            }
+          }
+        },
+        {
+          "templateId": "zai-api",
+          "templateNameMap": {
+            "zh-CN": "Z.ai",
+            "en-US": "Z.ai"
+          },
+          "config": {
+            "access": {
+              "type": "api-key",
+              "apiKeyManagementUrl": "https://z.ai/manage-apikey/apikey-list"
+            },
+            "api": {
+              "type": "anthropic-messages",
+              "baseUrl": "https://api.z.ai/api/anthropic"
+            },
+            "logo": {
+              "type": "builtin",
+              "key": "zai"
             }
           }
         },
         {
           "templateId": "qwen-alibaba-model-studio-cn",
           "templateNameMap": {
-            "zh-CN": "阿里云百炼（中国）",
-            "en-US": "Alibaba Cloud (China)"
+            "zh-CN": "阿里百炼",
+            "en-US": "Alibaba Model Studio"
           },
           "config": {
             "access": {
@@ -173,31 +173,10 @@
           }
         },
         {
-          "templateId": "qwen-alibaba-model-studio-intl",
-          "templateNameMap": {
-            "zh-CN": "阿里云百炼（国际）",
-            "en-US": "Alibaba Cloud (Global)"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://modelstudio.console.aliyun.com/ap-southeast-1?tab=dashboard"
-            },
-            "api": {
-              "type": "openai-chat-completions",
-              "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "alibaba-model-studio"
-            }
-          }
-        },
-        {
           "templateId": "xiaomi-mimo",
           "templateNameMap": {
-            "zh-CN": "Xiaomi MiMo",
-            "en-US": "Xiaomi MiMo"
+            "zh-CN": "Xiaomi",
+            "en-US": "Xiaomi"
           },
           "config": {
             "access": {
@@ -211,48 +190,6 @@
             "logo": {
               "type": "builtin",
               "key": "xiaomi-mimo"
-            }
-          }
-        },
-        {
-          "templateId": "openai",
-          "templateNameMap": {
-            "zh-CN": "OpenAI",
-            "en-US": "OpenAI"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://platform.openai.com/api-keys"
-            },
-            "api": {
-              "type": "openai-responses",
-              "baseUrl": "https://api.openai.com/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "openai"
-            }
-          }
-        },
-        {
-          "templateId": "anthropic",
-          "templateNameMap": {
-            "zh-CN": "Anthropic",
-            "en-US": "Anthropic"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://console.anthropic.com/settings/keys"
-            },
-            "api": {
-              "type": "anthropic-messages",
-              "baseUrl": "https://api.anthropic.com/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "anthropic"
             }
           }
         },
@@ -299,52 +236,10 @@
           }
         },
         {
-          "templateId": "opencode-go-chat",
-          "templateNameMap": {
-            "zh-CN": "OpenCode Go (Chat)",
-            "en-US": "OpenCode Go (Chat)"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://opencode.ai/auth"
-            },
-            "api": {
-              "type": "openai-chat-completions",
-              "baseUrl": "https://opencode.ai/zen/go/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "opencode"
-            }
-          }
-        },
-        {
-          "templateId": "opencode-go-messages",
-          "templateNameMap": {
-            "zh-CN": "OpenCode Go (Anthropic)",
-            "en-US": "OpenCode Go (Anthropic)"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://opencode.ai/auth"
-            },
-            "api": {
-              "type": "anthropic-messages",
-              "baseUrl": "https://opencode.ai/zen/go/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "opencode"
-            }
-          }
-        },
-        {
           "templateId": "opencode-go-responses",
           "templateNameMap": {
-            "zh-CN": "OpenCode Go (Responses)",
-            "en-US": "OpenCode Go (Responses)"
+            "zh-CN": "OpenCode",
+            "en-US": "OpenCode"
           },
           "config": {
             "access": {
@@ -354,69 +249,6 @@
             "api": {
               "type": "openai-responses",
               "baseUrl": "https://opencode.ai/zen/go/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "opencode"
-            }
-          }
-        },
-        {
-          "templateId": "opencode-zen-responses",
-          "templateNameMap": {
-            "zh-CN": "OpenCode Zen (Responses)",
-            "en-US": "OpenCode Zen (Responses)"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://opencode.ai/auth"
-            },
-            "api": {
-              "type": "openai-responses",
-              "baseUrl": "https://opencode.ai/zen/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "opencode"
-            }
-          }
-        },
-        {
-          "templateId": "opencode-zen-messages",
-          "templateNameMap": {
-            "zh-CN": "OpenCode Zen (Anthropic)",
-            "en-US": "OpenCode Zen (Anthropic)"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://opencode.ai/auth"
-            },
-            "api": {
-              "type": "anthropic-messages",
-              "baseUrl": "https://opencode.ai/zen/v1"
-            },
-            "logo": {
-              "type": "builtin",
-              "key": "opencode"
-            }
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "templateNameMap": {
-            "zh-CN": "OpenCode Zen (Chat)",
-            "en-US": "OpenCode Zen (Chat)"
-          },
-          "config": {
-            "access": {
-              "type": "api-key",
-              "apiKeyManagementUrl": "https://opencode.ai/auth"
-            },
-            "api": {
-              "type": "openai-chat-completions",
-              "baseUrl": "https://opencode.ai/zen/v1"
             },
             "logo": {
               "type": "builtin",

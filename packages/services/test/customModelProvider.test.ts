@@ -10,15 +10,32 @@ import { configureCodingPlanApiKey } from "../../../apps/zcode-cli/packages/boot
 
 const bundled = resolve("config/provider/zcode-builtin.json");
 
-test("bundled configuration keeps four Key templates and has no account providers", async () => {
+test("bundled configuration has one template per brand and no account providers", async () => {
   const source = new NodeZCodeBuiltinProviderConfigSource({
     bundledFilePath: bundled,
     watch: false,
   });
   try {
     const config = await source.read();
-    for (const id of ["zai-api", "bigmodel-api", "zai-standard-api", "bigmodel-standard-api"])
+    assert.equal(config.providerTemplates?.keys().length, 12);
+    for (const id of ["zai-api", "bigmodel-api"])
       assert.ok(config.providerTemplates?.keys().includes(id));
+    assert.equal(config.providerTemplates?.has("zai-standard-api"), false);
+    assert.equal(config.providerTemplates?.has("bigmodel-standard-api"), false);
+    const templates = config.providerTemplates!.entries();
+    assert.equal(new Set(templates.map(([, template]) => template.config.logo?.key)).size, 12);
+    const opencode = config.providerTemplates!.get("opencode-go-responses")!;
+    assert.equal(opencode.templateNameMap["en-US"], "OpenCode");
+    assert.equal(opencode.config.api?.baseUrl, "https://opencode.ai/zen/go/v1");
+    assert.equal(opencode.config.api?.type, "openai-responses");
+    assert.equal(
+      config.providerTemplates!.get("bigmodel-api")?.templateNameMap["en-US"],
+      "BigModel",
+    );
+    for (const rule of config.models.rules()) {
+      if (rule.type === "template-model")
+        assert.equal(config.providerTemplates!.has(rule.templateId), true, rule.templateId);
+    }
     assert.equal(config.providers.keys().length, 0);
     for (const [, template] of config.providerTemplates!.entries())
       assert.equal(template.config.access?.type, "api-key");
