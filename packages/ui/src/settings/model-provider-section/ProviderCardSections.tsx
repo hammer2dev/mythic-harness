@@ -135,6 +135,8 @@ export function ProviderNameSection({
     <div>
       <label className="mb-1 block text-ui-base text-foreground-subtle">{label}</label>
       <Input
+        // 名称默认是 28px，改用连接表单统一的 lg（32px）尺寸。
+        size="lg"
         aria-label={label}
         data-testid={TID_MODEL_PROVIDER_NAME_INPUT}
         value={value}

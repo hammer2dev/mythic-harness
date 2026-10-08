@@ -38,6 +38,7 @@ export function ModelCatalogPicker({
       {manual ? (
         <Input
           autoFocus
+          size="lg"
           aria-label={intl.formatMessage({ id: "settings.modelProvider.modelId" })}
           className="font-mono"
           value={value[0] ?? ""}
@@ -67,6 +68,8 @@ export function ModelCatalogPicker({
             <Button
               type="button"
               variant="outline"
+              // 目录选择与手填 ID 同用 lg，避免切换入口时高度变化。
+              size="lg"
               role="combobox"
               aria-expanded={expanded}
               disabled={catalog.status !== "success" || catalog.ids.length === 0}

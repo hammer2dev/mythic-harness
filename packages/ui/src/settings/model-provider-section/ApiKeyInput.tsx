@@ -35,7 +35,8 @@ export function ApiKeyInput({
         type={visible && !readOnly ? "text" : "password"}
         size="lg"
         data-testid={TID_MODEL_PROVIDER_API_KEY_INPUT}
-        className="pr-10 h-9"
+        // 不再用 h-9 覆盖 lg，保持与其他连接字段同高。
+        className="pr-10"
         placeholder={intl.formatMessage({
           id: "settings.modelProvider.apiKeyPlaceholder",
         })}

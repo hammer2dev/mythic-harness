@@ -251,3 +251,13 @@ pnpm exec tsx --test packages/services/test/builtinModelMetadata.test.ts package
 - freshness 的远端 fetch 因 GitHub 连接重置失败；`--no-fetch` 检查通过。当前相对 `origin/main` 为 ahead 26、behind 0，并与已保存的 `origin/feature/model-gateway-config` 同步，未将 fetch 记为通过。
 - 本轮首次启动仍记录到既有 `OnboardingDialog` Hook 顺序及局部 ErrorBoundary 错误，完整刷新后未再出现；隔离 HTTP 仍有 `window-controller` 缺失告警。新增模板的关键界面场景均已实际通过，不据此声称页面全程无错误。
 - 未验证真实目录、模型推理、原生 Electron、手机远控或跨 Host 分发。本轮没有提交或推送代码，其他个人配置与本地改动保持原状。
+
+## 表单控件高度统一（2026-10-08）
+
+- 源码确认名称、模型目录选择与手填 ID 原用默认 28px，API Key 的局部 `h-9` 覆盖为 36px；统一使用已有 `lg`（32px），共修改三个 UI 组件。规则先更新至配置简化方案，草稿和保存仍由原组件及 Host 服务负责。
+- 隔离 HTTP/Web 页面在 1280×900 与 390×844 下实测：名称、Base URL、API 格式、API Key、模型目录选择、手填 ID、上下文和输出上限共八个控件均为 32px。连接字段文字、密钥可见性图标与 API 格式箭头显示正常。
+- 两种视口的模型下拉都能打开，真实鼠标滚轮使列表 `scrollTop` 从 0 增至 450.4；手填和上限弹窗正常打开、取消。名称失焦保存后，完整刷新仍保留。
+- 证据保存在 `C:/Users/Administrator/AppData/Local/Temp/zcode-control-sizes-e2e-20261008-67c5d8a1/output/playwright/`，关键截图为 `connection-height-desktop.png` 与 `connection-height-narrow.png`。本轮只测修改后尺寸，不将源码判断记为修改前页面实测。
+- 根 `pnpm typecheck`、`pnpm lint`、`pnpm architecture:check --changed` 通过；Lint 为 0 错误、17 条原有告警，架构为 0 违规。目标文件格式检查、`git diff --check` 通过；freshness 含远端 fetch 正常通过。
+- 验证使用本地目录 fixture 与假密钥，未请求真实模型或操作用户桌面会话。测试供应商已删除，浏览器及三项测试服务关闭，3067／5201／3070 端口已释放；未验证原生 Electron 或手机远控。本轮未提交、推送代码。
+- 隔离环境仍有既有 `OnboardingDialog` 和 `window-controller` 错误；本轮控件尺寸与指定交互通过，不据此声称全页面零错误。
