@@ -1,4 +1,4 @@
-import { ReadOutputSchema } from "@zcode/contracts";
+import { ApplyPatchOutputSchema, ReadOutputSchema } from "@zcode/contracts";
 import { createReadFileStateKey } from "./read-file-state.js";
 import type { ReadFileStateEntry, ReadFileStateMap } from "./types.js";
 
@@ -9,6 +9,7 @@ export type PersistedReadFileStateTool =
   | "Read"
   | "Write"
   | "Edit"
+  | "ApplyPatch"
   | "CreateWorkflow"
   | "AmendWorkflow";
 
@@ -24,6 +25,64 @@ export interface PersistedReadFileStateMetadata {
   revisionId: string;
   mtimeMs: number;
   sizeBytes: number;
+}
+
+interface PersistedFileMutationReadState {
+  path: string;
+  state: PersistedReadFileStateMetadata | null;
+}
+
+export function createFileMutationReadStateMetadata(input: {
+  completedAt: Date;
+  output: unknown;
+  toolName: string;
+}): { schemaVersion: 1; files: PersistedFileMutationReadState[] } | undefined {
+  if (input.toolName !== "ApplyPatch") return undefined;
+  const parsed = ApplyPatchOutputSchema.safeParse(input.output);
+  if (!parsed.success || parsed.data.committedChanges.length === 0) return undefined;
+  return {
+    schemaVersion: 1,
+    files: parsed.data.committedChanges.map((change) => ({
+      path: change.filePath,
+      state:
+        change.content === null
+          ? null
+          : (createReadFileStateMetadataFromEntry({
+              completedAt: input.completedAt,
+              toolName: "ApplyPatch",
+              entry: {
+                path: change.filePath,
+                content: change.content,
+                isPartialView: false,
+                readAt: input.completedAt,
+                revisionId: change.afterRevision?.id,
+                mtimeMs: change.afterRevision?.mtimeMs,
+                sizeBytes: change.afterRevision?.sizeBytes,
+              },
+            }) ?? null),
+    })),
+  };
+}
+
+export function parseFileMutationReadStateMetadata(
+  metadata: unknown,
+): PersistedFileMutationReadState[] {
+  const changes = asRecord(asRecord(metadata)?.readFileStateChanges);
+  if (changes?.schemaVersion !== 1 || !Array.isArray(changes.files)) return [];
+  const files: PersistedFileMutationReadState[] = [];
+  for (const value of changes.files) {
+    const file = asRecord(value);
+    if (!file || typeof file.path !== "string" || !file.path) continue;
+    if (file.state === null) {
+      files.push({ path: file.path, state: null });
+      continue;
+    }
+    const state = parseReadFileStateMetadata({ readFileState: file.state });
+    if (state?.tool === "ApplyPatch" && state.path === file.path) {
+      files.push({ path: file.path, state });
+    }
+  }
+  return files;
 }
 
 export function createReadFileStateMetadata(input: {
@@ -134,6 +193,7 @@ function isPersistedReadFileStateTool(value: unknown): value is PersistedReadFil
     value === "Read" ||
     value === "Write" ||
     value === "Edit" ||
+    value === "ApplyPatch" ||
     value === "CreateWorkflow" ||
     value === "AmendWorkflow"
   );

@@ -7,7 +7,7 @@ const DIFF_TIMEOUT_MS = 5_000;
 export function recordTurnFileChange(
   changes: RuntimeTurnFileChangeMap,
   input: {
-    afterContent?: string;
+    afterContent?: string | null;
     beforeContent: string | null;
     path: string;
     structuredPatch: DiffHunk[];
@@ -29,7 +29,7 @@ export function recordTurnFileChange(
     return;
   }
 
-  existing.afterContent = input.afterContent ?? existing.afterContent;
+  if (input.afterContent !== undefined) existing.afterContent = input.afterContent;
   existing.fallbackAdditions += fallback.additions;
   existing.fallbackDeletions += fallback.deletions;
   existing.toolNames.add(input.toolName);
@@ -49,7 +49,7 @@ export function buildTurnFileChangeSummary(
               additions: entry.fallbackAdditions,
               deletions: entry.fallbackDeletions,
             }
-          : diffLineStat(entry.beforeContent ?? "", entry.afterContent, entry.path);
+          : diffLineStat(entry.beforeContent ?? "", entry.afterContent ?? "", entry.path);
       return {
         additions: stat.additions,
         deletions: stat.deletions,

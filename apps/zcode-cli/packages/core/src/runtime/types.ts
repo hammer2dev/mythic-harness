@@ -647,7 +647,7 @@ export interface WorkspaceCheckpointSummary {
 }
 
 export interface RuntimeTurnFileChangeEntry {
-  afterContent?: string;
+  afterContent?: string | null;
   beforeContent: string | null;
   fallbackAdditions: number;
   fallbackDeletions: number;

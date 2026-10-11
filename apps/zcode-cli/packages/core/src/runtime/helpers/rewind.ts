@@ -19,11 +19,14 @@ import type {
 import type { WorkspaceRewindRestoredFile } from "../types.js";
 import { isPlainRecord, isRuntimeDiffHunk } from "./data.js";
 import { sanitizeSystemReminderBody } from "../../system-reminder/source.js";
+import { ApplyPatchCommittedChangeSchema } from "@zcode/contracts";
 
 export const WORKSPACE_CHECKPOINT_CONTENT_TYPE = "application/vnd.zcode.workspace-checkpoint+json";
 
 interface FileMutationCheckpointCandidate {
-  content?: string;
+  beforeEncoding?: WorkspaceCheckpointArtifact["files"][number]["beforeEncoding"];
+  beforeLineEndings?: WorkspaceCheckpointArtifact["files"][number]["beforeLineEndings"];
+  content?: string | null;
   filePath: string;
   originalFile: string | null;
   structuredPatch: DiffHunk[];
@@ -45,9 +48,18 @@ export function getFileMutationCheckpointCandidate(
 
   const structuredPatch = output.structuredPatch.filter(isRuntimeDiffHunk);
   if (structuredPatch.length !== output.structuredPatch.length) return undefined;
+  const beforeEncoding = ApplyPatchCommittedChangeSchema.shape.beforeEncoding.safeParse(
+    output.beforeEncoding,
+  );
+  const beforeLineEndings = ApplyPatchCommittedChangeSchema.shape.beforeLineEndings.safeParse(
+    output.beforeLineEndings,
+  );
 
   return {
-    content: typeof output.content === "string" ? output.content : undefined,
+    beforeEncoding: beforeEncoding.success ? beforeEncoding.data : undefined,
+    beforeLineEndings: beforeLineEndings.success ? beforeLineEndings.data : undefined,
+    content:
+      typeof output.content === "string" || output.content === null ? output.content : undefined,
     filePath: output.filePath,
     originalFile: output.originalFile,
     structuredPatch,
@@ -55,22 +67,50 @@ export function getFileMutationCheckpointCandidate(
   };
 }
 
+export function getFileMutationCheckpointCandidates(
+  result: ToolExecutionResult,
+): FileMutationCheckpointCandidate[] {
+  if (result.toolName === "ApplyPatch" && isPlainRecord(result.output)) {
+    if (!Array.isArray(result.output.committedChanges)) return [];
+    const byPath = new Map<string, FileMutationCheckpointCandidate>();
+    for (const change of result.output.committedChanges) {
+      const candidate = getFileMutationCheckpointCandidate(change);
+      if (!candidate || candidate.content === undefined) continue;
+      const existing = byPath.get(candidate.filePath);
+      byPath.set(
+        candidate.filePath,
+        existing
+          ? {
+              ...existing,
+              content: candidate.content,
+              structuredPatch: [...existing.structuredPatch, ...candidate.structuredPatch],
+            }
+          : candidate,
+      );
+    }
+    return [...byPath.values()];
+  }
+  if (!result.success) return [];
+  const candidate = getFileMutationCheckpointCandidate(result.output);
+  return candidate ? [candidate] : [];
+}
+
 export function stringifyWorkspaceCheckpointArtifact(
-  candidate: FileMutationCheckpointCandidate,
+  candidates: FileMutationCheckpointCandidate | FileMutationCheckpointCandidate[],
   result: ToolExecutionResult,
 ): string {
   const artifact: WorkspaceCheckpointArtifact = {
     createdAt: new Date().toISOString(),
-    files: [
-      {
-        ...(candidate.content !== undefined ? { afterContent: candidate.content } : {}),
-        afterContentLength: candidate.content?.length,
-        beforeContent: candidate.originalFile,
-        existedBefore: candidate.originalFile !== null,
-        path: candidate.filePath,
-        structuredPatch: candidate.structuredPatch,
-      },
-    ],
+    files: (Array.isArray(candidates) ? candidates : [candidates]).map((candidate) => ({
+      ...(candidate.content !== undefined ? { afterContent: candidate.content } : {}),
+      afterContentLength: candidate.content?.length,
+      beforeContent: candidate.originalFile,
+      beforeEncoding: candidate.beforeEncoding,
+      beforeLineEndings: candidate.beforeLineEndings,
+      existedBefore: candidate.originalFile !== null,
+      path: candidate.filePath,
+      structuredPatch: candidate.structuredPatch,
+    })),
     kind: "workspace_file_before_change",
     toolCallId: result.toolCallId,
     toolName: result.toolName,

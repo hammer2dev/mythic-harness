@@ -4,7 +4,17 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { RgArg, RipgrepBufferedResult } from "ripgrep";
@@ -47,6 +57,7 @@ import {
 } from "./text-metadata.js";
 import { readTextFileRangeFromNode } from "./text-range-reader.js";
 import { maybeThrowStorageFsFault } from "../storage/fs-fault-injection.js";
+import { assertFileRevision, writeConditionalTextFile } from "./conditional-write.js";
 
 const DEFAULT_GLOB_MAX_RESULTS = 100;
 const DEFAULT_GREP_HEAD_LIMIT = 250;
@@ -131,7 +142,7 @@ export class NodeFileSystemAdapter implements FileSystemPort {
   async stat(request: FileSystemStatRequest): Promise<FileSystemStatResult> {
     const path = resolveAbsoluteRequestPath(request.path);
     try {
-      const info = await stat(path);
+      const info = await (request.followSymlinks === false ? lstat(path) : stat(path));
       const kind = nodeKind(info);
       return {
         path,
@@ -288,13 +299,17 @@ export class NodeFileSystemAdapter implements FileSystemPort {
     }
   }
 
-  async writeTextFile(request: FileSystemWriteTextRequest): Promise<FileSystemWriteTextResult> {
+  async writeTextFile(
+    request: FileSystemWriteTextRequest,
+    options?: { signal?: AbortSignal },
+  ): Promise<FileSystemWriteTextResult> {
     const path = resolveAbsoluteRequestPath(request.path);
     const encoding = request.encoding ?? "utf8";
     const textContent = applyRequestedLineEndings(request.content, request.lineEndings);
     const content = encodeTextContent({ content: textContent, encoding, path });
 
     try {
+      throwIfAborted(options?.signal);
       if (request.expectedRevision) {
         await this.assertExpectedRevision(path, request.expectedRevision);
       }
@@ -302,6 +317,16 @@ export class NodeFileSystemAdapter implements FileSystemPort {
       if (request.createParents) {
         maybeThrowStorageFsFault({ operation: "mkdir", path: dirname(path) });
         await mkdir(dirname(path), { recursive: true });
+      }
+
+      if (request.expectedMissing || request.expectedRevision) {
+        return await writeConditionalTextFile({
+          path,
+          content,
+          expectedRevision: request.expectedRevision,
+          expectedMissing: request.expectedMissing,
+          signal: options?.signal,
+        });
       }
 
       if (request.atomic ?? true) {
@@ -335,6 +360,7 @@ export class NodeFileSystemAdapter implements FileSystemPort {
 
     try {
       throwIfAborted(options?.signal);
+      if (request.expectedRevision) await assertFileRevision(path, request.expectedRevision);
       maybeThrowStorageFsFault({ operation: "rm", path });
       await unlink(path);
       return { path, removed: true };
@@ -471,15 +497,7 @@ export class NodeFileSystemAdapter implements FileSystemPort {
   }
 
   private async assertExpectedRevision(path: string, expected: FileSystemRevision): Promise<void> {
-    const info = await stat(path);
-    const actual = revisionId(info.mtimeMs, info.size);
-    if (actual !== expected.id) {
-      throw createFileSystemError({
-        code: "stale_write",
-        path,
-        message: `File changed since it was read: ${path}`,
-      });
-    }
+    await assertFileRevision(path, expected);
   }
 }
 
@@ -740,7 +758,9 @@ async function atomicWrite(path: string, content: Buffer): Promise<void> {
       constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
     ).catch((error: unknown) => {
       if (getNodeErrorCode(error) === "ELOOP") {
-        throw new SymlinkWriteRefusedError(`Refusing to write through symlink: ${path} (O_NOFOLLOW)`);
+        throw new SymlinkWriteRefusedError(
+          `Refusing to write through symlink: ${path} (O_NOFOLLOW)`,
+        );
       }
       throw error;
     });
@@ -1187,11 +1207,13 @@ function parseRipgrepJsonOutput(
         const lineNumber =
           typeof event.data?.line_number === "number" ? event.data.line_number : undefined;
         for (const submatch of submatches) {
-          entries.push(...createOnlyMatchingEntries({
-            path,
-            text: submatch.match?.text ?? "",
-            lineNumber,
-          }));
+          entries.push(
+            ...createOnlyMatchingEntries({
+              path,
+              text: submatch.match?.text ?? "",
+              lineNumber,
+            }),
+          );
         }
         continue;
       }
@@ -1616,7 +1638,8 @@ function createOnlyMatchingContentEntries(input: {
           matched: false,
         },
       ];
-    });
+    },
+  );
 }
 
 function createContextLineIndexes(

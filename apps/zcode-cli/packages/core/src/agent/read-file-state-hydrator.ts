@@ -1,6 +1,7 @@
 import type { MessageId, MessagePart, MessageWithParts, ToolPart } from "@zcode/contracts";
 import {
   parseReadFileStateMetadata,
+  parseFileMutationReadStateMetadata,
   type PersistedReadFileStateTool,
 } from "../tool/read-file-state-metadata.js";
 import { createReadFileStateKey, normalizeReadFileStateMtimeMs } from "../tool/read-file-state.js";
@@ -49,6 +50,32 @@ export async function hydrateReadFileStateFromSession(input: {
     if (message.info.role !== "assistant") continue;
 
     for (const part of dedupeParts(message.parts)) {
+      if (
+        part.type === "tool" &&
+        part.tool === "ApplyPatch" &&
+        (part.state.status === "completed" || part.state.status === "error")
+      ) {
+        // 部分失败也有真实提交；先清除旧路径状态，再恢复当时持久化的版本，禁止重读磁盘冒充已读。
+        for (const file of parseFileMutationReadStateMetadata(part.state.metadata)) {
+          const pathKey = createReadFileStateKey(file.path, 1, undefined);
+          for (const [key, entry] of input.readFileState) {
+            if (createReadFileStateKey(entry.path, 1, undefined) === pathKey)
+              input.readFileState.delete(key);
+          }
+          if (file.state) {
+            setFullReadState(input.readFileState, file.path, file.state.content, {
+              isPartialView: file.state.isPartialView,
+              mtimeMs: normalizeReadFileStateMtimeMs(file.state.mtimeMs),
+              readAt: new Date(file.state.readAtMs),
+              revisionId: file.state.revisionId,
+              sizeBytes: file.state.sizeBytes,
+              sourceTool: "ApplyPatch",
+            });
+            result.restoredCount++;
+          }
+        }
+        continue;
+      }
       if (!isCompletedToolPart(part)) continue;
 
       if (part.tool === "Read") {

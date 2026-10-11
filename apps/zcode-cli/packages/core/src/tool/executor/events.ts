@@ -58,6 +58,7 @@ export async function emitToolCallResult(
   display: ToolResultDisplayPayload | undefined,
   perf: ToolExecutionTelemetry | undefined,
   skillMetadata: SkillTelemetryMetadata | undefined,
+  error?: ToolExecutionResult["error"],
 ): Promise<void> {
   await deps.emitEvent({
     id: crypto.randomUUID() as any,
@@ -71,7 +72,8 @@ export async function emitToolCallResult(
       toolCallId: toolCall.id,
       ...(skillMetadata ? { skillMetadata } : {}),
       result: {
-        success: true,
+        success: error === undefined,
+        ...(error ? { error } : {}),
         content: serialization.content,
         display,
         perf,

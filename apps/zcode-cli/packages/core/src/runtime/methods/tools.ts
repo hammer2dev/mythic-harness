@@ -18,10 +18,9 @@ import type {
 } from "../deps.js";
 import {
   isResolvablePermissionBroker,
-  getFileMutationCheckpointCandidate,
+  getFileMutationCheckpointCandidates,
   WORKSPACE_CHECKPOINT_CONTENT_TYPE,
   stringifyWorkspaceCheckpointArtifact,
-  throwIfTurnAborted,
   createTurnCancelledError,
   isTurnCancellationError,
   findParallelGroupIndex,
@@ -176,27 +175,32 @@ export async function emitFileMutationCheckpoint(
     traceContext: TraceContext;
   },
 ): Promise<void> {
-  if (!this.artifactStore || !options.result.success) return;
+  const candidates = getFileMutationCheckpointCandidates(options.result);
+  if (candidates.length === 0) return;
 
-  const candidate = getFileMutationCheckpointCandidate(options.result.output);
-  if (!candidate) return;
+  // 部分提交已经改变磁盘；变更记账不能依赖可选 artifact 或 turn 是否已取消。
+  for (const candidate of candidates) {
+    recordTurnFileChange(this.currentTurnFileChanges, {
+      afterContent: candidate.content,
+      beforeContent: candidate.originalFile,
+      path: candidate.filePath,
+      structuredPatch: candidate.structuredPatch,
+      toolName: options.result.toolName,
+    });
+  }
+  if (!this.artifactStore) return;
 
   try {
-    throwIfTurnAborted(options.abortSignal);
-    const artifact = await this.artifactStore.writeToolResultArtifact(
-      {
-        sessionId: this.sessionId,
-        turnId: options.traceContext.turnId,
-        toolCallId: options.result.toolCallId,
-        toolName: options.result.toolName,
-        content: stringifyWorkspaceCheckpointArtifact(candidate, options.result),
-        contentType: WORKSPACE_CHECKPOINT_CONTENT_TYPE,
-        retention: "session",
-        trace: options.traceContext,
-      },
-      { signal: options.abortSignal },
-    );
-    throwIfTurnAborted(options.abortSignal);
+    const artifact = await this.artifactStore.writeToolResultArtifact({
+      sessionId: this.sessionId,
+      turnId: options.traceContext.turnId,
+      toolCallId: options.result.toolCallId,
+      toolName: options.result.toolName,
+      content: stringifyWorkspaceCheckpointArtifact(candidates, options.result),
+      contentType: WORKSPACE_CHECKPOINT_CONTENT_TYPE,
+      retention: "session",
+      trace: options.traceContext,
+    });
 
     const event = this.createEvent(
       SessionEventType.CheckpointCreated,
@@ -208,24 +212,17 @@ export async function emitFileMutationCheckpoint(
         scope: RewindScope.Workspace,
         snapshotRef: artifact.uri,
         diffRef: artifact.uri,
-        fileCount: 1,
+        fileCount: candidates.length,
       },
       options.traceContext,
     );
     await this.appendEvent(event, options.traceContext);
     options.events.push(event);
-    recordTurnFileChange(this.currentTurnFileChanges, {
-      afterContent: candidate.content,
-      beforeContent: candidate.originalFile,
-      path: candidate.filePath,
-      structuredPatch: candidate.structuredPatch,
-      toolName: options.result.toolName,
-    });
 
     this.logger?.debug("Workspace checkpoint created", {
       ...traceContextToLogContext(options.traceContext),
       event: "checkpoint.created",
-      fileCount: 1,
+      fileCount: candidates.length,
       module: "core.runtime",
       status: "completed",
       toolCallId: options.result.toolCallId,
@@ -240,7 +237,7 @@ export async function emitFileMutationCheckpoint(
       ...traceContextToLogContext(options.traceContext),
       errorMessage: error instanceof Error ? error.message : String(error),
       event: "checkpoint.create.failed",
-      filePath: candidate.filePath,
+      filePaths: candidates.map((candidate) => candidate.filePath),
       module: "core.runtime",
       status: "failed",
       toolCallId: options.result.toolCallId,

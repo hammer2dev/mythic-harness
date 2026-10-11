@@ -803,6 +803,8 @@ function synthesizeToolPart(
         result: {
           success: false,
           content: part.state.error,
+          // 部分提交的 error part 仍有真实文件 diff，冷恢复不能只留下错误文本。
+          ...(persistedMetadata?.display ? { display: persistedMetadata.display } : {}),
           error: {
             type: "fault.runtime.toolFailed",
             message: part.state.error,

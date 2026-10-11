@@ -7,6 +7,7 @@ import { z } from "zod";
 import { isCompactBoundaryItem, parseCompactBoundaryPayload } from "../compact/index.js";
 import type { CompactBoundaryPayload, CompactContextItem } from "../compact/index.js";
 import type { MessageId } from "../interfaces/shared.js";
+import { ApplyPatchCommittedChangeSchema } from "../tools/apply-patch.js";
 
 const diffHunkSchema = z
   .object({
@@ -111,7 +112,9 @@ export const workspaceCheckpointArtifactSchema = z
             path: z.string().min(1),
             existedBefore: z.boolean(),
             beforeContent: z.string().nullable(),
-            afterContent: z.string().optional(),
+            beforeEncoding: ApplyPatchCommittedChangeSchema.shape.beforeEncoding,
+            beforeLineEndings: ApplyPatchCommittedChangeSchema.shape.beforeLineEndings,
+            afterContent: z.string().nullable().optional(),
             afterContentLength: z.number().int().nonnegative().optional(),
             structuredPatch: z.array(diffHunkSchema),
           })

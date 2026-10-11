@@ -12,7 +12,7 @@ import type { V4ConversationFileChangesResult } from "@zcode/shared/zcode-protoc
 import { applyPatch, structuredPatch, type StructuredPatch } from "diff";
 
 interface FileChangeAggregate {
-  afterContent?: string;
+  afterContent?: string | null;
   beforeContent: string | null;
   fallbackAdditions: number;
   fallbackDeletions: number;
@@ -148,7 +148,8 @@ async function aggregateWorkspaceCheckpoints(
         });
         continue;
       }
-      existing.afterContent = afterContent ?? existing.afterContent;
+      // null 是已确认删除，不能用 ?? 把它替换成上一次写入的内容。
+      if (afterContent !== undefined) existing.afterContent = afterContent;
       existing.fallbackAdditions += fallback.additions;
       existing.fallbackDeletions += fallback.deletions;
       existing.patches.push(...file.structuredPatch);
@@ -162,7 +163,7 @@ async function aggregateWorkspaceCheckpoints(
       const patches =
         entry.afterContent === undefined
           ? entry.patches
-          : createFinalPatch(entry.path, entry.beforeContent ?? "", entry.afterContent);
+          : createFinalPatch(entry.path, entry.beforeContent ?? "", entry.afterContent ?? "");
       const stat =
         entry.afterContent === undefined
           ? {
@@ -273,7 +274,8 @@ function createFinalPatch(path: string, beforeContent: string, afterContent: str
 
 function resolveCheckpointAfterContent(
   file: ReturnType<typeof parseWorkspaceCheckpointArtifact>["files"][number],
-): string | undefined {
+): string | null | undefined {
+  if (file.afterContent === null) return null;
   if (typeof file.afterContent === "string") return file.afterContent;
   if (!file.existedBefore && file.beforeContent === null && file.structuredPatch.length === 0) {
     return undefined;

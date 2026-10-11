@@ -146,11 +146,12 @@ export async function executeWithTimeout<TInput, TOutput>(
         },
       );
       abortController.abort(error);
-      rejectOnce(error);
+      // 补丁提交中超时仍须等待 handler 汇报已落盘效果，不能只留下一个超时错误。
+      if (entry.cancellation.settlement !== "afterHandler") rejectOnce(error);
     });
 
     const abortHandler = () => {
-      if (timedOut) return;
+      if (timedOut || entry.cancellation.settlement === "afterHandler") return;
       rejectOnce(
         createCoreError(
           CoreErrorType.ToolCancelled,

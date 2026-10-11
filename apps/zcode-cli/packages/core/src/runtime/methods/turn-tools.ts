@@ -329,6 +329,7 @@ export async function executeToolCallsForModelStep(
                 // state.error 面向 UI / 日志，可能比模型实际收到的
                 // modelContent 更笼统；仅附加保存 string 内容供冷恢复精确重放。
                 metadata: {
+                  ...completedToolPartMetadata(result),
                   ...mcpToolPartMetadata(
                     this.registry.getMetadata(result.toolName)?.mcpPresentation,
                   ),

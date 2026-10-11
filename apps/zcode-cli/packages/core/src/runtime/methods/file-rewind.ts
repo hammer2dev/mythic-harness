@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { applyPatch, type StructuredPatch } from "diff";
+import type {
+  FileSystemRevision,
+  FileSystemTextEncoding,
+  FileSystemLineEndings,
+} from "@zcode/contracts";
 import {
   RewindScope,
   RewindStrategy,
@@ -36,6 +41,9 @@ type PlannedFileState = {
   content: string | null;
   exists: boolean;
   hash: string | null;
+  revision?: FileSystemRevision;
+  encoding?: FileSystemTextEncoding;
+  lineEndings?: FileSystemLineEndings;
 };
 
 type FileCheckpointOperation = {
@@ -43,6 +51,8 @@ type FileCheckpointOperation = {
   afterContent: string | null;
   artifact: WorkspaceCheckpointArtifact;
   beforeContent: string | null;
+  beforeEncoding?: FileSystemTextEncoding;
+  beforeLineEndings?: FileSystemLineEndings;
   checkpoint: CheckpointCreatedPayload;
   path: string;
   toolName: string;
@@ -53,6 +63,7 @@ type WorkspaceFileRewindPlan = WorkspaceFileRewindPreview & {
 };
 
 type FileRewindJournalEntry = {
+  appliedContent: string | null;
   path: string;
   state: PlannedFileState;
 };
@@ -153,16 +164,21 @@ export async function applyWorkspaceFileRewind(
       if ("reason" in state) {
         throw new Error(state.message ?? `Failed to journal ${operation.path}`);
       }
-      journal.push({ path: operation.path, state });
+      // 预览之后仍可能被外部修改；恢复前复核后态，并把 revision 交给文件端口。
+      if (state.hash !== hashContent(operation.afterContent)) {
+        throw new Error(`File changed before rewind: ${operation.path}`);
+      }
       if (operation.action === "delete" || operation.beforeContent === null) {
         await this.fileSystemPort.removeFile(
           {
             path: operation.path,
             missingOk: true,
+            expectedRevision: state.revision,
             trace: traceContext,
           },
           { signal: options.abortSignal },
         );
+        journal.push({ path: operation.path, state, appliedContent: null });
         restoredFiles.push({ action: "delete", path: operation.path });
         continue;
       }
@@ -171,12 +187,19 @@ export async function applyWorkspaceFileRewind(
         {
           path: operation.path,
           content: operation.beforeContent,
+          // checkpoint 保存的是规范化文本，恢复时必须还原原编码与主换行策略。
+          encoding: operation.beforeEncoding,
+          lineEndings: operation.beforeLineEndings,
           createParents: true,
           atomic: true,
+          expectedRevision: state.revision,
+          expectedMissing: !state.exists,
           trace: traceContext,
         },
         { signal: options.abortSignal },
       );
+      // 条件写入失败时没有本次写入事实，不能把失败路径放入补偿覆盖外部变更。
+      journal.push({ path: operation.path, state, appliedContent: operation.beforeContent });
       restoredFiles.push({ action: "restore", path: operation.path });
     }
     await options.commitAfterApply?.();
@@ -256,10 +279,15 @@ async function compensateFileRewindJournal(
   traceContext: TraceContext,
 ): Promise<void> {
   for (const entry of [...journal].reverse()) {
+    const current = await readCurrentFileState.call(this, entry.path, traceContext, undefined);
+    if ("reason" in current || current.hash !== hashContent(entry.appliedContent)) {
+      throw new Error(`File changed before rewind compensation: ${entry.path}`);
+    }
     if (!entry.state.exists || entry.state.content === null) {
       await this.fileSystemPort!.removeFile({
         path: entry.path,
         missingOk: true,
+        expectedRevision: current.revision,
         trace: traceContext,
       });
       continue;
@@ -267,8 +295,12 @@ async function compensateFileRewindJournal(
     await this.fileSystemPort!.writeTextFile({
       path: entry.path,
       content: entry.state.content,
+      encoding: entry.state.encoding,
+      lineEndings: entry.state.lineEndings,
       createParents: true,
       atomic: true,
+      expectedRevision: current.revision,
+      expectedMissing: !current.exists,
       trace: traceContext,
     });
   }
@@ -391,6 +423,8 @@ async function buildWorkspaceFileRewindPlan(
         afterContent,
         artifact,
         beforeContent: file.beforeContent,
+        beforeEncoding: file.beforeEncoding,
+        beforeLineEndings: file.beforeLineEndings,
         checkpoint,
         path: filePath,
         toolName: artifact.toolName,
@@ -509,10 +543,7 @@ function resolveTargetCheckpoints(
       .map((event) => event.payload)
       .filter((payload): payload is CheckpointCreatedPayload => {
         const checkpoint = payload as Partial<CheckpointCreatedPayload>;
-        return (
-          checkpoint.scope === RewindScope.Workspace ||
-          checkpoint.scope === RewindScope.Both
-        );
+        return checkpoint.scope === RewindScope.Workspace || checkpoint.scope === RewindScope.Both;
       });
   }
 
@@ -524,7 +555,7 @@ function resolveCheckpointAfterContent(
   file: WorkspaceCheckpointArtifact["files"][number],
 ): string | null | undefined {
   const afterContent = (file as { afterContent?: unknown }).afterContent;
-  if (typeof afterContent === "string") {
+  if (typeof afterContent === "string" || afterContent === null) {
     return afterContent;
   }
 
@@ -565,6 +596,9 @@ async function readCurrentFileState(
       content: read.content,
       exists: true,
       hash: hashContent(read.content),
+      revision: read.revision,
+      encoding: read.encoding,
+      lineEndings: read.lineEndings,
     };
   } catch (error) {
     if (isFileSystemPortError(error) && error.code === "not_found") {

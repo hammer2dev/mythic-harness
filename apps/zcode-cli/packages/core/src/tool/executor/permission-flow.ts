@@ -12,7 +12,7 @@ import {
 } from "@zcode/contracts";
 import type { HookRunResult } from "../../hooks/index.js";
 import type { PermissionContext } from "../../permission/service.js";
-import type { ExecutableToolCall, ToolEntry, ToolExecutionResult } from "../types.js";
+import type { ExecutableToolCall, ToolEntry } from "../types.js";
 import { normalizeToolExecutionInput } from "../input-normalization.js";
 import { resolveToolApproval } from "./approval-gate.js";
 import { createErrorResult, createPermissionErrorResult } from "./errors.js";
@@ -28,15 +28,15 @@ import {
   resolveRuntimePermissionContext,
 } from "./permission-capability.js";
 import { buildDefaultPermissionUpdates } from "./permission-suggestions.js";
-import { recheckPermissionHookModifiedInput } from "./permission-input-recheck.js";
+import {
+  recheckPermissionHookModifiedInput,
+  resolvePermissionModifiedInput,
+  type ToolPermissionFlowResult,
+} from "./permission-input-recheck.js";
 import type { ToolExecutorDeps } from "./types.js";
 import { summarizeInput } from "./utils.js";
 import { validateInput } from "./validation.js";
 import { applyMemoryFilePermission } from "./memory-file-permission.js";
-
-type ToolPermissionFlowResult =
-  | { allowed: true; executionInput: unknown; permissionWaitMs?: number }
-  | { allowed: false; result: ToolExecutionResult };
 
 export async function resolveToolPermission(
   deps: ToolExecutorDeps,
@@ -412,20 +412,19 @@ export async function resolveToolPermission(
     };
   }
 
-  const modifiedInput = useNormalizedHookModifiedInput
-    ? normalizedHookModifiedInput
-    : normalizeToolExecutionInput({
-        entry,
-        input: resolvedPermission.modifiedInput ?? executionInput,
-        logger: deps.logger,
-        source: "permission",
-      });
-  const modifiedInputValidation = validateInput(modifiedInput, entry);
-  if (modifiedInputValidation) {
-    return {
-      allowed: false,
-      result: createErrorResult(toolCall, modifiedInputValidation),
-    };
-  }
-  return { allowed: true, executionInput: modifiedInput, permissionWaitMs };
+  return resolvePermissionModifiedInput({
+    deps,
+    entry,
+    mode,
+    projectRules,
+    requestId,
+    signal,
+    toolCall,
+    traceContext,
+    alreadyCheckedByHook: useNormalizedHookModifiedInput,
+    modifiedInput: useNormalizedHookModifiedInput
+      ? normalizedHookModifiedInput
+      : (resolvedPermission.modifiedInput ?? executionInput),
+    permissionWaitMs,
+  });
 }

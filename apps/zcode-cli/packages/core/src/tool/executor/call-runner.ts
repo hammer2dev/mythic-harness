@@ -27,7 +27,6 @@ import {
   createPermissionErrorResult,
   createToolHandlerFailureError,
   isToolHandlerFailure,
-  isToolHandlerFailureError,
 } from "./errors.js";
 import { emitToolCallError, emitToolCallResult, emitToolCallStarted } from "./events.js";
 import {
@@ -61,6 +60,7 @@ import { validateInitialModelToolInput, validateInput, validateOutput } from "./
 import type { ExecutableToolCall } from "../types.js";
 import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/capability.js";
 import { resolveToolEntryModelContract } from "../model-contract.js";
+import { retainCompletedHandlerOutput } from "./handler-outcome.js";
 
 export async function executeToolCall(
   deps: ToolExecutorDeps,
@@ -364,6 +364,7 @@ async function executeToolCallImpl(
   let readFileStateMetadata: ToolExecutionResult["readFileStateMetadata"];
   let failureStage: "handler" | "serialize" | "post_hook" = "handler";
   let skillTelemetryMetadata: SkillTelemetryMetadata | undefined;
+  let completedOutput: unknown;
 
   try {
     const model = options?.model ?? deps.model;
@@ -439,7 +440,7 @@ async function executeToolCallImpl(
       turnId,
     };
 
-    // 同批后续 ToolSearch 可能先于 terminal part 持久化；进入 handler 前保护实际调用工具。
+    // 同批后续 ToolSearch 可能先于 terminal part 持久化；进入 handler 前即保护实际调用工具。
     deps.onToolExecutionStart?.(canonicalToolCall.name);
     const output = await executeWithTimeout(
       entry.handler,
@@ -456,6 +457,8 @@ async function executeToolCallImpl(
       throw createToolHandlerFailureError(canonicalToolCall, output);
     }
     validateOutput(output, entry);
+    completedOutput = output;
+    const outputError = entry.resolveOutputError?.(output);
     // node_repl 同时承载 Browser Use 与 CUA，不能在注册时把整个 server 标成 official。
     // CUA SDK 结果带 producer integrity metadata 时，才为本次序列化临时打开原子帧保护；
     // 否则通用 resultBudget 会截断/重排 image_ref，或非 authority 路径会把引用剥掉。
@@ -470,15 +473,27 @@ async function executeToolCallImpl(
       executionAbortController.signal,
     );
     failureStage = "post_hook";
-    const postToolHookResult = await runPostToolUseHooks(
-      deps,
-      canonicalToolCall,
-      executionInput,
-      output,
-      serialization.artifactPath,
-      traceContext,
-      options?.signal,
-    );
+    const postToolHookResult =
+      executionAbortController.signal.aborted && entry.cancellation.settlement === "afterHandler"
+        ? { additionalContexts: [] }
+        : outputError
+          ? await runPostToolUseFailureHooks(
+              deps,
+              canonicalToolCall,
+              executionInput,
+              new Error(outputError.message),
+              traceContext,
+              options?.signal,
+            )
+          : await runPostToolUseHooks(
+              deps,
+              canonicalToolCall,
+              executionInput,
+              output,
+              serialization.artifactPath,
+              traceContext,
+              options?.signal,
+            );
     serialization = appendHookAdditionalContexts(
       serialization,
       [...preToolHookResult.additionalContexts, ...postToolHookResult.additionalContexts],
@@ -516,7 +531,8 @@ async function executeToolCallImpl(
       {
         toolCallId: canonicalToolCall.id,
         toolName: canonicalToolCall.name,
-        success: true,
+        success: outputError === undefined,
+        ...(outputError ? { error: outputError } : {}),
         output,
         display,
         modelContent: finalModelContent,
@@ -540,6 +556,7 @@ async function executeToolCallImpl(
       display,
       perf,
       skillTelemetryMetadata,
+      outputError,
     );
 
     await backgroundTasks.trackBackgroundTask(canonicalToolCall, output, traceContext, turnId);
@@ -549,35 +566,47 @@ async function executeToolCallImpl(
       durationMs,
       event: "tool.call.completed",
       module: "core.tool.executor",
-      status: "completed",
+      status: outputError ? "failed" : "completed",
       toolCallId: canonicalToolCall.id,
       toolName: canonicalToolCall.name,
     });
 
     telemetry?.setOutputBytes(serialization.returnedBytes);
     telemetry?.setOutputTruncated(serialization.truncated);
-    telemetry?.finishCompleted();
+    if (executionAbortController.signal.aborted) {
+      telemetry?.finishCancelled("abort_signal");
+    } else if (outputError) {
+      telemetry?.finishFailed(
+        "handler",
+        errorCategoryForToolError(outputError.type),
+        new Error(outputError.message),
+      );
+    } else {
+      telemetry?.finishCompleted();
+    }
     return result;
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    const failureHookResult = await runPostToolUseFailureHooks(
-      deps,
-      canonicalToolCall,
-      executionInput,
-      error,
-      traceContext,
-      options?.signal,
-    );
+    // 已提交结果进入后处理失败后，不再递归执行 hook；必须先归还实际文件变更。
+    const failureHookResult =
+      entry.resolveOutputError && completedOutput !== undefined
+        ? { additionalContexts: [] }
+        : await runPostToolUseFailureHooks(
+            deps,
+            canonicalToolCall,
+            executionInput,
+            error,
+            traceContext,
+            options?.signal,
+          );
     let result = createErrorResult(
       canonicalToolCall,
       error instanceof Error ? error : new Error(String(error)),
       durationMs,
     );
-    const baseModelContent = result.error
-      ? isToolHandlerFailureError(error) && typeof result.modelContent === "string"
-        ? result.modelContent
-        : result.error.message
-      : undefined;
+    result = retainCompletedHandlerOutput(result, entry, completedOutput, readFileStateMetadata);
+    const baseModelContent =
+      typeof result.modelContent === "string" ? result.modelContent : result.error?.message;
     if (failureHookResult.additionalContexts.length > 0 && baseModelContent) {
       result.modelContent = [
         baseModelContent,
@@ -599,14 +628,29 @@ async function executeToolCallImpl(
 
     // Skill 已解析成功后，serialize/post_hook 仍可能失败；错误事件也要保留
     // resolved metadata，否则失败的 Skill agent_step 无法归因到具体 skill。
-    await emitToolCallError(
-      deps,
-      canonicalToolCall.id,
-      traceContext,
-      turnId,
-      result.error,
-      skillTelemetryMetadata,
-    );
+    if (result.output !== undefined && result.serialization) {
+      await emitToolCallResult(
+        deps,
+        canonicalToolCall,
+        traceContext,
+        turnId,
+        result.serialization,
+        durationMs,
+        result.display,
+        undefined,
+        skillTelemetryMetadata,
+        result.error,
+      );
+    } else {
+      await emitToolCallError(
+        deps,
+        canonicalToolCall.id,
+        traceContext,
+        turnId,
+        result.error,
+        skillTelemetryMetadata,
+      );
+    }
 
     deps.logger?.error(
       "Tool call failed",

@@ -7,7 +7,10 @@ import {
 } from "@zcode/contracts";
 
 import type { PermissionDecisionResult, PermissionContext } from "../../permission/service.js";
-import type { ExecutableToolCall, ToolEntry } from "../types.js";
+import type { ExecutableToolCall, ToolEntry, ToolExecutionResult } from "../types.js";
+import { normalizeToolExecutionInput } from "../input-normalization.js";
+import { createErrorResult, createPermissionErrorResult } from "./errors.js";
+import { validateInput } from "./validation.js";
 import { applyMemoryFilePermission, targetsMemoryFile } from "./memory-file-permission.js";
 import {
   resolveRuntimePermissionCapability,
@@ -19,6 +22,44 @@ import type { ToolExecutorDeps } from "./types.js";
 interface PermissionHookInputRecheckResult {
   brokerResult?: PermissionBrokerResult;
   permissionDecision?: PermissionDecisionResult;
+}
+
+export type ToolPermissionFlowResult =
+  | { allowed: true; executionInput: unknown; permissionWaitMs?: number }
+  | { allowed: false; result: ToolExecutionResult };
+
+export async function resolvePermissionModifiedInput(
+  input: Omit<Parameters<typeof recheckPermissionHookModifiedInput>[0], "modifiedInput"> & {
+    modifiedInput: unknown;
+    alreadyCheckedByHook: boolean;
+    permissionWaitMs: number;
+  },
+): Promise<ToolPermissionFlowResult> {
+  const modifiedInput = input.alreadyCheckedByHook
+    ? input.modifiedInput
+    : normalizeToolExecutionInput({
+        entry: input.entry,
+        input: input.modifiedInput,
+        logger: input.deps.logger,
+        source: "permission",
+      });
+  const validation = validateInput(modifiedInput, input.entry);
+  if (validation) return { allowed: false, result: createErrorResult(input.toolCall, validation) };
+  if (input.toolCall.name === "ApplyPatch" && !input.alreadyCheckedByHook) {
+    // broker 可改写多个路径；原输入获批不代表新目标能绕过项目 deny/ask。
+    const recheck = await recheckPermissionHookModifiedInput({ ...input, modifiedInput });
+    if (recheck.brokerResult && recheck.brokerResult.decision !== "allow") {
+      return {
+        allowed: false,
+        result: createPermissionErrorResult(
+          input.toolCall,
+          recheck.brokerResult.reason ?? "Modified patch targets were not approved",
+          { decision: recheck.brokerResult.decision, requestId: input.requestId },
+        ),
+      };
+    }
+  }
+  return { allowed: true, executionInput: modifiedInput, permissionWaitMs: input.permissionWaitMs };
 }
 
 export async function recheckPermissionHookModifiedInput(input: {

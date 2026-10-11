@@ -331,6 +331,8 @@ export interface ToolEntry extends ToolContractDeclaration {
     context: ToolInputResolutionContext,
   ) => Promise<ToolInputResolutionResult> | ToolInputResolutionResult;
   formatModelContent?: (output: unknown) => ModelMessageContent;
+  /** 部分提交等业务失败仍保留结构化输出，不能通过抛错丢弃已经发生的文件变化。 */
+  resolveOutputError?: (output: unknown) => ToolExecutionResult["error"];
   formatPersistedModelContent?: (
     input: ToolPersistedModelContentInput,
   ) => ModelMessageContent | undefined;

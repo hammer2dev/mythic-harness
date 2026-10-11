@@ -8,10 +8,10 @@
 
 通过当前 `builtInTools`、`ToolRegistry.toContracts()` 与生产使用的 `estimateAiSdkToolSchemaTokens()` 统计全部 provider-visible 内置定义，包含 ToolSearch 与 ApplyPatch。未连接 MCP，未套用特定会话的端口/角色裁剪；这不是某个真实会话同时获准 39 个工具的承诺。
 
-| SDK 转换路径 | 全内置目录（39 个） | 常驻（15 个） | 初始定义估算降幅 |
-| --- | ---: | ---: | ---: |
-| openai-compatible | 23,922 | 8,288 | 65.4% |
-| Anthropic（`claude-sonnet-4-5` strict schema 路径） | 24,732 | 8,602 | 65.2% |
+| SDK 转换路径                                        | 全内置目录（39 个） | 常驻（15 个） | 初始定义估算降幅 |
+| --------------------------------------------------- | ------------------: | ------------: | ---------------: |
+| openai-compatible                                   |              23,922 |         8,288 |            65.4% |
+| Anthropic（`claude-sonnet-4-5` strict schema 路径） |              24,732 |         8,602 |            65.2% |
 
 因此 16,000 的默认总预算在该基准中为按需工具预留约 7,400–7,700 个估算 token。MCP 大小、角色描述和 provider 转换会影响实际会话结果；常驻超限时仍保留常驻并拒绝新激活。统计忽略内部 outputSchema/权限元数据，计算转换后的 name、description、inputSchema、strict/providerOptions 等发送字段；未执行网络请求或比较真实 usage。
 

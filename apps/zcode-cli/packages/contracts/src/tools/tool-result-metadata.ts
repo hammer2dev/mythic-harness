@@ -75,6 +75,14 @@ export const fileDiffToolResultDisplayPayloadSchema = z
   })
   .strict();
 
+export const fileDiffsToolResultDisplayPayloadSchema = z
+  .object({
+    kind: z.literal("file_diffs"),
+    files: z.array(fileDiffToolResultDisplayPayloadSchema).min(1).max(32),
+    truncated: z.boolean().optional(),
+  })
+  .strict();
+
 export const localAgentMessageToolResultDisplayPayloadSchema = z
   .object({
     kind: z.literal("local_agent_message"),
@@ -223,6 +231,7 @@ const bashOutputDisplaySchema = z
 export const toolResultDisplayPayloadSchema = z.discriminatedUnion("kind", [
   bashOutputDisplaySchema,
   fileDiffToolResultDisplayPayloadSchema,
+  fileDiffsToolResultDisplayPayloadSchema,
   localAgentMessageToolResultDisplayPayloadSchema,
   taskStopToolResultDisplayPayloadSchema,
   taskOutputToolResultDisplayPayloadSchema,

@@ -263,6 +263,9 @@ export class PermissionService {
 
   private matchesRuleToolName(ruleToolName: string, contextToolName: string): boolean {
     if (ruleToolName === contextToolName) return true;
+    // ApplyPatch 同时包含新增、更新和删除，必须继承已有 Edit/Write 路径限制。
+    if (contextToolName === "ApplyPatch")
+      return ruleToolName === "Edit" || ruleToolName === "Write";
     return contextToolName === "Write" && ruleToolName === "Edit";
   }
 

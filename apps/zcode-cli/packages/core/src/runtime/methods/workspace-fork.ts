@@ -7,12 +7,7 @@ import {
   createPartId,
   parseWorkspaceCheckpointArtifact,
 } from "../deps.js";
-import type {
-  MessageId,
-  SessionId,
-  TraceContext,
-  WorkspaceCheckpointArtifact,
-} from "../deps.js";
+import type { MessageId, SessionId, TraceContext, WorkspaceCheckpointArtifact } from "../deps.js";
 import {
   selectCheckpointsForMessages,
   formatWorkspaceForkAtMessageNoticeBody,
@@ -64,6 +59,8 @@ export async function restoreWorkspaceCheckpointFiles(
       {
         path: file.path,
         content: file.beforeContent,
+        encoding: file.beforeEncoding,
+        lineEndings: file.beforeLineEndings,
         createParents: true,
         atomic: true,
         trace: traceContext,

@@ -15,12 +15,11 @@ import {
   TaskOutputResultSchema,
   TASK_STOP_TOOL_NAME,
   TaskStopOutputSchema,
-  type DiffHunk,
   type NodeReplCuaAppDisplay,
   type ToolResultDisplayPayload,
 } from "@zcode/contracts";
 import { createBashResultDisplay } from "./bash-result-display.js";
-import { countPatchLines } from "../diff.js";
+import { createFileDiffResultDisplay } from "./file-diff-display.js";
 import { boundDisplayText } from "./display-text.js";
 import { createCreateWorkflowDisplay } from "./create-workflow-display.js";
 import { createWorkflowObservationDisplay } from "./workflow-observation-display.js";
@@ -33,8 +32,6 @@ import {
   cuaRequestAccessStatusSchema,
 } from "@zcode/zcode-cua/request-access-contract";
 
-const MAX_DISPLAY_DIFF_HUNKS = 8;
-const MAX_DISPLAY_DIFF_LINES = 160;
 const MAX_SEND_MESSAGE_DISPLAY_FIELD_BYTES = 4 * 1024;
 const MAX_TASK_STOP_DISPLAY_FIELD_BYTES = 16 * 1024;
 export const MAX_NODE_REPL_DISPLAY_IMAGE_BASE64_BYTES = 200 * 1024;
@@ -170,26 +167,7 @@ export function createToolResultDisplay(
     };
   }
 
-  if (!isRecord(output)) return undefined;
-  const filePath = output.filePath;
-  const structuredPatch = output.structuredPatch;
-  if (typeof filePath !== "string" || !Array.isArray(structuredPatch)) {
-    return undefined;
-  }
-
-  const hunks = structuredPatch.filter(isDiffHunk);
-  if (hunks.length === 0) return undefined;
-
-  const { additions, deletions } = countPatchLines(hunks);
-  const { patch: boundedPatch, truncated } = boundDiffHunks(hunks);
-  return {
-    kind: "file_diff",
-    filePath,
-    additions,
-    deletions,
-    structuredPatch: boundedPatch,
-    truncated,
-  };
+  return createFileDiffResultDisplay(toolName, output);
 }
 
 function boundMcpDisplayText(value: string, maxChars: number): string | undefined {
@@ -396,39 +374,4 @@ function compactTaskStopDisplayMessage(output: {
   return output.message === standardMessage
     ? `Successfully stopped task: ${output.task_id}`
     : output.message;
-}
-
-function isDiffHunk(value: unknown): value is DiffHunk {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.oldStart === "number" &&
-    typeof value.oldLines === "number" &&
-    typeof value.newStart === "number" &&
-    typeof value.newLines === "number" &&
-    Array.isArray(value.lines) &&
-    value.lines.every((line) => typeof line === "string")
-  );
-}
-
-function boundDiffHunks(hunks: DiffHunk[]): { patch: DiffHunk[]; truncated: boolean } {
-  const bounded: DiffHunk[] = [];
-  let remainingLines = MAX_DISPLAY_DIFF_LINES;
-  let truncated = hunks.length > MAX_DISPLAY_DIFF_HUNKS;
-
-  for (const hunk of hunks.slice(0, MAX_DISPLAY_DIFF_HUNKS)) {
-    if (remainingLines <= 0) {
-      truncated = true;
-      break;
-    }
-
-    const lines = hunk.lines.slice(0, remainingLines);
-    bounded.push({ ...hunk, lines });
-    remainingLines -= lines.length;
-    if (lines.length < hunk.lines.length) {
-      truncated = true;
-      break;
-    }
-  }
-
-  return { patch: bounded, truncated };
 }

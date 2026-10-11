@@ -61,6 +61,8 @@ export type FileSystemTextEncoding = BufferEncoding | "gb2312" | "gbk" | "gb1803
 export interface FileSystemStatRequest {
   /** Normalized absolute path. Relative paths are resolved by the tool layer. */
   path: string;
+  /** Defaults to true. False observes a symlink itself instead of its target. */
+  followSymlinks?: boolean;
   trace?: TraceContext;
 }
 
@@ -170,6 +172,8 @@ export interface FileSystemWriteTextRequest {
   createParents?: boolean;
   atomic?: boolean;
   expectedRevision?: FileSystemRevision;
+  /** Create exclusively; an existing destination must never be overwritten. */
+  expectedMissing?: boolean;
   trace?: TraceContext;
 }
 
@@ -184,6 +188,8 @@ export interface FileSystemRemoveFileRequest {
   path: string;
   /** Treat a missing file as a completed no-op. */
   missingOk?: boolean;
+  /** Recheck the source immediately before removing it. */
+  expectedRevision?: FileSystemRevision;
   trace?: TraceContext;
 }
 
