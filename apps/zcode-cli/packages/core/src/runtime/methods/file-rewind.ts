@@ -44,6 +44,7 @@ type PlannedFileState = {
   revision?: FileSystemRevision;
   encoding?: FileSystemTextEncoding;
   lineEndings?: FileSystemLineEndings;
+  mode?: number;
 };
 
 type FileCheckpointOperation = {
@@ -53,6 +54,7 @@ type FileCheckpointOperation = {
   beforeContent: string | null;
   beforeEncoding?: FileSystemTextEncoding;
   beforeLineEndings?: FileSystemLineEndings;
+  beforeMode?: number;
   checkpoint: CheckpointCreatedPayload;
   path: string;
   toolName: string;
@@ -115,8 +117,7 @@ export async function applyWorkspaceFileRewind(
     commitAfterApply?: () => Promise<void>;
   } = {},
 ): Promise<WorkspaceFileRewindApplyResult> {
-  const traceContext =
-    options.traceContext ?? getCurrentTraceContext() ?? this.rootTraceContext;
+  const traceContext = options.traceContext ?? getCurrentTraceContext() ?? this.rootTraceContext;
   const plan = await buildWorkspaceFileRewindPlan.call(this, {
     ...options,
     traceContext,
@@ -190,6 +191,7 @@ export async function applyWorkspaceFileRewind(
           // checkpoint 保存的是规范化文本，恢复时必须还原原编码与主换行策略。
           encoding: operation.beforeEncoding,
           lineEndings: operation.beforeLineEndings,
+          mode: operation.beforeMode,
           createParents: true,
           atomic: true,
           expectedRevision: state.revision,
@@ -235,7 +237,6 @@ export async function applyWorkspaceFileRewind(
     };
   }
 
-  const firstOperation = plan.operations[0];
   const lastOperation = plan.operations.at(-1);
   const targetMessageId = options.targetMessageId ?? options.targetMessageIds?.[0];
   const rewindId = `rewind_${crypto.randomUUID()}`;
@@ -297,6 +298,7 @@ async function compensateFileRewindJournal(
       content: entry.state.content,
       encoding: entry.state.encoding,
       lineEndings: entry.state.lineEndings,
+      mode: entry.state.mode,
       createParents: true,
       atomic: true,
       expectedRevision: current.revision,
@@ -317,8 +319,7 @@ async function buildWorkspaceFileRewindPlan(
     traceContext?: TraceContext;
   },
 ): Promise<WorkspaceFileRewindPlan> {
-  const traceContext =
-    options.traceContext ?? getCurrentTraceContext() ?? this.rootTraceContext;
+  const traceContext = options.traceContext ?? getCurrentTraceContext() ?? this.rootTraceContext;
   if (!this.artifactStore || !this.fileSystemPort) {
     return {
       canApply: false,
@@ -425,6 +426,7 @@ async function buildWorkspaceFileRewindPlan(
         beforeContent: file.beforeContent,
         beforeEncoding: file.beforeEncoding,
         beforeLineEndings: file.beforeLineEndings,
+        beforeMode: file.beforeMode,
         checkpoint,
         path: filePath,
         toolName: artifact.toolName,
@@ -599,6 +601,7 @@ async function readCurrentFileState(
       revision: read.revision,
       encoding: read.encoding,
       lineEndings: read.lineEndings,
+      mode: read.mode,
     };
   } catch (error) {
     if (isFileSystemPortError(error) && error.code === "not_found") {

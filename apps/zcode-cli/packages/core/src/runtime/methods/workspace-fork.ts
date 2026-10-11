@@ -61,6 +61,7 @@ export async function restoreWorkspaceCheckpointFiles(
         content: file.beforeContent,
         encoding: file.beforeEncoding,
         lineEndings: file.beforeLineEndings,
+        mode: file.beforeMode,
         createParents: true,
         atomic: true,
         trace: traceContext,

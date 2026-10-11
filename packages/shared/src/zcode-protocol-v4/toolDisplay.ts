@@ -42,6 +42,7 @@ const toolResultDisplaySchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("file_diffs"),
     files: z.array(fileDiffDisplaySchema).min(1).max(32),
+    totalFiles: z.number().int().positive().optional(),
     truncated: z.boolean().optional(),
   }),
   z.object({

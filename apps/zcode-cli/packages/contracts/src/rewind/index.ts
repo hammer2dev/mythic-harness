@@ -114,6 +114,7 @@ export const workspaceCheckpointArtifactSchema = z
             beforeContent: z.string().nullable(),
             beforeEncoding: ApplyPatchCommittedChangeSchema.shape.beforeEncoding,
             beforeLineEndings: ApplyPatchCommittedChangeSchema.shape.beforeLineEndings,
+            beforeMode: ApplyPatchCommittedChangeSchema.shape.beforeMode,
             afterContent: z.string().nullable().optional(),
             afterContentLength: z.number().int().nonnegative().optional(),
             structuredPatch: z.array(diffHunkSchema),

@@ -102,6 +102,8 @@ export interface FileSystemReadTextResult {
   encoding: FileSystemTextEncoding;
   /** Dominant line ending style observed before LF normalization. */
   lineEndings?: FileSystemLineEndings;
+  /** Permission bits observed by the execution environment; excludes file-type bits and ACLs. */
+  mode?: number;
   bytesRead: number;
   sizeBytes: number;
   truncated: boolean;
@@ -169,6 +171,8 @@ export interface FileSystemWriteTextRequest {
   encoding?: FileSystemTextEncoding;
   /** Restore this line ending style while writing logical LF-normalized text. */
   lineEndings?: FileSystemLineEndings;
+  /** Preserve snapshot permission bits during a move or restore; omit for existing defaults. */
+  mode?: number;
   createParents?: boolean;
   atomic?: boolean;
   expectedRevision?: FileSystemRevision;

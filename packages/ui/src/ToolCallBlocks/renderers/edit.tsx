@@ -18,6 +18,7 @@ import {
 } from "../shared.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { readRawToolCallFileDiffStatus } from "@/ToolCallBlocks/fileSummaries.js";
 
 const EDIT_TOOL_ICON = <PencilIcon className="size-4 shrink-0 text-foreground-subtle" />;
 
@@ -87,6 +88,17 @@ export function EditToolCallBlock(context: ToolCallBlockRenderContext) {
   const { toolCallNode, rawFileSummaries, isRunning, statusLabel, errorText, onOpenCodeViewer } =
     context;
   const { toolCall } = toolCallNode;
+  // display 的列表与内容都可能裁剪；真实总数和提示直接从同一载荷派生，不再把可见长度当作总数。
+  const diffStatus = readRawToolCallFileDiffStatus(toolCall.raw, toolCall);
+  const totalFiles = diffStatus?.totalFiles ?? rawFileSummaries.length;
+  const truncationNotice = diffStatus?.truncated
+    ? diffStatus.totalFiles !== undefined && diffStatus.totalFiles > diffStatus.visibleFiles
+      ? intl.formatMessage(
+          { id: "chat.toolCall.edit.filesTruncated" },
+          { shown: diffStatus.visibleFiles, total: diffStatus.totalFiles },
+        )
+      : intl.formatMessage({ id: "chat.toolCall.edit.diffTruncated" })
+    : undefined;
   const hasMultipleFiles = rawFileSummaries.length > 1;
   const isFailed =
     toolCall.status === "failed" || isRawToolCallFailed(toolCall.raw) || Boolean(errorText);
@@ -172,14 +184,26 @@ export function EditToolCallBlock(context: ToolCallBlockRenderContext) {
       rawFileSummaries.length > 1 ? (
         <span>
           {intl.formatMessage(
-            { id: "chat.toolCall.edit.multipleFiles" },
-            { count: String(rawFileSummaries.length) },
+            {
+              id:
+                diffStatus?.truncated && diffStatus.totalFiles === undefined
+                  ? "chat.toolCall.edit.visibleFiles"
+                  : "chat.toolCall.edit.multipleFiles",
+            },
+            { count: String(totalFiles) },
           )}
         </span>
       ) : (
         primaryText
       ),
-    [intl, primaryText, rawFileSummaries.length],
+    [
+      diffStatus?.totalFiles,
+      diffStatus?.truncated,
+      intl,
+      primaryText,
+      rawFileSummaries.length,
+      totalFiles,
+    ],
   );
   const singleFileInlinePreview = buildEditInlinePreview(
     rawFileSummaries.length === 1 ? (rawFileSummaries[0] ?? null) : null,
@@ -333,6 +357,9 @@ export function EditToolCallBlock(context: ToolCallBlockRenderContext) {
         title={toolCall.title}
         renderContent={renderContent}
       />
+      {truncationNotice ? (
+        <p className="pl-6 text-ui-xs text-muted-foreground">{truncationNotice}</p>
+      ) : null}
       {/* <pre className="text-[8px]">{JSON.stringify(toolCall, null, 2)}</pre> */}
     </>
   );
@@ -378,6 +405,9 @@ function EditFileSummaryBlock({
   animateDiffCountOnMount?: boolean;
 }) {
   const { intl } = useZCodeIntl();
+  const truncationNotice = summary.truncated
+    ? intl.formatMessage({ id: "chat.toolCall.edit.diffTruncated" })
+    : undefined;
   const kindLabel = intl.formatMessage({
     id: getEditKindLabelMessageId([summary.operationKind], [summary.actionLabel], isRunning),
   });
@@ -475,6 +505,9 @@ function EditFileSummaryBlock({
         title={title}
         renderContent={renderContent}
       />
+      {truncationNotice ? (
+        <p className="text-ui-xs text-muted-foreground">{truncationNotice}</p>
+      ) : null}
     </>
   );
 }

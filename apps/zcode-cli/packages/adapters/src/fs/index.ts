@@ -4,17 +4,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import {
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  readFile,
-  rename,
-  stat,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { RgArg, RipgrepBufferedResult } from "ripgrep";
@@ -198,6 +188,7 @@ export class NodeFileSystemAdapter implements FileSystemPort {
         content,
         encoding,
         lineEndings,
+        mode: info.mode & 0o7777,
         bytesRead: buffer.byteLength,
         sizeBytes: info.size,
         truncated,
@@ -323,6 +314,7 @@ export class NodeFileSystemAdapter implements FileSystemPort {
         return await writeConditionalTextFile({
           path,
           content,
+          mode: request.mode,
           expectedRevision: request.expectedRevision,
           expectedMissing: request.expectedMissing,
           signal: options?.signal,
@@ -330,10 +322,16 @@ export class NodeFileSystemAdapter implements FileSystemPort {
       }
 
       if (request.atomic ?? true) {
-        await atomicWrite(path, content);
+        await atomicWrite(path, content, request.mode);
       } else {
         maybeThrowStorageFsFault({ operation: "writeFile", path });
-        await writeFile(path, content);
+        const handle = await open(path, "w", request.mode);
+        try {
+          await handle.writeFile(content);
+          if (request.mode !== undefined) await handle.chmod(request.mode);
+        } finally {
+          await handle.close();
+        }
       }
 
       const info = await stat(path);
@@ -614,8 +612,7 @@ async function searchTextWithJavaScript(
     const mode = request.outputMode ?? "files_with_matches";
     const candidates = await collectTextSearchCandidates(path, rootInfo, request, signal);
 
-    const searchRequest =
-      mode === "content" ? request : { ...request, onlyMatching: false };
+    const searchRequest = mode === "content" ? request : { ...request, onlyMatching: false };
     const contentEntries: FileSystemSearchTextEntry[] = [];
     const countEntries: FileSystemSearchTextEntry[] = [];
     const matchingFiles: Array<{ path: string; mtimeMs: number }> = [];
@@ -715,8 +712,8 @@ function getNodeErrorCode(error: unknown): unknown {
   return typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
 }
 
-async function atomicWrite(path: string, content: Buffer): Promise<void> {
-  let existingMode: number | undefined;
+async function atomicWrite(path: string, content: Buffer, mode?: number): Promise<void> {
+  let existingMode = mode;
 
   try {
     const targetInfo = await lstat(path);
@@ -725,7 +722,7 @@ async function atomicWrite(path: string, content: Buffer): Promise<void> {
         `Refusing to write through symlink: ${path}. Resolve the symlink and pass the real target path explicitly.`,
       );
     }
-    existingMode = targetInfo.mode;
+    existingMode ??= targetInfo.mode;
   } catch (error) {
     if (getNodeErrorCode(error) !== "ENOENT") {
       throw error;
@@ -738,6 +735,7 @@ async function atomicWrite(path: string, content: Buffer): Promise<void> {
     const handle = await open(
       tempPath,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      existingMode,
     );
     try {
       await handle.writeFile(content);
@@ -756,6 +754,7 @@ async function atomicWrite(path: string, content: Buffer): Promise<void> {
     const fallbackHandle = await open(
       path,
       constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+      existingMode,
     ).catch((error: unknown) => {
       if (getNodeErrorCode(error) === "ELOOP") {
         throw new SymlinkWriteRefusedError(
@@ -767,6 +766,7 @@ async function atomicWrite(path: string, content: Buffer): Promise<void> {
 
     try {
       await fallbackHandle.writeFile(content);
+      if (mode !== undefined) await fallbackHandle.chmod(mode);
       await fallbackHandle.sync();
     } finally {
       await fallbackHandle.close();
@@ -1625,8 +1625,8 @@ function createOnlyMatchingContentEntries(input: {
 }): FileSystemSearchTextEntry[] {
   const matchedLineIndexes = createMatchedLineIndexes(input.matches.ranges);
 
-  return createContextLineIndexes(input.lines.length, input.matches.ranges, input.request)
-    .flatMap((lineIndex) => {
+  return createContextLineIndexes(input.lines.length, input.matches.ranges, input.request).flatMap(
+    (lineIndex) => {
       const matchedEntries = input.matches.entriesByLine.get(lineIndex);
       if (matchedEntries) return matchedEntries;
       if (matchedLineIndexes.has(lineIndex)) return [];
@@ -1691,21 +1691,18 @@ function createOnlyMatchingEntries(input: {
 
   // ripgrep 只把 LF/CRLF 当作输出行边界；单独的 CR 是普通匹配文本。
   // 同时，跨行 match 内部的空行不生成 entry，但整段零长度 match 需要保留空 entry。
-  return input.text
-    .split(/\r?\n/)
-    .flatMap((line, index) =>
-      line.length === 0
-        ? []
-        : [
-            {
-              path: input.path,
-              lineNumber:
-                input.lineNumber === undefined ? undefined : input.lineNumber + index,
-              text: line,
-              matched: true,
-            },
-          ],
-    );
+  return input.text.split(/\r?\n/).flatMap((line, index) =>
+    line.length === 0
+      ? []
+      : [
+          {
+            path: input.path,
+            lineNumber: input.lineNumber === undefined ? undefined : input.lineNumber + index,
+            text: line,
+            matched: true,
+          },
+        ],
+  );
 }
 
 function splitRipgrepSearchLines(content: string): string[] {

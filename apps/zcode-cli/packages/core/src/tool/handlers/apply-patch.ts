@@ -118,6 +118,8 @@ async function commitItem(
         expectedRevision: created ? undefined : item.read!.revision,
         encoding: item.read?.encoding,
         lineEndings: item.read?.lineEndings,
+        // 移动的目标是新文件，必须继承源权限，不能让默认 umask 抹掉脚本执行位。
+        mode: item.type === "move" ? item.read?.mode : undefined,
         trace,
       },
       signal,
@@ -149,7 +151,7 @@ function makeChange(
   content: string | null,
   beforeRevision?: FileSystemRevision,
   afterRevision?: FileSystemRevision,
-  beforeText?: Pick<FileSystemReadTextResult, "encoding" | "lineEndings">,
+  beforeText?: Pick<FileSystemReadTextResult, "encoding" | "lineEndings" | "mode">,
 ): ApplyPatchCommittedChange {
   return {
     filePath,
@@ -158,7 +160,11 @@ function makeChange(
     beforeRevision,
     afterRevision,
     ...(beforeText
-      ? { beforeEncoding: beforeText.encoding, beforeLineEndings: beforeText.lineEndings }
+      ? {
+          beforeEncoding: beforeText.encoding,
+          beforeLineEndings: beforeText.lineEndings,
+          beforeMode: beforeText.mode,
+        }
       : {}),
     structuredPatch: createStructuredPatch({
       filePath,

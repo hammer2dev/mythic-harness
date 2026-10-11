@@ -37,6 +37,29 @@ function readFileDiffDisplays(value: unknown): Record<string, unknown>[] {
   return display.files.filter(isPlainRecord);
 }
 
+export function readRawToolCallFileDiffStatus(raw: unknown, source?: EditKindSource) {
+  const values = isPlainRecord(raw)
+    ? [raw, readRawToolCallInput(raw), raw.rawOutput, source?.output]
+    : [source?.output];
+  for (const value of values) {
+    if (!isPlainRecord(value)) continue;
+    const display = isPlainRecord(value.display) ? value.display : value;
+    const files = readFileDiffDisplays(value);
+    if (files.length === 0) continue;
+    return {
+      visibleFiles: files.length,
+      ...(display.kind === "file_diffs" &&
+      typeof display.totalFiles === "number" &&
+      Number.isInteger(display.totalFiles) &&
+      display.totalFiles > 0
+        ? { totalFiles: display.totalFiles }
+        : {}),
+      truncated: display.truncated === true || files.some((file) => file.truncated === true),
+    };
+  }
+  return undefined;
+}
+
 function readDisplayStructuredPatch(display: Record<string, unknown>, fileLabel: string) {
   const structuredPatch = display.structuredPatch;
   if (!Array.isArray(structuredPatch)) {
@@ -93,6 +116,7 @@ function readDisplayFileDiffSummaries(...values: unknown[]): RawToolCallFileSumm
             typeof display.deletions === "number" ? Math.max(0, Math.round(display.deletions)) : 0,
         },
         patch: readDisplayStructuredPatch(display, getPathLeaf(path)),
+        truncated: display.truncated === true,
       });
     }
   }

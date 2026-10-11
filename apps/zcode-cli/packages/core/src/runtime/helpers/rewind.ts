@@ -26,6 +26,7 @@ export const WORKSPACE_CHECKPOINT_CONTENT_TYPE = "application/vnd.zcode.workspac
 interface FileMutationCheckpointCandidate {
   beforeEncoding?: WorkspaceCheckpointArtifact["files"][number]["beforeEncoding"];
   beforeLineEndings?: WorkspaceCheckpointArtifact["files"][number]["beforeLineEndings"];
+  beforeMode?: number;
   content?: string | null;
   filePath: string;
   originalFile: string | null;
@@ -54,10 +55,12 @@ export function getFileMutationCheckpointCandidate(
   const beforeLineEndings = ApplyPatchCommittedChangeSchema.shape.beforeLineEndings.safeParse(
     output.beforeLineEndings,
   );
+  const beforeMode = ApplyPatchCommittedChangeSchema.shape.beforeMode.safeParse(output.beforeMode);
 
   return {
     beforeEncoding: beforeEncoding.success ? beforeEncoding.data : undefined,
     beforeLineEndings: beforeLineEndings.success ? beforeLineEndings.data : undefined,
+    beforeMode: beforeMode.success ? beforeMode.data : undefined,
     content:
       typeof output.content === "string" || output.content === null ? output.content : undefined,
     filePath: output.filePath,
@@ -107,6 +110,7 @@ export function stringifyWorkspaceCheckpointArtifact(
       beforeContent: candidate.originalFile,
       beforeEncoding: candidate.beforeEncoding,
       beforeLineEndings: candidate.beforeLineEndings,
+      beforeMode: candidate.beforeMode,
       existedBefore: candidate.originalFile !== null,
       path: candidate.filePath,
       structuredPatch: candidate.structuredPatch,

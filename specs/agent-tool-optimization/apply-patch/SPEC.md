@@ -2,7 +2,7 @@
 
 状态：已实现，与 ToolSearch 联合验证；自动化证据及未执行的实机验收见 [验证记录](../VERIFICATION.md)。更新：2026-10-11。
 
-本规范属于 [Agent 工具优化](../SPEC.md)。工具通过 [ToolSearch](../tool-search/SPEC.md) 按需发现，不改变已确认的常驻工具名单。
+本规范属于 [Agent 工具优化](../SPEC.md)。ApplyPatch 已加入常驻候选名单，当前会话获准时首个模型请求即携带完整定义，无需先调用 [ToolSearch](../tool-search/SPEC.md)；白名单、禁用规则和执行权限继续生效。
 
 ## 1. 已确认的产品规则
 
@@ -11,6 +11,7 @@
 - 本轮实现补丁解析、条件写入、权限、结果与恢复；LSP/AST/Graph 消费和通用分析通知留待后续，不引入尚无消费者的分析框架。
 - `Edit` 保留单文件字符串替换，`Write` 保留创建或整体写入；ApplyPatch 用于以局部 diff 表达相关改动，减少多次调用。
 - 补丁处理与语言无关；首版不覆盖二进制补丁、权限位变更，不提供语义重命名或任意 LSP `WorkspaceEdit` 执行。
+- 保留已有文件的权限位属于移动和恢复语义，不开放补丁输入修改权限位的能力。执行端文件系统读取原权限并负责创建时恢复，core 仅通过 FileSystemPort 传递；Windows 沿用平台实际支持的权限语义。
 - 已有目标仅接受普通文本文件，沿用写入端的符号链接拒绝策略；预检与条件提交均不得跟随符号链接，以免将链接目标内容误记为可恢复的普通文件快照。
 
 ## 2. 实现入口
@@ -122,10 +123,13 @@ sequenceDiagram
 - cold resume 或工具结果重放不重新执行补丁。中断后无法确认的项先核对磁盘及已保存记录，不推断整批全部成功或全部失败。
 
 - 已有文件的 `beforeEncoding` 与 `beforeLineEndings` 随实际提交记录和 checkpoint 可选保存；rewind 写回原编码与主换行策略，失败补偿采用补偿前实际读取到的编码和换行。旧 artifact 缺少这些字段时保留既有默认行为；仍使用 FileSystemPort 的规范化文本与主换行规则，不新增 raw 文本或混合换行模型。
+- 文件权限位同样作为可选前镜像元数据保存。移动目标在发布前继承源权限，删除或移动后的 rewind、workspace fork 以及恢复失败补偿均沿用对应快照权限；旧 artifact 缺少此字段时维持原默认行为。文件属性仍由执行端文件系统拥有，checkpoint 只是恢复快照，不新增独立权限状态。
 
 ## 8. Desktop、Web 与远程边界
 
-工具结果的 UI 投影使用兼容现有 `file_diff` 的 `file_diffs` 展示载荷：`{ kind: "file_diffs", files: FileDiff[], truncated?: boolean }`。每个 FileDiff 沿用单文件的路径、增删行数、structuredPatch 和截断标记；只从 `committedChanges` 生成，失败和未执行项不能伪造文件变更。展示最多 32 个路径，整体最多 160 行 diff，每个路径最多 8 个 hunk；被截断时显式标记，完整快照仍在 checkpoint 中。
+工具结果的 UI 投影使用兼容现有 `file_diff` 的 `file_diffs` 展示载荷：`{ kind: "file_diffs", files: FileDiff[], totalFiles?: number, truncated?: boolean }`。每个 FileDiff 沿用单文件的路径、增删行数、structuredPatch 和截断标记；只从 `committedChanges` 生成，失败和未执行项不能伪造文件变更。展示最多 32 个路径，整体最多 160 行 diff，每个路径最多 8 个 hunk；被截断时显式标记，完整快照仍在 checkpoint 中。
+
+审查修复补充可选 `totalFiles`：由 Runtime 从实际提交路径计算，随 display 进入实时事件和冷恢复，旧载荷仍可读取。UI 直接派生展示，不缓存第二份事实；有总数时显示真实变更文件数，路径裁剪时说明“仅展示 32 / 33 个文件”，仅 diff 内容裁剪时也显示预览不完整。旧载荷只有 `truncated` 时明确提示预览截断，不推断未知总数。Desktop 与手机 Web 共用组件与本地化文案。
 
 Runtime 持久化 completed/error tool part 时都保留 display；实时 ToolCallResult 与冷 transcript hydration 的 error 结果都携带同一载荷。V4 `toolOutputSchema.display` 增加 `file_diffs` 分支，旧 `file_diff` 仍可解析。Desktop continuous 与 Web replayable 消费同一投影结果，恢复时只还原展示和已提交版本，不再次执行补丁。
 
@@ -150,6 +154,8 @@ Runtime 持久化 completed/error tool part 时都保留 display；实时 ToolCa
 | AP-5 恢复与客户端   | Desktop 完成一次部分成功调用；手机连接同一 attachment  | 手机断线重连并恢复结果，随后主动检查 rewind    | 结果重放不再次写入；实际文件与已提交记录一致，恢复遵守现有冲突检查                                | E2E 会话事件、文件写入次数、checkpoint/rewind 结果 |
 
 仅用代表性的权限拒绝、一次提交失败和一次版本冲突验证边界，不生成语言、平台、操作类型的笛卡尔测试矩阵。二进制及跨文件事务场景按首版范围排除。
+
+审查修复验收：移动可执行脚本和私有文本文件后权限保留，删除/移动后恢复沿用原权限；一次提交 33 个文件时总数为 33、预览为 32 且有裁剪提示，少量文件超过 diff 行预算时仍提示内容裁剪；桌面与窄屏的实时/恢复展示使用相同载荷语义。验证脚本仅临时存在，执行后删除；无法执行 POSIX 或实机场景时如实记录边界。
 
 ## 10. 实施与验证落点
 

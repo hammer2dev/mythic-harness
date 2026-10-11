@@ -35,6 +35,7 @@ export async function assertFileRevision(
 export async function writeConditionalTextFile(input: {
   path: string;
   content: Buffer;
+  mode?: number;
   expectedRevision?: FileSystemRevision;
   expectedMissing?: boolean;
   signal?: AbortSignal;
@@ -44,7 +45,7 @@ export async function writeConditionalTextFile(input: {
   let createdTemporary = false;
   try {
     assertNotCancelled(input.signal, path);
-    let mode: number | undefined;
+    let mode = input.mode;
     if (!input.expectedMissing) {
       const info = await lstat(path);
       if (!info.isFile())
@@ -53,7 +54,7 @@ export async function writeConditionalTextFile(input: {
           path,
           message: `Patch target must be a regular file: ${path}`,
         });
-      mode = info.mode;
+      mode ??= info.mode;
     }
     maybeThrowStorageFsFault({ operation: "writeFile", path });
     const handle = await open(temporary, "wx", mode);

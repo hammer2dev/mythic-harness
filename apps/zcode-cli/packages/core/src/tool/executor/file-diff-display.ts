@@ -29,7 +29,13 @@ export function createFileDiffResultDisplay(
       truncated ||= display.truncated === true;
       return display;
     });
-    return { kind: "file_diffs", files, truncated };
+    return {
+      kind: "file_diffs",
+      files,
+      // 路径列表有展示上限；单独保留真实数量，避免客户端把截断后的长度当作全部变更。
+      totalFiles: parsed.data.committedChanges.length,
+      truncated,
+    };
   }
 
   if (

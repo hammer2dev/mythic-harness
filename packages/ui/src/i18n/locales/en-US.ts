@@ -3839,6 +3839,10 @@ const enUS: Record<string, string> = {
   "chat.toolCall.edit.editing": "Editing",
   "chat.toolCall.edit.edited": "Edited",
   "chat.toolCall.edit.multipleFiles": "{count} files",
+  "chat.toolCall.edit.visibleFiles": "{count} files shown",
+  "chat.toolCall.edit.filesTruncated":
+    "Showing {shown}/{total} files; diff previews may be truncated.",
+  "chat.toolCall.edit.diffTruncated": "Diff preview truncated.",
   "chat.toolCall.snapshot.notice":
     "{fields} tool field(s) were truncated. Showing preview {previewBytes} / {fullBytes}.",
   "chat.toolCall.snapshot.loadFull": "Load full tool data",

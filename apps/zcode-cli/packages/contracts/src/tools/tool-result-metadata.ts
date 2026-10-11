@@ -79,6 +79,7 @@ export const fileDiffsToolResultDisplayPayloadSchema = z
   .object({
     kind: z.literal("file_diffs"),
     files: z.array(fileDiffToolResultDisplayPayloadSchema).min(1).max(32),
+    totalFiles: z.number().int().positive().optional(),
     truncated: z.boolean().optional(),
   })
   .strict();

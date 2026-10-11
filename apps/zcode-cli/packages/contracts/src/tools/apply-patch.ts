@@ -81,6 +81,7 @@ export interface ApplyPatchCommittedChange {
   afterRevision?: FileSystemRevision;
   beforeEncoding?: FileSystemTextEncoding;
   beforeLineEndings?: FileSystemLineEndings;
+  beforeMode?: number;
 }
 
 export const ApplyPatchCommittedChangeSchema = z
@@ -111,6 +112,7 @@ export const ApplyPatchCommittedChangeSchema = z
       ])
       .optional(),
     beforeLineEndings: z.enum(["LF", "CRLF"]).optional(),
+    beforeMode: z.number().int().min(0).max(0o7777).optional(),
   })
   .strict();
 
