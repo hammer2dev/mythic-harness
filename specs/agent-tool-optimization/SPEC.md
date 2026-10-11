@@ -6,7 +6,7 @@
 
 ## 当前实施范围
 
-用户已确认先实现 `ToolSearch` 和 `ApplyPatch`，作为 Agent 基础工具。保持已确认的 14 个现有常驻工具并增加 `ToolSearch`，`ApplyPatch` 通过搜索按需加载。LSP、AST、Dependency Graph 的能力与软件开发插件方案均保留设计，待这两个工具完成后再决定；本轮不注册占位工具、不增加语言运行环境或分析服务。
+用户已确认先实现 `ToolSearch` 和 `ApplyPatch`，作为 Agent 基础工具。保留已有 16 个常驻候选，并加入 `Agent`、`Skill`，共 18 个通用常驻候选；`RespondToCoordinator`、`submit_result`、`escalate` 在对应角色和端口已授予使用资格时常驻。全部常驻规则继续受有效白名单、显式禁用及模型能力约束，`SendMessage` 保持按需。LSP、AST、Dependency Graph 的能力与软件开发插件方案均保留设计，待这两个工具完成后再决定；本轮不注册占位工具、不增加语言运行环境或分析服务。
 
 ## 验证代码留存规则
 
@@ -36,7 +36,7 @@
 | Dependency Graph | 组织有来源的关系，查询依赖方向及潜在影响路径。       | 首版方案从 Java 有效项目模型的模块关系开始，符号级影响留作后续；结果说明覆盖范围。                             |
 | ApplyPatch       | 将结构化补丁应用到文本文件。                         | 已确认支持新增、修改、删除和移动；全部预检通过后逐项提交，途中失败报告实际已完成与未完成项，不要求跨文件回滚。 |
 
-`ApplyPatch` 已通过 ToolSearch 按需加载。`LSP`、`AST`、`DependencyGraph` 保留相同的按需加载设计，不注册尚未实现的工具定义；AST 和图工具的名称及具体参数仍为提案。
+`ApplyPatch` 在当前会话获准使用时直接常驻，不需要先调用 ToolSearch。`LSP`、`AST`、`DependencyGraph` 保留按需加载设计，不注册尚未实现的工具定义；AST 和图工具的名称及具体参数仍为提案。
 
 ## 共享事实与状态边界
 
