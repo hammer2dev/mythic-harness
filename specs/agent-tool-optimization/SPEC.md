@@ -6,7 +6,7 @@
 
 ## 当前实施范围
 
-用户已确认先实现 `ToolSearch` 和 `ApplyPatch`，作为 Agent 基础工具。保留已有 16 个常驻候选，并加入 `Agent`、`Skill`，共 18 个通用常驻候选；`RespondToCoordinator`、`submit_result`、`escalate` 在对应角色和端口已授予使用资格时常驻。全部常驻规则继续受有效白名单、显式禁用及模型能力约束，`SendMessage` 保持按需。LSP、AST、Dependency Graph 的能力与软件开发插件方案均保留设计，待这两个工具完成后再决定；本轮不注册占位工具、不增加语言运行环境或分析服务。
+用户已确认先实现 `ToolSearch` 和 `ApplyPatch`，作为 Agent 基础工具。通用常驻候选共 18 个，包含 `Agent`、`Skill`，并以 `SendMessage` 替换 `TaskOutput` 的常驻位置；`TaskOutput` 保留注册和执行能力，改由 ToolSearch 按需加载。`RespondToCoordinator`、`submit_result`、`escalate` 在对应角色和端口已授予使用资格时常驻。全部常驻规则继续受有效白名单、显式禁用及模型能力约束。LSP、AST、Dependency Graph 的能力与软件开发插件方案均保留设计，待这两个工具完成后再决定；本轮不注册占位工具、不增加语言运行环境或分析服务。
 
 ## 验证代码留存规则
 

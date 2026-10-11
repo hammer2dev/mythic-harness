@@ -2,11 +2,22 @@
 
 所属专项：[Agent 工具优化](../SPEC.md)。
 
-测量日期：2026-10-11。当前结论以 18 个通用常驻候选和 3 个按角色资格常驻的控制工具为准，默认总预算为 32,000；下方保留 16/15 个常驻候选的历史补测，以及实现前源码 `dd1bb16` 的 14 项盘点。用途是为 [ToolSearch 规范](SPEC.md) 的可调预算提供依据，不代表实际 provider 计费。
+最近测量日期：2026-10-12。当前结论以 SendMessage 替换 TaskOutput 后的 18 个通用常驻候选和 3 个按角色资格常驻的控制工具为准，默认总预算为 32,000；下方保留替换前 18 项、16/15 项常驻候选的历史补测，以及实现前源码 `dd1bb16` 的 14 项盘点。用途是为 [ToolSearch 规范](SPEC.md) 的可调预算提供依据，不代表实际 provider 计费。
 
-## 当前补测：18 个通用常驻候选与角色控制工具
+## 当前补测：SendMessage 替换 TaskOutput
 
-当前源码的 `RESIDENT_TOOL_NAMES` 新增 `Agent`、`Skill`，以及仅在对应角色和端口已授予资格时常驻的 `RespondToCoordinator`、`submit_result`、`escalate`。源码中的 21 项策略集合不等于同一请求加载 21 个工具；以下通用基准排除三个角色工具，实际会话继续做模型、端口及权限过滤。
+以当前源码的 builtInTools、ToolRegistry.toContracts()、RESIDENT_TOOL_NAMES 和 estimateAiSdkToolSchemaTokens() 内联测量，不调用模型或执行工具，不连接 MCP，不传自定义 profiles 或结果 schema。统计口径与下方历史 18 项补测一致，角色工具不计入通用常驻合计。
+
+| SDK 转换路径                     | 全内置目录（39 个） | 通用常驻（18 个） | 比替换前减少 | 32,000 预算剩余 |
+| -------------------------------- | ------------------: | ----------------: | -----------: | --------------: |
+| openai-compatible                |              24,032 |            10,040 |          147 |          21,960 |
+| Anthropic（`claude-sonnet-4-5`） |              24,841 |            10,415 |          148 |          21,585 |
+
+SendMessage 单项分别为 368 / 388，TaskOutput 为 515 / 536 个估算 token；只替换常驻位置，全部内置定义总量不变。TaskOutput 搜索加载后仍计入按需预算。通用候选数量与预算均不变，实际请求继续按模型、端口和权限裁剪；这不是每个会话实际加载 18 个工具或实际计费的承诺。
+
+## 历史补测：替换前 18 个通用常驻候选与角色控制工具
+
+2026-10-11 的 `RESIDENT_TOOL_NAMES` 新增 `Agent`、`Skill`，以及仅在对应角色和端口已授予资格时常驻的 `RespondToCoordinator`、`submit_result`、`escalate`，当时 TaskOutput 常驻、SendMessage 按需。源码中的 21 项策略集合不等于同一请求加载 21 个工具；以下通用基准排除三个角色工具，实际会话继续做模型、端口及权限过滤。
 
 本次通过 `node --import tsx` 内联读取当前源码的 `builtInTools`、`ToolRegistry.toContracts()` 与 `estimateAiSdkToolSchemaTokens()`，统计口径与下方 16 项补测一致。不传自定义子代理 profiles 或工作流结果 schema，不连接 MCP，不创建会话或调用模型 API。schema 估算与真实请求验证分别记录，真实请求见 [验证记录](../VERIFICATION.md)。
 

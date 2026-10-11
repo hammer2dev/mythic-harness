@@ -17,7 +17,7 @@ export const RESIDENT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "EnterPlanMode",
   "ExitPlanMode",
   "AskUserQuestion",
-  "TaskOutput",
+  "SendMessage",
   "TaskStop",
   "ReadSessionContext",
   "ToolSearch",

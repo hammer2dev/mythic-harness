@@ -1,5 +1,17 @@
 # ToolSearch / ApplyPatch 实现验证
 
+## SendMessage 替换 TaskOutput 常驻位置（2026-10-12）
+
+用户确认后，唯一源码改动是 Runtime `RESIDENT_TOOL_NAMES` 中以 SendMessage 替换 TaskOutput。通用候选仍为 18 个，角色控制候选仍为 3 个；注册、权限、handler、32,000 总预算和每次最多 5 项规则均沿用原实现。
+
+- 3 个内联核心回归用例在修改前均失败，修改后 3/3 通过。使用真实 AgentRuntime、工具注册和请求投影入口，验证首请求含 SendMessage、不含 TaskOutput，准确搜索 TaskOutput 后下一步骤提供完整 schema；旧 SendMessage 激活标记清理、低预算常驻保护、TaskOutput 激活快照恢复；缺少消息端口、受限子代理白名单及显式禁用不能扩权。不调用外部模型或实际发送消息，未生成或保留 `.test.ts` 文件。
+- 当前 CLI 构建 11/11 通过。独立临时工作目录和会话存储中的真实 CLI 会话使用当前模型配置，最终 OpenAI Responses 请求包含 17 个常驻工具及完整参数 schema：含 SendMessage 的 to/summary/message，不含 TaskOutput；模型正常结束，未调用工具。18 个通用候选中的 WebSearch 因当前模型不支持原生搜索而未加载。此项只验证实际请求加载，不代表发送消息、TaskOutput 执行或 Desktop/手机 UI 端到端验收。
+- 首次准确搜索后的激活链路由上述 Runtime 用例验证。此前真实模型在 ToolSearch 中填入错误 `server: "functions"` 导致零命中的问题，本次没有修复，也未将其标为通过。
+- 根目录 typecheck 通过；CLI typecheck 27/27 通过。根目录 lint 为 17 个既有 warning、0 error；CLI lint 因未改动文件的 max-lines 错误未通过；改动的 tool-exposure.ts 单独 lint 为 0 warning、0 error。CLI 命令初次因找不到 turbo 失败，补充现有根目录 node_modules/.bin 到本次进程 PATH 后重试，未修改仓库配置。验证环境 Node 24.19.0，仓库 mise.toml 指定 24.14.0，CLI 输出了 engine 警告。
+- 架构检查改动前后均为 0 violations / 0 baseline / 0 new。状态仍由 Runtime ToolExposureState 单一拥有，未增加接口、模块依赖或恢复路径。唯一源码净行数为 0；工具定义基线已重测，见 [SCHEMA-BASELINE.md](tool-search/SCHEMA-BASELINE.md)。
+
+本轮未暂存、提交或推送。以下保留先前版本的历史验证记录。
+
 日期：2026-10-11。范围仅为两个基础工具；LSP、AST、Dependency Graph 和软件开发插件仍为待定设计。
 
 ## 自动化结果
