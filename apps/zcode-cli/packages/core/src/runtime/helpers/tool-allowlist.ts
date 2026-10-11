@@ -103,11 +103,8 @@ function appendChildControlTool(
   }
 
   if (config.taskType === "subagent_child") {
-    if (allowlist.includes(RESPOND_TO_COORDINATOR_TOOL_NAME)) {
-      return allowlist;
-    }
     // Explore 会在 runtime 注册前再次求工具交集，child 控制工具必须在最终结果补回。
-    return [...allowlist, RESPOND_TO_COORDINATOR_TOOL_NAME];
+    return [...new Set([...allowlist, RESPOND_TO_COORDINATOR_TOOL_NAME, "ToolSearch"])];
   }
 
   // workflow child 没有 allowlist 收窄（persona 无工具档位，工具面只有减法，见

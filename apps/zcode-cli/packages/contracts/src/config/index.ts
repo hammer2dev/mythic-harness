@@ -4,6 +4,7 @@ import type { CollaborationMode } from "../interfaces/session.port.js";
 import type { McpServerConfig } from "../interfaces/mcp.port.js";
 import type { HooksRuntimeConfig, HooksRuntimeConfigPatch } from "../hooks/index.js";
 import type { PluginConfig, PluginOptionValues } from "../plugins/index.js";
+import { DEFAULT_TOOL_SEARCH_CONFIG, type ToolSearchConfig } from "../tools/tool-search.js";
 
 // ============================================================
 // Config Key Types
@@ -67,6 +68,8 @@ export const ConfigKey = {
 
   // Tool Concurrency
   ToolConcurrencyMax: "toolConcurrency.maxConcurrency",
+  ToolSearchSchemaTokenBudget: "toolSearch.schemaTokenBudget",
+  ToolSearchMaxResults: "toolSearch.maxResults",
 
   // Model anomaly guards
   ModelAnomalyGuard: "modelAnomalyGuard",
@@ -138,7 +141,10 @@ export type ConfigValue<K extends ConfigKey> = K extends "modelStream.idleTimeou
                                       ? "debug" | "info" | "warn" | "error"
                                       : K extends "logging.format"
                                         ? "text" | "json"
-                                        : K extends "toolConcurrency.maxConcurrency"
+                                        : K extends
+                                              | "toolConcurrency.maxConcurrency"
+                                              | "toolSearch.schemaTokenBudget"
+                                              | "toolSearch.maxResults"
                                           ? number
                                           : K extends "modelAnomalyGuard"
                                             ? ModelAnomalyGuardConfig
@@ -249,6 +255,7 @@ export interface RuntimeConfig {
     format: "text" | "json";
   };
   toolConcurrency: ToolConcurrencyConfig;
+  toolSearch: ToolSearchConfig;
   modelAnomalyGuard: ModelAnomalyGuardConfig;
   hooks: HooksRuntimeConfig;
   ui: {
@@ -271,6 +278,7 @@ export interface RuntimeConfigPatch {
   commandOverrides?: RuntimeConfig["commandOverrides"];
   logging?: Partial<RuntimeConfig["logging"]>;
   toolConcurrency?: Partial<RuntimeConfig["toolConcurrency"]>;
+  toolSearch?: Partial<ToolSearchConfig>;
   modelAnomalyGuard?: Partial<RuntimeConfig["modelAnomalyGuard"]>;
   hooks?: HooksRuntimeConfigPatch;
   ui?: Partial<RuntimeConfig["ui"]>;
@@ -342,6 +350,7 @@ export const DefaultRuntimeConfig: RuntimeConfig = {
   toolConcurrency: {
     maxConcurrency: 10,
   },
+  toolSearch: { ...DEFAULT_TOOL_SEARCH_CONFIG },
   modelAnomalyGuard: {
     maxBudgetWarningsPerTurn: 3,
     repeatedToolCallWarningThreshold: 3,

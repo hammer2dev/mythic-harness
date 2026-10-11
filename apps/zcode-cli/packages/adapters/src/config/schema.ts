@@ -300,6 +300,13 @@ export const ZCodeConfigFileSchema = z
     logging: loggingSchema.optional(),
     ui: uiSchema.optional(),
     toolConcurrency: toolConcurrencySchema.optional(),
+    toolSearch: z
+      .object({
+        schemaTokenBudget: z.number().int().positive().optional(),
+        maxResults: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     modelAnomalyGuard: modelAnomalyGuardSchema.optional(),
     hooks: hooksSchema.optional(),
   })
@@ -417,6 +424,7 @@ function parsedConfigFileToRuntimePatch(parsed: ZCodeConfigFile): RuntimeConfigP
   if (parsed.logging) config.logging = parsed.logging;
   if (parsed.ui) config.ui = parsed.ui;
   if (parsed.toolConcurrency) config.toolConcurrency = parsed.toolConcurrency;
+  if (parsed.toolSearch) config.toolSearch = parsed.toolSearch;
   if (parsed.modelAnomalyGuard) config.modelAnomalyGuard = parsed.modelAnomalyGuard;
   if (parsed.hooks) config.hooks = parsed.hooks;
 

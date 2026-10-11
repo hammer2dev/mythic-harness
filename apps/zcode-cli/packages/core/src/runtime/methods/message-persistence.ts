@@ -25,6 +25,7 @@ import {
 } from "./synthetic-notice-metadata.js";
 import { buildPersistedConversationInputIntent } from "./input-intent-persistence.js";
 import { buildProjectionAnchor, mapSyntheticSourceToAnchorOrigin } from "./projection-anchor.js";
+import { runtimeToolExposure } from "../helpers/tool-exposure.js";
 
 export async function persistUserPrompt(
   this: AgentRuntimeInternal,
@@ -340,6 +341,16 @@ export async function persistMessage(
   copyFrom?: Parameters<SessionStorePort["saveMessage"]>[1],
 ): Promise<void> {
   if (!this.sessionStore) return;
+  if (
+    !copyFrom &&
+    input.sessionID === this.sessionId &&
+    (input.role === "assistant" || input.summary)
+  ) {
+    input = {
+      ...input,
+      metadata: { toolExposure: runtimeToolExposure(this).snapshot(), ...input.metadata },
+    };
+  }
   await this.sessionStore.saveMessage(input, copyFrom);
   this.logger?.debug("Session message persisted", {
     ...traceContextToLogContext(traceContext),
@@ -357,6 +368,16 @@ export async function persistPart(
   traceContext: TraceContext,
   copyFrom?: Parameters<SessionStorePort["savePart"]>[1],
 ): Promise<void> {
+  if (
+    !copyFrom &&
+    input.sessionID === this.sessionId &&
+    input.type === "tool" &&
+    (input.state.status === "completed" || input.state.status === "error")
+  ) {
+    const exposure = runtimeToolExposure(this);
+    exposure.touch(this.registry.get(input.tool)?.metadata.name ?? input.tool);
+    input = { ...input, metadata: { ...input.metadata, toolExposure: exposure.snapshot() } };
+  }
   if (!this.sessionStore) return;
   await this.sessionStore.savePart(input, copyFrom);
   this.logger?.debug("Session part persisted", {

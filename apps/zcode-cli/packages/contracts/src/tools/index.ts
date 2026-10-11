@@ -9,6 +9,7 @@ export * from "./read.js";
 export * from "./write.js";
 export * from "./edit.js";
 export * from "./apply-patch.js";
+export * from "./tool-search.js";
 export * from "./bash.js";
 export * from "./node-repl.js";
 export * from "./glob.js";

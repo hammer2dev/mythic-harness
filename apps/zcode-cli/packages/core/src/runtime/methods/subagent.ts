@@ -248,7 +248,11 @@ export function createDefaultSubagentPort(
           // toolset 不能再依赖 DEFAULT_SUBAGENT_TYPE，否则默认通用 agent 会被误降级为只读搜索工具面。
           toolset: builtInExplore ? "explore" : "main",
           toolAllowlist: childToolAllowlist,
-          toolDisallowlist: this.config.toolDisallowlist,
+          toolDisallowlist: [
+            ...(this.config.toolDisallowlist ?? []),
+            ...(request.disallowedTools ?? []),
+          ],
+          toolSearch: this.config.toolSearch,
           embeddedSearchBackend: this.config.embeddedSearchBackend,
           nativeSearchEnhancementsEnabled: this.config.nativeSearchEnhancementsEnabled,
           subagents: {

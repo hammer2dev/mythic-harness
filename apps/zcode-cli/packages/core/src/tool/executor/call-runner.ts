@@ -410,6 +410,7 @@ async function executeToolCallImpl(
       sessionStore: deps.sessionStore,
       sessionModePort: deps.sessionModePort,
       workflowPort: deps.workflowPort,
+      searchTools: deps.searchTools,
       dynamicWorkflowRunPort: deps.dynamicWorkflowRunPort,
       dynamicWorkflowSnippetPort: deps.dynamicWorkflowSnippetPort,
       modelCatalogPort: deps.modelCatalogPort,
@@ -438,6 +439,8 @@ async function executeToolCallImpl(
       turnId,
     };
 
+    // 同批后续 ToolSearch 可能先于 terminal part 持久化；进入 handler 前保护实际调用工具。
+    deps.onToolExecutionStart?.(canonicalToolCall.name);
     const output = await executeWithTimeout(
       entry.handler,
       executionInput,

@@ -38,6 +38,7 @@ import {
 } from "./runner-runtime.js";
 import { runStreamText } from "./runner-stream.js";
 import { DEFAULT_MODEL_STREAM_IDLE_TIMEOUT_MS } from "./stream-idle-timeout.js";
+import { estimateAiSdkToolSchemaTokens } from "./tool-schema-estimate.js";
 
 export type { AiSdkModelRetryOptions } from "./retry-policy.js";
 export { normalizeUsage, toModelStreamEvent } from "./runner-normalization.js";
@@ -194,6 +195,13 @@ export class AiSdkModelAdapter {
       },
       options: options.options,
       executor: {
+        estimateToolSchemaTokens: (tools) =>
+          estimateAiSdkToolSchemaTokens(tools, {
+            providerKind: resolved.providerKind,
+            modelId: resolved.modelId,
+            requiresMfjsToolSchema: properties.requiresMfjsToolSchema,
+            supportsNativeWebSearch: properties.supportsNativeWebSearch,
+          }),
         generateText: (request) => {
           const legacyRequest = toLegacyRequest(request);
           return this.generateTextWithResolved(

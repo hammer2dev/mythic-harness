@@ -22,6 +22,7 @@ import {
 } from "../../agent/message-history.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { runModelBackedTurnStep } from "./turn-model-step.js";
+import { getExposedTools, runtimeToolExposure } from "../helpers/tool-exposure.js";
 import {
   AUTOMATION_MUTATION_TOOL_NAMES,
   evaluateRapidRefill,
@@ -42,6 +43,7 @@ export async function runRegularTurnLoop(
   this: AgentRuntimeInternal,
   state: RegularTurnLoopState,
 ): Promise<void> {
+  runtimeToolExposure(this).beginTurn(state.turnId);
   while (true) {
     throwIfTurnAborted(state.turnAbortSignal);
     const outputTokenRecoveryActive = state.turnRequestState.outputTokenContinuationCount > 0;
@@ -111,9 +113,11 @@ export async function runRegularTurnLoop(
     // automation 写工具，否则模型会先看到并创建、修改或删除任务定义。
     const tools = state.automationCreateLimitReached
       ? []
-      : turnDisallowedTools
-        ? this.getTools(state.model).filter((tool) => !turnDisallowedTools.has(tool.name))
-        : this.getTools(state.model);
+      : getExposedTools(this, {
+          model: state.model,
+          turnId: state.turnId,
+          disallowed: turnDisallowedTools ?? undefined,
+        });
     finishTools();
     if (!outputTokenRecoveryActive && this.needsPlanModeExitReminder) {
       this.needsPlanModeExitReminder = false;

@@ -60,6 +60,13 @@ export function withModelInvocationContext(
     properties: model.properties,
     optionSpecs: model.optionSpecs,
     options: model.options,
+    ...(model.estimateToolSchemaTokens
+      ? {
+          estimateToolSchemaTokens: (
+            tools: Parameters<NonNullable<Model["estimateToolSchemaTokens"]>>[0],
+          ) => model.estimateToolSchemaTokens!(tools),
+        }
+      : {}),
     bind(options) {
       return withModelInvocationContext(model.bind(options), createContext);
     },

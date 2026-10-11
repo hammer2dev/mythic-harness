@@ -45,6 +45,7 @@ import type {
   BackgroundTaskControlPort,
   ToolExecutionResult,
   ToolRuntimeScope,
+  ToolExecutionContext,
 } from "../types.js";
 
 export interface BackgroundTaskNotificationCommand {
@@ -72,6 +73,8 @@ export type ShouldEnqueueBackgroundTaskNotification = (
 ) => boolean;
 
 export interface ToolExecutorOptions {
+  onToolExecutionStart?: (toolName: string) => void;
+  searchTools?: ToolExecutionContext["searchTools"];
   agentTelemetry?: AgentExecutionTelemetryPort;
   agentTelemetryActorKind?: AgentTelemetryActorKind;
   registry: ToolRegistry;
@@ -176,6 +179,8 @@ export interface ToolBatchExecuteOptions extends ToolExecuteOptions {
 }
 
 export interface ToolExecutorDeps {
+  onToolExecutionStart?: (toolName: string) => void;
+  searchTools?: ToolExecutionContext["searchTools"];
   agentTelemetry?: AgentExecutionTelemetryPort;
   agentTelemetryActorKind?: AgentTelemetryActorKind;
   registry: ToolRegistry;

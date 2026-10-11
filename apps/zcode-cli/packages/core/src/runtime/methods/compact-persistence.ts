@@ -1,4 +1,5 @@
 import { createModelId, createModelProviderId } from "@zcode/contracts";
+import { runtimeToolExposure } from "../helpers/tool-exposure.js";
 import {
   CompactTrigger,
   CompactTimelineDisplay,
@@ -318,6 +319,7 @@ export async function persistCompactSummary(
           body: summary,
           diffs: [],
         },
+        metadata: { toolExposure: runtimeToolExposure(this).compactedSnapshot() },
         agent: this.config.agentName ?? "zcode-agent",
         modelSelection: persistedModel,
         semantics: {

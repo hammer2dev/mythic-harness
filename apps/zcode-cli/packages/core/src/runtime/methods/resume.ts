@@ -41,6 +41,7 @@ import {
   restoreWorkspaceFileRewindEntries,
 } from "./workspace-checkpoint-persistence.js";
 import { mainTurnCacheHitAggregateFromMessages } from "./turn-model-step-usage.js";
+import { restoreToolExposureFromMessages } from "../helpers/tool-exposure.js";
 
 export function toScheduleState(
   this: AgentRuntimeInternal,
@@ -179,6 +180,7 @@ export async function resumeFromStore(
     rewindKeptMessageIds,
     rewindTargetMessageId,
   });
+  restoreToolExposureFromMessages(this, activeMessages);
   // compact preserved segment 会把 compact 前消息插回 provider 上下文，
   // 但它不是 compact 后时间线的 latest anchor，不能用于后续 compact parentID。
   const timelineActiveMessages = activeSessionMessages(messages, {

@@ -132,6 +132,13 @@ export function resolveAppRuntimeConfig(input: {
         options.runtimeConfig?.toolConcurrency?.maxConcurrency ??
         configResult.config.toolConcurrency.maxConcurrency,
     },
+    toolSearch: {
+      schemaTokenBudget:
+        options.runtimeConfig?.toolSearch?.schemaTokenBudget ??
+        configResult.config.toolSearch.schemaTokenBudget,
+      maxResults:
+        options.runtimeConfig?.toolSearch?.maxResults ?? configResult.config.toolSearch.maxResults,
+    },
     modelAnomalyGuard: {
       ...configResult.config.modelAnomalyGuard,
       ...options.runtimeConfig?.modelAnomalyGuard,

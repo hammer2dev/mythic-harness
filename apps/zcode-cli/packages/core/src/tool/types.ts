@@ -29,6 +29,8 @@ import type {
   SubagentRunOptions,
   SubagentPort,
   ToolArtifactStorePort,
+  ToolSearchInput,
+  ToolSearchOutput,
   TraceContext,
   TraceId,
   TurnId,
@@ -173,6 +175,10 @@ export interface ToolExecutionContext {
   /** 模型目录端口；缺席则 ListModels 报能力缺席，CreateWorkflow 的 subagent_model 被拒。 */
   modelCatalogPort?: ModelCatalogPort;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
+  searchTools?: (
+    input: ToolSearchInput,
+    context: { model?: Model; turnId?: TurnId; abortSignal: AbortSignal },
+  ) => ToolSearchOutput;
   readFileState?: ReadFileStateMap;
   recordReadFileStateMetadata?: (metadata: PersistedReadFileStateMetadata) => void;
   /** 记录 Skill resolved metadata；仅用于 telemetry，不改变模型可见结果。 */

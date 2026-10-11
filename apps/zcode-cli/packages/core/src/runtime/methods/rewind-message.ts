@@ -39,6 +39,7 @@ import type {
   WorkspaceRewindResult,
 } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { restoreToolExposureFromMessages } from "../helpers/tool-exposure.js";
 import { rebuildContextPrefix } from "./context-refresh.js";
 import { mainTurnCacheHitAggregateFromMessages } from "./turn-model-step-usage.js";
 
@@ -709,6 +710,7 @@ async function rebuildConversationDerivedState(
   );
 
   const activeMessages = activeSessionMessages(options.persistedMessages, branchOptions);
+  restoreToolExposureFromMessages(this, activeMessages);
   const timelineActiveMessages = activeSessionMessages(options.persistedMessages, {
     ...branchOptions,
     includeCompactPreservedSegment: false,

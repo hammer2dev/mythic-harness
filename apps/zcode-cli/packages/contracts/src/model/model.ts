@@ -48,6 +48,8 @@ export interface Model {
   readonly properties: ModelProperties;
   readonly optionSpecs: ModelOptionSpecs;
   readonly options: ModelOptions;
+  /** 对当前 provider 转换后的工具定义做字符启发式估算，不是 provider tokenizer。 */
+  estimateToolSchemaTokens?(tools: readonly ModelToolContract[]): number;
 
   bind(options?: ModelOptions): Model;
   generateText(request: ModelRequest): Promise<ModelResult>;

@@ -2,6 +2,7 @@ import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-
 import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
 import type { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { RuntimeCommandQueue } from "./command-queue.js";
+import type { ToolExposureState } from "./tool-exposure.js";
 import type {
   ContextBuilder,
   ContextBuildResult,
@@ -84,6 +85,7 @@ export interface AgentRuntimeInternal
   messageHistory: MessageHistory;
   readFileState: ReadFileStateMap;
   cachedTools: ModelToolContract[] | null;
+  toolExposure: ToolExposureState;
   contextBuilder: ContextBuilder | null;
   contextInitialized: boolean;
   contextSourceSnapshot?: ContextSourceSnapshot;

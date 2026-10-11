@@ -93,6 +93,7 @@ import type {
   WorkspaceGenerateTextResult,
 } from "./methods/workspace-generate-text.js";
 import { cloneModelSelection } from "./model-selection.js";
+import { ToolExposureState } from "./tool-exposure.js";
 import type {
   AcquireForegroundPromotionLeaseResult,
   ActiveForegroundExecutionState,
@@ -157,6 +158,7 @@ export class AgentRuntime {
   private messageHistory: MessageHistory;
   private readFileState: ReadFileStateMap;
   private cachedTools: ModelToolContract[] | null = null;
+  private toolExposure = new ToolExposureState();
   private contextBuilder: ContextBuilder | null = null;
   private contextInitialized = false;
   private contextSourceSnapshot?: ContextSourceSnapshot;

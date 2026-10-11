@@ -183,6 +183,12 @@ class ConfigStore {
       if (config.toolConcurrency.maxConcurrency !== undefined)
         this.set(ConfigKey.ToolConcurrencyMax, config.toolConcurrency.maxConcurrency, scope);
     }
+    if (config.toolSearch?.schemaTokenBudget !== undefined) {
+      this.set(ConfigKey.ToolSearchSchemaTokenBudget, config.toolSearch.schemaTokenBudget, scope);
+    }
+    if (config.toolSearch?.maxResults !== undefined) {
+      this.set(ConfigKey.ToolSearchMaxResults, config.toolSearch.maxResults, scope);
+    }
     if (config.modelAnomalyGuard) {
       const previous = this.get(ConfigKey.ModelAnomalyGuard) ?? DefaultConfig.modelAnomalyGuard;
       this.set(
@@ -328,6 +334,13 @@ export class ConfigPortImpl implements ConfigPort {
       },
       modelAnomalyGuard:
         this.store.get(ConfigKey.ModelAnomalyGuard) ?? DefaultConfig.modelAnomalyGuard,
+      toolSearch: {
+        schemaTokenBudget:
+          this.store.get(ConfigKey.ToolSearchSchemaTokenBudget) ??
+          DefaultConfig.toolSearch.schemaTokenBudget,
+        maxResults:
+          this.store.get(ConfigKey.ToolSearchMaxResults) ?? DefaultConfig.toolSearch.maxResults,
+      },
       hooks: this.store.get(ConfigKey.Hooks) ?? DefaultConfig.hooks,
       ui: {
         locale: this.store.get(ConfigKey.UiLocale) ?? DefaultConfig.ui.locale,
@@ -435,6 +448,10 @@ function getDefaultValue(key: ConfigKey): unknown {
       return defaults.logging.format;
     case ConfigKey.ToolConcurrencyMax:
       return defaults.toolConcurrency.maxConcurrency;
+    case ConfigKey.ToolSearchSchemaTokenBudget:
+      return defaults.toolSearch.schemaTokenBudget;
+    case ConfigKey.ToolSearchMaxResults:
+      return defaults.toolSearch.maxResults;
     case ConfigKey.ModelAnomalyGuard:
       return defaults.modelAnomalyGuard;
     case ConfigKey.Hooks:

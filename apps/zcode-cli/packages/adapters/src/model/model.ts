@@ -12,6 +12,7 @@ import {
   type ModelProviderId,
   type ModelRequest,
   type ModelResult,
+  type ModelToolContract,
 } from "@zcode/contracts";
 
 export interface ModelExecutionRequest extends Omit<ModelRequest, "options"> {
@@ -19,6 +20,7 @@ export interface ModelExecutionRequest extends Omit<ModelRequest, "options"> {
 }
 
 export interface ModelExecutor {
+  estimateToolSchemaTokens?(tools: readonly ModelToolContract[]): number;
   generateText(request: ModelExecutionRequest): Promise<ModelResult>;
   streamText(request: ModelExecutionRequest): AsyncIterable<ModelEvent>;
 }
@@ -44,6 +46,7 @@ class ExecutableModel implements Model {
   readonly properties: ModelProperties;
   readonly optionSpecs: ModelOptionSpecs;
   readonly options: ModelOptions;
+  readonly estimateToolSchemaTokens?: (tools: readonly ModelToolContract[]) => number;
   private readonly executor: ModelExecutor;
 
   constructor(input: CreateModelOptions) {
@@ -54,6 +57,7 @@ class ExecutableModel implements Model {
     this.optionSpecs = freezeOptionSpecs(input.optionSpecs);
     this.options = Object.freeze(validatePartialOptions(this.optionSpecs, input.options ?? {}));
     this.executor = input.executor;
+    this.estimateToolSchemaTokens = input.executor.estimateToolSchemaTokens?.bind(input.executor);
   }
 
   bind(options?: ModelOptions): Model {

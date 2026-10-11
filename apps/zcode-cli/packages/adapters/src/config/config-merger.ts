@@ -42,6 +42,7 @@ export function mergeConfigs(...configs: PrioritizedConfig[]): RuntimeConfigPatc
         : inputConfig;
     const previousHooks = result.hooks;
     const previousPlugins = result.plugins;
+    const previousToolSearch = result.toolSearch;
     Object.assign(result, config);
 
     // Deep merge nested objects
@@ -135,6 +136,9 @@ export function mergeConfigs(...configs: PrioritizedConfig[]): RuntimeConfigPatc
     }
     if (config.toolConcurrency) {
       result.toolConcurrency = { ...result.toolConcurrency, ...config.toolConcurrency };
+    }
+    if (config.toolSearch) {
+      result.toolSearch = { ...previousToolSearch, ...config.toolSearch };
     }
     if (config.modelAnomalyGuard) {
       result.modelAnomalyGuard = {

@@ -144,6 +144,8 @@ export interface AgentRuntimeConfig {
     builtInModelSelectionOverrides?: Partial<Record<"general-purpose" | "Explore", ModelSelection>>;
   };
   toolAllowlist?: readonly string[];
+  /** Provider-facing definition estimate budget, including resident tools. */
+  toolSearch?: { schemaTokenBudget?: number; maxResults?: number };
   toolDisallowlist?: readonly string[];
   /**
    * Defaults to main. Explore child runtimes use the explore toolset to opt into

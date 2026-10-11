@@ -48,6 +48,7 @@ import {
   truncateCompactSummaryRequestEntriesAfterPromptTooLong,
 } from "../helpers/index.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { runtimeToolExposure } from "../helpers/tool-exposure.js";
 import type { CompactTimelineContext, RuntimeModelTextResult } from "../types.js";
 import {
   buildCompactSummaryRequestMessages,
@@ -68,7 +69,6 @@ import {
 import { recordModelUsageFact } from "./usage-observability.js";
 
 const AUTO_COMPACT_MAX_ATTEMPTS = 3;
-const COMPACT_TOOL_KEEP_MAX_COUNT = 100;
 
 export async function compactActiveConversation(
   this: AgentRuntimeInternal,
@@ -246,13 +246,11 @@ async function compactActiveConversationImpl(
     turnTraceContext,
     events,
   );
-  // 止血原因：massive MCP 工具会把 compact summary request 的 provider context 撑爆。
-  // ToolSearch/deferred tools 完成前，仅在工具数超过阈值时让 compact summary 保持无工具。
+  // summary 不执行工具；不附带 registry，避免 MCP 定义挤占压缩请求上下文。
   await this.initializeMcp(turnTraceContext);
   throwIfTurnAborted(options.abortSignal);
-  const runtimeCompactTools = this.getTools(compactModel);
-  const compactTools =
-    runtimeCompactTools.length > COMPACT_TOOL_KEEP_MAX_COUNT ? [] : runtimeCompactTools;
+  const compactTools: never[] = [];
+  runtimeToolExposure(this).beginTurn(turnTraceContext.turnId);
 
   while (true) {
     try {
@@ -616,6 +614,8 @@ async function compactActiveConversationImpl(
           : recordablePostCompactEntries,
       );
       this.readFileState.clear();
+      const exposure = runtimeToolExposure(this);
+      exposure.restore(exposure.compactedSnapshot(), true);
       return {
         displayText: "Compacted",
         entries: postCompactEntries,
