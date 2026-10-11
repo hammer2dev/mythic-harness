@@ -13,7 +13,7 @@ export const toolSearchToolEntry: ToolEntry = {
   metadata: {
     name: "ToolSearch",
     description:
-      "Search available built-in and MCP tools by name or capability and load matching tool definitions. Use this when the needed tool is absent from the current tools list, including Agent, Skill, ApplyPatch, workflow, and MCP tools. Only loaded matches become callable with their full schemas on the next model step. Search does not execute tools or grant permission. Narrow the query when a match exceeds the schema budget.",
+      "Discover and load eligible built-in and MCP tools whose definitions are not in the current tool list. When a task needs a missing specialized capability, call ToolSearch before substituting general-purpose tools or reporting that capability unavailable. Query an exact tool name or concise capability keywords, such as Agent, Skill, workflow, or an MCP service/action. After loading, call the tool on the next model step using its full schema. Reuse suitable tools already available; do not search before every call. If no match is found or the budget is exceeded, refine the query or use an available alternative instead of repeating the same search. ToolSearch discovers tools, not project files; it does not execute matches or grant permission.",
     readOnly: true,
     destructive: false,
     concurrentSafe: false,

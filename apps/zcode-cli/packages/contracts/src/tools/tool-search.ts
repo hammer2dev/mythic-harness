@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { toToolJsonSchema } from "./json-schema.js";
 
-export const DEFAULT_TOOL_SEARCH_CONFIG = { schemaTokenBudget: 16_000, maxResults: 5 } as const;
+export const DEFAULT_TOOL_SEARCH_CONFIG = { schemaTokenBudget: 32_000, maxResults: 5 } as const;
 
 export interface ToolSearchConfig {
   schemaTokenBudget: number;

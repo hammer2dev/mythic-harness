@@ -8,6 +8,7 @@ export const RESIDENT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "Read",
   "Write",
   "Edit",
+  "ApplyPatch",
   "Bash",
   "WebFetch",
   "WebSearch",
@@ -20,6 +21,12 @@ export const RESIDENT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "TaskStop",
   "ReadSessionContext",
   "ToolSearch",
+  "Agent",
+  "Skill",
+  // 角色控制工具仅在既有端口和权限过滤授予资格时进入目录。
+  "RespondToCoordinator",
+  "submit_result",
+  "escalate",
 ]);
 
 export interface SearchableTool {
@@ -68,7 +75,8 @@ export class ToolExposureState {
     this.beginTurn(turnId);
     const eligible = new Map(catalog.map((tool) => [tool.name, tool]));
     for (const [name, loaded] of this.loaded) {
-      if (eligible.get(name)?.identity !== loaded.identity) {
+      // 旧会话中转为常驻的激活记录不再参与 LRU，避免裁剪时误扣不可回收的常驻成本。
+      if (RESIDENT_TOOL_NAMES.has(name) || eligible.get(name)?.identity !== loaded.identity) {
         this.loaded.delete(name);
         this.revision += 1;
       }

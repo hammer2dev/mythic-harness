@@ -81,20 +81,20 @@ export function resolveBuiltInToolAllowlist(
   const normalizedAllowlist = normalizeBuiltInToolAllowlist(config.toolAllowlist);
 
   if (config.toolset !== "explore") {
-    return appendChildControlTool(config, normalizedAllowlist);
+    return appendChildTools(config, normalizedAllowlist);
   }
 
   if (!normalizedAllowlist) {
-    return appendChildControlTool(config, EXPLORE_AGENT_ALLOWED_TOOLS);
+    return appendChildTools(config, EXPLORE_AGENT_ALLOWED_TOOLS);
   }
 
-  return appendChildControlTool(
+  return appendChildTools(
     config,
     normalizedAllowlist.filter((toolName) => EXPLORE_AGENT_ALLOWED_TOOL_SET.has(toolName)),
   );
 }
 
-function appendChildControlTool(
+function appendChildTools(
   config: AgentRuntimeConfig,
   allowlist: readonly string[] | undefined,
 ): readonly string[] | undefined {
@@ -107,9 +107,11 @@ function appendChildControlTool(
     return [...new Set([...allowlist, RESPOND_TO_COORDINATOR_TOOL_NAME, "ToolSearch"])];
   }
 
-  // workflow child 没有 allowlist 收窄（persona 无工具档位，工具面只有减法，见
-  // bootstrap 的 workflow-actor-tools.ts），submit_result / escalate 由 includeSubmitResult /
-  // includeEscalate 两道门注册，不需要在这里补回。
+  if (config.taskType === "workflow_child") {
+    // 脚本工作流可通过 opts.tools 收窄白名单；缺少发现入口会让按需工具全部不可达。
+    return [...new Set([...allowlist, "ToolSearch"])];
+  }
+
   return allowlist;
 }
 
