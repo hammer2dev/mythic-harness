@@ -18,28 +18,11 @@
 | 恢复与展示 | 部分提交 checkpoint、artifact 失败仍有 turn changes；删除的 null 后态、并发重建冲突；GBK + CRLF rewind 与失败补偿；冷恢复 read-state 不重复写盘。            |
 | 双链路投影 | partial/error 多文件 diff 经真实 V4 ProductProjection、冷 transcript hydration、continuous/replayable snapshot 均保留；先改后删的 live/cold/query 摘要一致。 |
 
-根目录执行：
+以上为删除测试源码前的历史验证结果。15 个临时测试文件已按用户 2026-10-11 的要求删除，原测试命令不再是当前可执行入口；后续需要复验时编写临时核心用例，执行完成后删除，不随代码提交。
 
-```powershell
-$tests = @(
-  'apps/zcode-cli/packages/adapters/src/model/tool-schema-estimate.test.ts'
-  'apps/zcode-cli/packages/bootstrap/src/app/tool-search-config.test.ts'
-  'apps/zcode-cli/packages/core/src/agent/read-file-state-hydrator.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/tool-exposure.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/tool-search-batch.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/tool-search.integration.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/methods/apply-patch-display.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/methods/cold-file-change-summaries.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/methods/file-mutation-checkpoint.test.ts'
-  'apps/zcode-cli/packages/core/src/runtime/methods/file-rewind.test.ts'
-  'apps/zcode-cli/packages/core/src/tool/executor/apply-patch-outcome.test.ts'
-  'apps/zcode-cli/packages/core/src/tool/executor/permission-input-recheck.test.ts'
-  'apps/zcode-cli/packages/core/src/tool/executor/timeout.test.ts'
-  'apps/zcode-cli/packages/core/src/tool/handlers/apply-patch-parser.test.ts'
-  'apps/zcode-cli/packages/core/src/tool/handlers/apply-patch.test.ts'
-)
-pnpm exec tsx --test @tests
-```
+## 测试源码清理复核（2026-10-11）
+
+已删除全仓 39 个 `.test.ts` 文件（含上述 15 个文件），源码目录复扫无剩余；`.gitignore` 对根包与 CLI 内的同后缀路径均生效。根与 CLI `typecheck` 通过，CLI 为 27/27 tasks；根 `lint` 通过，仍有 17 条既有警告。CLI `lint` 仍被既有 `max-lines` 错误阻塞，本次未修改生产源码。架构检查通过，0 baseline、0 new violations；`git diff --check` 通过。本次只清理验证源码和引用，未重新执行已删除的行为测试。
 
 ## 静态检查
 

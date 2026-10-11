@@ -146,7 +146,7 @@ flowchart LR
 | 未知型号与个人覆盖 | 未知型号补齐两项必要上限后可通过完整校验；请求 ID 不变；个人 64,000 上限在数据更新后保持，清空后才继承       |
 | 页面与同步         | 模型编辑没有预设选择器；取消和保存失败保留原有行为；更新不恢复已删除成员，个人覆盖配置及分发 round trip 通过 |
 
-沿用内置 Release 的完整解析校验，补充规则覆盖、停服条目清理与个人覆盖的核心用例，调整 `packages/services/test/modelGatewayConfiguration.test.ts` 和 `packages/ui/test/providerModelDraft.test.ts` 中的预设相关断言，并完成一条已知型号编辑、未知型号手填及取消保存的隔离 E2E。实施后执行 `pnpm typecheck`、`pnpm --dir apps/zcode-cli typecheck`、`pnpm lint`、`pnpm architecture:check --changed` 及改动文件格式检查；实际新增测试按其入口执行，不假定存在统一 test 命令。
+沿用内置 Release 的完整解析校验，用临时验证脚本覆盖规则、停服条目清理、个人覆盖和预设移除的核心场景，并完成一条已知型号编辑、未知型号手填及取消保存的隔离 E2E。实施后执行 `pnpm typecheck`、`pnpm --dir apps/zcode-cli typecheck`、`pnpm lint`、`pnpm architecture:check --changed` 及改动文件格式检查；临时脚本按实际入口执行并记录结果，验证后删除、不随源码提交，不假定存在统一 test 命令。原 `.test.ts` 验证源码现已移除，下文保留当时的验收结果。
 
 本轮实际验收结果如下，历史验收记录保留当时已执行的事实。
 

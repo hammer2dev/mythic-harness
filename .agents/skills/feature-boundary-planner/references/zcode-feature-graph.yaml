@@ -369,14 +369,6 @@ nodes:
         symbol: updateWorkspaceProjectDefinition
       - file: packages/ui/src/lib/projectNavigationTarget.ts
         symbol: resolveProjectNavigationTarget
-      - file: packages/ui/test/workspaceProjects.test.ts
-        symbol: test
-      - file: packages/ui/test/projectNavigation.test.ts
-        symbol: test
-      - file: packages/ui/test/projectTaskMembership.test.ts
-        symbol: test
-      - file: apps/zcode-cli/packages/core/src/runtime/methods/project-workspace.test.ts
-        symbol: test
     invariants:
       - Project IDs remain stable when the name, folders or primary folder changes; existing sessions keep their execution directory and project membership.
       - All folders belong to the same execution environment; directory IO still uses workspacePath and remote routing preserves workspaceIdentity.

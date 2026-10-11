@@ -708,7 +708,7 @@ OAuth callback、Token refresh、Account Provider overlay、Coding Plan quota �
 
 `pnpm verify:pre-push` 当前等于 Lint + 架构检查，可用它完成提交前组合检查，不因文档要求把已通过的相同检查重复多轮。对文档/变更文件执行格式检查；按新改动和失败结果决定是否扩测。
 
-现有 `packages/ui/test/`、`packages/services/test/` 有少量 `node:test` 文件，包内没有统一单测/E2E script；不宣称已有完整覆盖。实现时按真实入口执行关键用例（可用仓库的 tsx + node:test），交互验证记录启动命令、fixture、操作和断言，缺失 E2E 场景需补齐。`providerConfigMigration.test.ts` 是旧配置测试，删除旧 importer 后移除相应历史用例；新增/保留当前 Provider 请求测试，不要求旧数据通过。
+仓库现已移除 `.test.ts` 验证源码，包内没有统一单测/E2E script；不宣称已有完整覆盖。实现时使用临时脚本按真实入口验证关键场景（可用仓库的 tsx + node:test），记录命令与结果，验证后删除脚本、不随源码提交。交互验证记录启动命令、fixture、操作和断言，缺失 E2E 场景需补齐。Provider 请求按当前实现验证，不恢复旧 importer 或要求旧数据通过；历史验收结果保留当时事实。
 
 在所有删除项完成后，用源码引用检查和当前 package.json 核对 exports、RPC代理、依赖、打包seed、README/技能是否仍指向已删除能力。`README.md`、`README.en.md` 当前说明 OAuth token proxy，需要更新；`specs/coding-plan-retirement/SPEC.md` 原来保留套餐查询，本设计覆盖其账号保留边界，实施时同步消除冲突。通用浏览器登录/OAuth技能和主题文案不因关键词命中被删。
 

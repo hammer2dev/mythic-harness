@@ -189,9 +189,8 @@ flowchart LR
 - 实施顺序：用现有 schema 统计冻结预算与边界规则，补充核心场景测试，拆分目录与请求投影，接入 ToolSearch、保留策略及持久化恢复。与 ApplyPatch 联合验收；LSP、AST、Dependency Graph 延后讨论，不阻塞本轮。
 - 已核对根 `package.json`：存在 `pnpm typecheck`、`pnpm lint`、`pnpm architecture:check --changed`；这些是代码实施阶段的检查入口，不等同于 ToolSearch 测试。
 - 已核对 `apps/zcode-cli/packages/core/package.json`：存在 `typecheck`、`lint`，没有 `test` script；CLI 根也未声明统一测试命令。
-- 当前 `apps/zcode-cli/packages/core/src/runtime/methods/project-workspace.test.ts` 使用 `node:test`，但与 ToolSearch 无关。应在实际测试落点确定后记录可执行命令，不虚构现成单测或 E2E 入口。
-- 已执行 `tool-exposure.test.ts` 的 4 项核心测试：名称搜索/去重/超大 schema、当前轮保护与跨轮 LRU、compact 快照恢复并按目录/预算重校验、常驻超额保留。
-- 已执行 `tool-search.integration.test.ts` 的 3 项集成测试：真实 AgentRuntime 与 scripted Model 的搜索→下一请求完整 ApplyPatch schema→文件落盘；真实 SQLite compact、cold resume、fork 边界和 conversation rewind；受限子代理发现入口；已连接 MCP 的按需激活/实际调用、取消不激活和移除后退出请求。
-- 已执行 `tool-search-batch.test.ts` 的 1 项回归：同批先调用旧轮工具、后搜索新工具时，前者在终态持久化之前已被保护。ToolSearch 共 8 项核心/集成测试通过。
-- 当前本地集成命令：`pnpm exec tsx --test apps/zcode-cli/packages/core/src/runtime/tool-exposure.test.ts apps/zcode-cli/packages/core/src/runtime/tool-search.integration.test.ts apps/zcode-cli/packages/core/src/runtime/tool-search-batch.test.ts`。开发环境需要先构建 workspace 依赖；源码验证也可使用指向各包 src 的 tsconfig paths。
+- 以下为此前通过 `tsx` 和 `node:test` 执行的验证记录；相关 `.test.ts` 源码已按用户要求删除，后续核心验证使用临时脚本，完成后删除，不随代码提交。
+- 已执行 4 项核心测试：名称搜索/去重/超大 schema、当前轮保护与跨轮 LRU、compact 快照恢复并按目录/预算重校验、常驻超额保留。
+- 已执行 3 项集成测试：真实 AgentRuntime 与 scripted Model 的搜索→下一请求完整 ApplyPatch schema→文件落盘；真实 SQLite compact、cold resume、fork 边界和 conversation rewind；受限子代理发现入口；已连接 MCP 的按需激活/实际调用、取消不激活和移除后退出请求。
+- 已执行 1 项回归：同批先调用旧轮工具、后搜索新工具时，前者在终态持久化之前已被保护。ToolSearch 共 8 项核心/集成测试通过。
 - 未执行真实网络 provider、Desktop continuous/手机 replayable 端到端场景；脚本模型与存储恢复测试不替代这些验证。

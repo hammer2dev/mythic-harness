@@ -155,6 +155,6 @@ Runtime 持久化 completed/error tool part 时都保留 display；实时 ToolCa
 
 实施依次补齐补丁解析/contract、逐目标权限与文件端口、handler 注册、部分成功结果/read-state、checkpoint 和 turn changes。保持业务 owner 与原工具链一致，不另造通用事务框架；分析消费者后续单独实施。
 
-已核对 `@zcode/core` package scripts：有 typecheck、lint，无统一 test script；现有测试中有 `node:test`。实现时按新增测试实际位置记录执行命令，AP-5 需要运行时/E2E 证据，不能拿单测替代。
+已核对 `@zcode/core` package scripts：有 typecheck、lint，无统一 test script。本轮使用 `node:test` 临时脚本完成验证，相关 `.test.ts` 源码现已移除；后续验证按实际临时入口记录命令和结果，执行后删除脚本、不随源码提交。AP-5 需要运行时/E2E 证据，不能拿单测替代。
 
 已执行命令与结果统一记录在 [验证记录](../VERIFICATION.md)。文档与静态检查不能代替文件写入、权限或恢复行为的证明。
