@@ -69,10 +69,12 @@ function buildCatalog(
     return {
       name: tool.name,
       description: tool.description ?? "",
-      capability: tool.capability,
+      // MCP capability 是桥接层生成的名称/服务说明，重复评分会把公共服务前缀抬为能力词。
+      capability: mcp ? undefined : tool.capability,
       aliases: entry?.aliases?.filter((alias) => runtime.registry.get(alias) === entry),
       source: mcp ? "mcp" : "builtin",
       server: mcp?.serverName,
+      mcpToolName: mcp?.toolName,
       identity: mcp
         ? JSON.stringify(["mcp", mcp.serverName, mcp.toolName])
         : `builtin:${tool.name}`,

@@ -15,8 +15,19 @@ export const ToolSearchInputSchema = z
       .trim()
       .min(1)
       .describe("Tool name, alias, or keywords describing the capability needed"),
-    source: z.enum(["all", "builtin", "mcp"]).optional(),
-    server: z.string().trim().min(1).optional().describe("Optional exact MCP server name"),
+    source: z
+      .enum(["all", "builtin", "mcp"])
+      .optional()
+      .describe("Tool source filter; builtin tools have no MCP server"),
+    server: z
+      .string()
+      .trim()
+      .min(1)
+      .nullable()
+      .optional()
+      .describe(
+        "Exact MCP server name. Omit or use null for no server filter, including builtin searches. Tool namespaces such as functions are not MCP server names.",
+      ),
     limit: z
       .number()
       .int()

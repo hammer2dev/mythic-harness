@@ -36,6 +36,7 @@ export interface SearchableTool {
   aliases?: readonly string[];
   source: "builtin" | "mcp";
   server?: string;
+  mcpToolName?: string;
   identity: string;
   cost: number;
 }
@@ -104,6 +105,18 @@ export class ToolExposureState {
     budget: number,
     maxResults: number = DEFAULT_TOOL_SEARCH_CONFIG.maxResults,
   ): ToolSearchOutput {
+    const resident = catalog
+      .filter((tool) => RESIDENT_TOOL_NAMES.has(tool.name))
+      .reduce((sum, tool) => sum + tool.cost, 0);
+    // 错误的服务筛选曾让内置工具持续零命中；先解释冲突，避免模型只换关键词重试。
+    const filterError = validateSearchFilter(input, catalog);
+    if (filterError) {
+      return {
+        matches: [],
+        budget: { limit: budget, used: this.cost(this.loaded, catalog), resident },
+        message: filterError,
+      };
+    }
     const matches = rankTools(input, catalog).slice(
       0,
       Math.min(input.limit ?? maxResults, maxResults),
@@ -150,15 +163,14 @@ export class ToolExposureState {
     }
     this.loaded = selected;
     this.revision = nextRevision;
-    const resident = catalog
-      .filter((tool) => RESIDENT_TOOL_NAMES.has(tool.name))
-      .reduce((sum, tool) => sum + tool.cost, 0);
     return {
       matches: results,
       budget: { limit: budget, used: this.cost(selected, catalog), resident },
       message:
         results.length === 0
-          ? "No eligible tools matched. Try a different name or capability."
+          ? input.server
+            ? "No eligible tools matched within the specified MCP server. Try different keywords, or omit server / set server to null to search without a server filter."
+            : "No eligible tools matched. Try a different name or capability."
           : results.some((tool) => tool.status === "budget_exceeded")
             ? "Matches marked budget_exceeded were not loaded; their full schemas cannot fit the current budget."
             : "Matching tools are loaded. Use their full schemas on the next model step; execution permissions still apply.",
@@ -231,9 +243,45 @@ export class ToolExposureState {
   }
 }
 
+function validateSearchFilter(
+  input: ToolSearchInput,
+  catalog: readonly SearchableTool[],
+): string | undefined {
+  if (!input.server) return undefined;
+  if (input.source === "builtin") {
+    return "Built-in tools have no MCP server. Retry with server omitted or set to null; keep source as builtin. Tool namespaces such as functions are not MCP server names.";
+  }
+  if (!catalog.some((tool) => tool.source === "mcp" && tool.server === input.server)) {
+    return "The specified MCP server has no tools in the current eligible catalog. Check its exact name, or omit server / set server to null to search without a server filter. Tool namespaces are not MCP server names.";
+  }
+  return undefined;
+}
+
+const SEARCH_STOP_WORDS: ReadonlySet<string> = new Set([
+  "a",
+  "an",
+  "the",
+  "i",
+  "we",
+  "you",
+  "to",
+  "of",
+  "for",
+  "in",
+  "on",
+  "with",
+  "from",
+  "please",
+  "want",
+  "need",
+  "can",
+]);
+
 function rankTools(input: ToolSearchInput, catalog: readonly SearchableTool[]): SearchableTool[] {
-  const query = input.query.toLocaleLowerCase();
-  const words = query.split(/[\s,]+/u).filter(Boolean);
+  const query = input.query.trim().toLowerCase();
+  const words = [...new Set(tokenizeSearchText(input.query))].filter(
+    (word) => !SEARCH_STOP_WORDS.has(word),
+  );
   return catalog
     .filter(
       (tool) =>
@@ -241,21 +289,48 @@ function rankTools(input: ToolSearchInput, catalog: readonly SearchableTool[]): 
         (!input.server || tool.server === input.server),
     )
     .map((tool) => {
-      const names = [tool.name, ...(tool.aliases ?? [])].map((name) => name.toLocaleLowerCase());
-      const searchable =
-        `${names.join(" ")} ${tool.description} ${tool.capability ?? ""} ${tool.server ?? ""}`.toLocaleLowerCase();
-      const exact = names.includes(query);
-      const score = exact
-        ? 10000
-        : words.reduce(
-            (sum, word) =>
-              sum +
-              (names.some((name) => name.includes(word)) ? 20 : searchable.includes(word) ? 1 : 0),
-            0,
-          );
-      return { tool, score };
+      const aliases = tool.aliases ?? [];
+      const exact = [tool.name, ...aliases].some((name) => name.toLowerCase() === query);
+      // MCP 规范名包含公共服务前缀；只给原工具名名称权重，避免整组服务工具挤占动作结果。
+      const name = tool.source === "mcp" ? (tool.mcpToolName ?? "") : tool.name;
+      const fields = [
+        { words: [name, ...aliases].flatMap(tokenizeSearchText), weight: 20 },
+        { words: tokenizeSearchText(tool.capability ?? ""), weight: 6 },
+        { words: tokenizeSearchText(tool.description), weight: 2 },
+        { words: tokenizeSearchText(tool.server ?? ""), weight: 1 },
+      ];
+      let coverage = 0;
+      let score = 0;
+      for (const word of words) {
+        // 按词边界匹配并优先覆盖有效关键词，避免 a/to 等短子串压过真正能力词。
+        const matchedField = fields.find((field) =>
+          field.words.some(
+            (candidate) => candidate === word || (word.length >= 3 && candidate.startsWith(word)),
+          ),
+        );
+        if (matchedField) {
+          coverage += 1;
+          score += matchedField.weight;
+        }
+      }
+      return { tool, exact, coverage, score };
     })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))
+    .filter(({ exact, coverage }) => exact || coverage > 0)
+    .sort(
+      (a, b) =>
+        Number(b.exact) - Number(a.exact) ||
+        b.coverage - a.coverage ||
+        b.score - a.score ||
+        a.tool.name.localeCompare(b.tool.name),
+    )
     .map(({ tool }) => tool);
+}
+
+function tokenizeSearchText(value: string): string[] {
+  return value
+    .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, "$1 $2")
+    .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, "$1 $2")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
 }
