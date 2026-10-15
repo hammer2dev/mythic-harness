@@ -59,12 +59,8 @@ export async function preflightPatchItem(
     { signal: context.abortSignal },
   );
   const lastRead = findLatestReadFileState(context.readFileState, item.path);
-  if (
-    !lastRead ||
-    lastRead.isPartialView ||
-    (lastRead.offset ?? 1) > 1 ||
-    lastRead.limit !== undefined
-  ) {
+  // 足量 limit 也能读到全文；保留起始位置与 token 截断检查，再以下方全文及 revision 比较确认完整性。
+  if (!lastRead || lastRead.isPartialView || (lastRead.offset ?? 1) > 1) {
     throw new Error(`Read the whole file before applying a patch: ${item.path}`);
   }
   if (
