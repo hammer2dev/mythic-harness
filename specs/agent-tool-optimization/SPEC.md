@@ -1,6 +1,6 @@
 # Agent 基础工具优化
 
-状态：ToolSearch 与 ApplyPatch 已实现；LSP、AST、Dependency Graph 保留设计待定。更新：2026-10-11。验证结果及未执行项见 [验证记录](VERIFICATION.md)。
+状态：ToolSearch 与 ApplyPatch 已实现并完成首轮桌面验收；ApplyPatch 完整读取误判已修复。MCP 首次失败后的会话级恢复入口保留设计草案，未实现；LSP、AST、Dependency Graph 保留设计待定。更新：2026-10-15。验证结果及未执行项见 [验证记录](VERIFICATION.md)。
 
 本目录集中维护 Java LSP、ToolSearch、AST、Dependency Graph 与 ApplyPatch 的设计、源码依据和验收场景。具体产品规则以各专项规范为准；接口提案和待冻结项不能作为已实现能力展示。
 

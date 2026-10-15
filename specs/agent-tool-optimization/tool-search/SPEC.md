@@ -4,7 +4,7 @@
 
 ## 状态与范围
 
-- 状态：**已实现**。ToolSearch 与 ApplyPatch 联合验证及真实 OpenAI Responses 请求结果见 [验证记录](../VERIFICATION.md)；客户端实机验收仍未执行。
+- 状态：**ToolSearch 基础能力已实现**。联合验证、真实 OpenAI Responses 请求与客户端实机验收状态见 [验证记录](../VERIFICATION.md)。下文“已有会话的 MCP 失败恢复”仅为待实现设计，不计入已交付能力。
 - 已确认目标：增加工具搜索，同时覆盖基础 Agent 工具与 MCP 工具，减少同时发送给模型的工具描述和 schema。
 - 已确认首版常驻名单、受限子代理自动补入发现入口、32,000 个估算 token 的可调总预算、单次最多加载 5 个，以及跨模型调用、用户消息、compact 和冷恢复的保留原则。
 - ApplyPatch 作为常驻的内置基础工具接入同一目录。LSP、AST、DependencyGraph 及软件开发插件方案保留设计待定，本轮不注册这些工具；目录不依赖其实现。各自设计见 [专项总览](../SPEC.md)。
@@ -146,6 +146,83 @@ sequenceDiagram
     R->>R: 同步 MCP entry 并失效派生缓存
     R->>M: 下一请求使用当前获准工具定义
 ```
+
+### 已有会话的 MCP 失败恢复（设计草案，未实现）
+
+2026-10-15 用户确认“先修 ApplyPatch，MCP 恢复先做设计”。本节记录已确认问题并提出恢复方案；具体协议字段、交互入口和运行中处理策略尚未冻结，不能据此宣称用户已确认所有产品选择。
+
+#### 已确认问题与现有能力边界
+
+- 桌面实机验收中，专用 MCP 配置已进入目标会话，但首次连接时服务脚本尚不存在，子进程以 `MODULE_NOT_FOUND` 退出，未发现任何 descriptor。随后补齐脚本不会自行触发该会话重新连接。此例是服务启动失败，不能归因为 ToolSearch 漏搜或配置未加载。
+- 现有 Desktop 协议只暴露 `mcp/list`。设置/插件管理中的刷新通过 `IMcpSyncService.listWorkspaceMcpServerStatuses` 进入独立的 `mcp-status` Agent 进程；该进程的 `protocol-settings` lease 不属于正在对话的 Runtime，刷新成功不能作为目标会话恢复的证据。
+- 内部 `app.connectMcpServer(name)` 已能针对该 App 的配置和 `McpPort` 连接指定服务，CLI 命令中心使用了它；Desktop 当前没有面向已有 session 暴露这条操作。源码依据：`packages/shared/src/zcode-protocol/index.ts` 的 `mcpList`；`packages/services/src/zcode-agent/zcodeAgentService.ts` 的 `mcpStatusProcessManager`、`getMcpStatusClient`；`apps/zcode-cli/packages/bootstrap/src/app/session-facade.ts` 的 `connectMcpServer`。
+
+| 场景                                               | 当前机制                                              | 与恢复设计的关系                                 |
+| -------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------ |
+| 首次连接仍在等待 OAuth，之后完成授权               | adapter 提交目录版本，原 Runtime 后续读取并同步       | 保留既有能力；不需要另开连接或重新授权           |
+| 已连接服务发送目录变化通知，或已有调用触发既有重连 | 当前 lease 获得新目录，按身份和预算更新请求投影       | 保留既有能力，不追溯取消已进入 `callTool` 的调用 |
+| 首次连接已经失败且无 descriptor                    | ToolSearch 无目标可加载，也没有可调用工具触发既有重连 | 需要显式面向原 session 的恢复入口；本节提出方案  |
+
+#### 建议协议与权限范围
+
+建议新增会话级恢复命令，暂称 `reconnectMcpServer`，复用既有 Host 路由、V4 `CommandInbox` 和 `app.connectMcpServer(serverName)`；正式命名与 schema 在实施前冻结。它是会话控制操作，不是 ToolSearch 的隐式副作用，也不把设置页状态查询改造成会话恢复。
+
+| 请求信息（拟议）                                                      | 语义                                                                                                                                            |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commandId`、`sessionId`                                              | 指定既有会话；沿用 `(sessionId, commandId)` 的命令去重与结果关联，相同请求重放不能再发起一次连接                                                |
+| `workspacePath`、可选 `workspaceIdentity`、远程时的 `remoteSessionId` | Host 优先使用非空的 workspaceIdentity，否则使用 workspacePath，找到当前 owner/attachment 并核验 session 归属；远程身份不能降级为仅按路径匹配    |
+| `serverName`                                                          | 精确指定该会话已有配置中的一个服务；不接受客户端随请求注入 command、URL、env、凭据或完整服务目录                                                |
+| `expectedRunId`（暂名）                                               | 关联用户发出操作时所见的 run；空值表示当时空闲。admission 核验当前 run，过期请求明确拒绝，不迁移到后续 run；实际 Runtime/lease 代次由服务端绑定 |
+
+- Host 只把命令路由给拥有该 session 的 Agent，CLI 在既有串行 admission 中定位原 App/Runtime，并调用其 `connectMcpServer`。不能另建会话、重启 Agent、借 `mcp-status` 进程完成操作，或把控制面 descriptor 直接写入会话 registry。
+- 恢复范围只包含目标会话已配置、仍启用且获准使用的服务。被禁用、已移除、缺少原有连接授权或不属于该会话的目标明确拒绝；不恢复任意历史配置，不写全局开关，不自动重连全部服务。工具 allow/disallow、模型资格和实际执行审批继续生效；连接成功不等于工具调用获批。
+- 对已经连接或仍有有效连接任务的目标，复用 adapter 当前状态/任务，不强制断开重建。共享底层连接仍遵循已有 session/workspace isolation；其他既有 lease 可以观察其目录事实变化，但不得由此增加服务绑定、扩张工具权限或借用子代理父端口的连接生命周期。
+- 不新增后台轮询、定时重试或独立恢复队列；连接结果和 OAuth 状态沿用现有生命周期。恢复期间 session 关闭、owner/lease 或 run 代次失效时，不把完成结果投递到新目标；adapter 继续负责丢弃旧连接代次的目录结果。
+
+#### 时序与结果（拟议）
+
+建议空闲会话直接恢复；若会话正在运行，则在下一次模型请求准备边界处理，保留已开始的工具调用。该运行中策略仍需用户确认，也可选择首版仅允许空闲时操作。无论采用哪种策略，都不能用超时等待来替代 admission 或目录同步顺序，也不因为恢复完成自动提交新的用户输入或启动新 run。
+
+1. 用户明确请求恢复一个服务；入口携带会话、workspace 和 run 关联。Host 验证路由，`CommandInbox` 去重并完成 admission。命令已接受仅表示请求获准处理，不代表服务已连接。
+2. 当前 App 解析自身既有服务配置，复用 `connectMcpServer` 和当前 lease；adapter 执行连接/发现。失败返回原有错误分类与可操作摘要；OAuth 待用户操作时返回待授权状态，沿用既有授权等待与后续状态通知，不另起轮询。
+3. 连接成功后，adapter 先提交目录 revision，原 Runtime 再读取当前目录并完成 registry/eligible 同步，然后才回报成功。下一次 ToolSearch 可发现新增定义；完整 schema 仍需遵循既有加载预算进入后续请求，不自动激活该服务全部工具。
+4. 回包/状态更新携带原 `commandId`、`sessionId`、workspace 身份、run 关联、`serverName`，复用现有服务连接状态与失败分类；另给出目录 revision 及该会话获准工具数量。明确区分“已连接且目录已同步”“仍待授权”“连接失败”和“请求被拒绝”，不把空目录或全被资格过滤说成工具已可用。不返回凭据或完整 schema。
+5. Desktop continuous 通过原会话实时链路接收结果；手机 replayable 通过同一会话 owner 的既有事件/恢复链路观察相同结果。客户端重放相同 `commandId` 只取已接受操作的状态，不重新连接；不新增客户端目录事实或持久化第二套 MCP 状态。
+
+```mermaid
+sequenceDiagram
+    participant U as 用户入口（待冻结）
+    participant H as 当前 Host owner
+    participant C as CLI CommandInbox
+    participant R as 既有 session App 与 Runtime
+    participant L as 该 session 的 MCP lease/adapter
+    participant S as 指定 MCP 服务
+    U->>H: 恢复 serverName，携带 session/workspace/run/commandId
+    H->>C: 校验 owner/attachment 后路由到原 Agent
+    C->>C: 去重、核验目标与 run、串行 admission
+    C->>R: 在允许的执行边界恢复单个服务
+    R->>L: app.connectMcpServer(serverName)
+    L->>S: 复用或建立连接，完成工具发现
+    alt 连接成功且目标仍有效
+        S-->>L: 当前工具目录
+        L->>L: 校验连接代次并提交 revision
+        R->>L: getToolCatalog
+        L-->>R: 当前目录快照
+        R->>R: 按会话资格同步 registry/eligible
+        R-->>H: 已连接、目录已同步、原请求关联
+        H-->>U: 原会话链路报告结果
+    else 待授权、连接失败或目标过期
+        R-->>H: 原请求状态与原因，不注入控制面目录
+        H-->>U: 显示当前状态和可操作反馈
+    end
+```
+
+#### 待冻结项与后续核心验收
+
+- **入口**：会话内错误卡片的重试操作、对话中的明确恢复指令，或二者共用同一命令；当前仅提出选项，不新增 Agent 基础工具，不假定模型可自行恢复连接。
+- **执行时机**：运行中排到下一请求边界，还是首版仅允许空闲会话恢复；需要确定用户看到的等待/拒绝反馈。
+- **协议落点**：在上述身份、权限和时序约束下冻结命令名、run 关联字段及状态回包/事件映射，然后同步共享协议类型与运行时校验。恢复会话配置之外的新服务属于另一个产品动作，不在本设计范围内。
+- 后续仅保留必要场景：首次失败且无 descriptor，修复外部条件后显式恢复，同一 session 能搜索并加载工具；重复命令/失效 run 不重复连接或串到其他会话；被禁用或白名单外目标不扩权；待授权及失败如实反馈。分别验证 Desktop continuous 与手机 replayable 的同一结果关联。当前桌面目录通知验收不能替代这些尚未实现的恢复验收。
 
 ## 拟议工具接口与事件顺序
 
