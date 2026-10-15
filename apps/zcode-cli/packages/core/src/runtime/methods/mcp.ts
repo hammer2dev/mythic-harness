@@ -1,8 +1,30 @@
 import { registerMcpTools, traceContextToLogContext } from "../deps.js";
 import type { McpConnectionSnapshot, TraceContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { synchronizeMcpTools } from "../../mcp/index.js";
 
 const MCP_SESSION_OAUTH_AUTHORIZATION_TIMEOUT_MS = 15_000;
+
+export function synchronizeRuntimeMcpCatalog(runtime: AgentRuntimeInternal): boolean {
+  if (runtime.config.mcp?.enabled === false || !runtime.mcpPort) return false;
+  const catalog = runtime.mcpPort.getToolCatalog?.();
+  if (!catalog) return false;
+  if (runtime.mcpToolCatalog?.revision !== catalog.revision) {
+    synchronizeMcpTools(
+      runtime.registry,
+      runtime.mcpPort,
+      runtime.mcpToolCatalog?.tools ?? [],
+      catalog.tools,
+      {
+        allowedTools: runtime.config.toolAllowlist,
+        disallowedTools: runtime.config.toolDisallowlist,
+      },
+    );
+    runtime.mcpToolCatalog = catalog;
+    runtime.invalidateToolCache();
+  }
+  return true;
+}
 
 export function startMcpStartup(
   this: AgentRuntimeInternal,
@@ -102,13 +124,15 @@ export async function initializeMcp(
 
   try {
     const snapshot = await startup;
-    const registered = registerMcpTools(this.registry, mcpPort, snapshot.tools, {
-      allowedTools: this.config.toolAllowlist,
-      disallowedTools: this.config.toolDisallowlist,
-    });
-    if (registered.length > 0) {
-      this.invalidateToolCache();
-    }
+    // 启动等待结束时 OAuth/重连可能已提交更新版本，不能用旧启动结果覆盖当前目录。
+    const hasCurrentCatalog = synchronizeRuntimeMcpCatalog(this);
+    const registered = hasCurrentCatalog
+      ? this.registry.list().filter((name) => this.registry.getMetadata(name)?.mcpPresentation)
+      : registerMcpTools(this.registry, mcpPort, snapshot.tools, {
+          allowedTools: this.config.toolAllowlist,
+          disallowedTools: this.config.toolDisallowlist,
+        });
+    if (!hasCurrentCatalog && registered.length > 0) this.invalidateToolCache();
     this.logger?.info("MCP tools registered", {
       ...traceContextToLogContext(traceContext),
       event: "mcp.tools.registered",

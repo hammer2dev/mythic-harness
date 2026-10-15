@@ -139,6 +139,12 @@ export interface McpConnectionSnapshot {
   tools: McpToolDescriptor[];
 }
 
+export interface McpToolCatalogSnapshot {
+  /** 同一端口实例内单调递增，仅表示已提交工具目录的版本。 */
+  revision: number;
+  tools: readonly McpToolDescriptor[];
+}
+
 export interface McpConnectOptions {
   /**
    * authorization_code OAuth callback 的等待上限。
@@ -199,6 +205,8 @@ export interface McpPort {
   pingServer?(name: string, options?: { timeoutMs?: number }): Promise<boolean>;
   status(): Promise<Record<string, McpServerStatus>>;
   listTools(): Promise<McpToolDescriptor[]>;
+  /** 同步读取当前目录，不执行 IO；旧注入端口可不实现，包装端口可返回 undefined。 */
+  getToolCatalog?(): McpToolCatalogSnapshot | undefined;
   callTool(request: McpCallToolRequest, options?: McpCallToolOptions): Promise<McpToolCallResult>;
   close(): Promise<void>;
 }

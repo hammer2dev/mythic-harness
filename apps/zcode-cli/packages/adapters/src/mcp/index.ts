@@ -29,6 +29,7 @@ import type {
   McpServerConfig,
   McpServerStatus,
   McpToolCallResult,
+  McpToolCatalogSnapshot,
   McpToolDescriptor,
 } from "@zcode/contracts";
 import { ZCODE_MCP_SERVER_REQUEST_ID_META_KEY } from "@zcode/contracts";
@@ -172,6 +173,7 @@ class NodeMcpAdapter implements McpPort {
     Pick<McpServerStatus, "failureKind" | "serverRequestId">
   >();
   private readonly records = new Map<string, McpServerRecord>();
+  private toolCatalog: McpToolCatalogSnapshot = { revision: 0, tools: [] };
   private readonly workingDirectory?: string;
 
   constructor(options: CreateMcpAdapterOptions) {
@@ -205,7 +207,14 @@ class NodeMcpAdapter implements McpPort {
     await Promise.all(
       Array.from(this.records.keys())
         .filter((name) => !configuredNames.has(name))
-        .map((name) => this.disconnectServer(name)),
+        .map(async (name) => {
+          const generation = this.nextConnectionGeneration(name);
+          await this.closeRecord(name);
+          // 配置移除等待关闭期间可能建立新连接，只撤销本次负责的旧目录。
+          if (!this.isCurrentConnection(name, generation)) return;
+          this.records.delete(name);
+          this.refreshToolCatalog();
+        }),
     );
 
     await Promise.all(
@@ -256,6 +265,9 @@ class NodeMcpAdapter implements McpPort {
   ): Promise<McpServerStatus> {
     const startedAt = Date.now();
     const timeoutMs = config.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
+    const previous = this.records.get(name);
+    const retainedTools =
+      previous && isDeepStrictEqual(previous.config, config) ? previous.tools : [];
     const generation = this.nextConnectionGeneration(name);
     this.connectionDiagnosticByServer.delete(name);
     this.logger?.info("MCP server connection started", {
@@ -266,10 +278,14 @@ class NodeMcpAdapter implements McpPort {
       transport: config.type,
     });
     await this.closeRecord(name);
+    // 较早的 connect 可能更晚结束关闭，不能覆盖后来建立的连接及其目录。
+    if (!this.isCurrentConnection(name, generation)) {
+      return this.records.get(name)?.status ?? this.createStatus(config, "disconnected");
+    }
 
     if (config.enabled === false) {
       const status = this.createStatus(config, "disabled");
-      this.records.set(name, { config, status, tools: [] });
+      this.setRecord(name, { config, status, tools: [] });
       this.logger?.info("MCP server connection skipped", {
         durationMs: Date.now() - startedAt,
         event: "mcp.server.connect.skipped",
@@ -297,9 +313,10 @@ class NodeMcpAdapter implements McpPort {
       abortController,
       config,
       status: connectingStatus,
-      tools: [],
+      // 同配置恢复仍依赖已知定义发起 callTool，不能在重连期间撤下目录。
+      tools: retainedTools,
     };
-    this.records.set(name, record);
+    this.setRecord(name, record);
     const connecting = this.openServerConnection({
       config,
       generation,
@@ -323,13 +340,16 @@ class NodeMcpAdapter implements McpPort {
     const record = this.records.get(name);
     if (!record) return undefined;
 
-    this.nextConnectionGeneration(name);
+    const generation = this.nextConnectionGeneration(name);
     await this.closeRecord(name);
+    // 断开只提交自身代次的结果，避免把新连接恢复为旧配置的 disconnected。
+    if (!this.isCurrentConnection(name, generation)) return this.records.get(name)?.status;
     const status = this.createStatus(record.config, "disconnected");
-    this.records.set(name, {
+    this.setRecord(name, {
       config: record.config,
       status,
-      tools: [],
+      // disconnected 仍允许下一次 callTool 自动重连，不等同于禁用或撤销配置。
+      tools: record.tools,
     });
     return status;
   }
@@ -382,7 +402,11 @@ class NodeMcpAdapter implements McpPort {
   }
 
   async listTools(): Promise<McpToolDescriptor[]> {
-    return Array.from(this.records.values()).flatMap((record) => record.tools);
+    return [...this.toolCatalog.tools];
+  }
+
+  getToolCatalog(): McpToolCatalogSnapshot {
+    return this.toolCatalog;
   }
 
   async callTool(
@@ -678,7 +702,7 @@ class NodeMcpAdapter implements McpPort {
       // 运行期工具已经向 core 广告；恢复期间保留 descriptor，避免设置页/借用端口误判工具消失。
       tools: input.record.tools,
     };
-    this.records.set(input.name, recoveryRecord);
+    this.setRecord(input.name, recoveryRecord);
     const connecting = this.runToolCallAuthorizationRecovery({
       abortController,
       config: input.config,
@@ -762,6 +786,7 @@ class NodeMcpAdapter implements McpPort {
     }
     await Promise.all(Array.from(this.records.keys()).map((name) => this.closeRecord(name)));
     this.records.clear();
+    this.refreshToolCatalog();
     this.connectionDiagnosticByServer.clear();
     this.logger?.info("MCP adapter closed", {
       durationMs: Date.now() - startedAt,
@@ -842,8 +867,59 @@ class NodeMcpAdapter implements McpPort {
     let getRecentStderr: (() => string | undefined) | undefined;
     let listToolsDurationMs: number | undefined;
     let transport: McpTransport | undefined;
+    let catalogReady = false;
+    let refreshRequested = false;
+    let refreshing = false;
     let failureKind: McpServerFailureKind =
       config.type === "stdio" ? "process_start_failed" : "network_unreachable";
+
+    const refreshTools = async (): Promise<void> => {
+      if (!catalogReady || refreshing || !client) return;
+      refreshing = true;
+      try {
+        // SDK 的自动刷新可能并发回写；只保留一次待刷新意图，按连接串行提交目录。
+        while (refreshRequested && this.isCurrentConnection(name, generation)) {
+          const current = this.records.get(name);
+          if (current?.client !== client || current.status.status !== "connected") return;
+          refreshRequested = false;
+          try {
+            const listed = await client.listTools(undefined, {
+              cacheMode: "refresh",
+              timeout: timeoutMs,
+            });
+            const latest = this.records.get(name);
+            if (
+              !this.isCurrentConnection(name, generation) ||
+              latest?.client !== client ||
+              latest.status.status !== "connected"
+            ) {
+              return;
+            }
+            const tools = listed.tools.map((tool) =>
+              normalizeMcpToolDescriptor(name, tool, config.timeoutMs),
+            );
+            this.setRecord(name, {
+              ...latest,
+              status: {
+                ...latest.status,
+                toolCount: tools.length,
+                updatedAt: new Date().toISOString(),
+              },
+              tools,
+            });
+          } catch (error) {
+            if (!this.isCurrentConnection(name, generation)) return;
+            this.logger?.warn("MCP tool catalog refresh failed", {
+              error: error instanceof Error ? error.message : String(error),
+              event: "mcp.tools.refresh.failed",
+              mcpServerName: name,
+            });
+          }
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
 
     try {
       const transportBundle = await this.createTransport(
@@ -863,6 +939,16 @@ class NodeMcpAdapter implements McpPort {
         },
         {
           versionNegotiation: resolveVersionNegotiation(config, timeoutMs),
+          listChanged: {
+            tools: {
+              autoRefresh: false,
+              debounceMs: 0,
+              onChanged: () => {
+                refreshRequested = true;
+                void refreshTools();
+              },
+            },
+          },
         },
       );
       this.updateCurrentRecord(name, generation, {
@@ -902,13 +988,15 @@ class NodeMcpAdapter implements McpPort {
         return this.records.get(name)?.status ?? status;
       }
       this.connectionDiagnosticByServer.delete(name);
-      this.records.set(name, {
+      this.setRecord(name, {
         client,
         config,
         status,
         tools,
         transport,
       });
+      catalogReady = true;
+      void refreshTools();
       const mcpTransportPid = getStdioTransportPid(transport);
       const mcpProcessIdentity =
         mcpTransportPid != null && this.connectionContext
@@ -1183,7 +1271,7 @@ class NodeMcpAdapter implements McpPort {
     if (!this.isCurrentConnection(name, generation)) {
       return this.records.get(name)?.status ?? status;
     }
-    this.records.set(name, { config, status, tools: [] });
+    this.setRecord(name, { config, status, tools: this.records.get(name)?.tools ?? [] });
     this.logger?.warn("MCP server connection failed", {
       ...this.connectionContext,
       connectDurationMs,
@@ -1339,6 +1427,17 @@ class NodeMcpAdapter implements McpPort {
       // 只在失败事件附带尾部 stderr，并先脱敏，避免把凭据或高频输出写入生产日志。
       return sanitizeMcpStdioStderr(text).slice(-MCP_STDIO_STDERR_LOG_MAX_CHARS);
     };
+  }
+
+  private setRecord(name: string, record: McpServerRecord): void {
+    this.records.set(name, record);
+    this.refreshToolCatalog();
+  }
+
+  private refreshToolCatalog(): void {
+    const tools = Array.from(this.records.values()).flatMap((record) => record.tools);
+    if (isDeepStrictEqual(this.toolCatalog.tools, tools)) return;
+    this.toolCatalog = { revision: this.toolCatalog.revision + 1, tools };
   }
 
   private async closeRecord(name: string): Promise<void> {

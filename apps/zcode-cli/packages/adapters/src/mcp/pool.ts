@@ -9,6 +9,7 @@ import type {
   McpServerConfig,
   McpServerStatus,
   McpToolCallResult,
+  McpToolCatalogSnapshot,
   McpToolDescriptor,
 } from "@zcode/contracts";
 import type { McpTelemetryTracker } from "./telemetry.js";
@@ -167,6 +168,8 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
     const configuredServers = new Map<string, McpServerConfig>();
     let leaseClosed = false;
     let sessionStartupReported = false;
+    let toolCatalog: McpToolCatalogSnapshot = { revision: 0, tools: [] };
+    let catalogSources: Array<{ entry: PoolEntry; catalog: McpToolCatalogSnapshot }> = [];
 
     const requireEntry = (serverName: string): PoolEntry => {
       const key = leased.get(serverName);
@@ -333,6 +336,33 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
     };
 
     return {
+      getToolCatalog(): McpToolCatalogSnapshot | undefined {
+        const sources: typeof catalogSources = [];
+        for (const key of leased.values()) {
+          const entry = entries.get(key);
+          if (!entry) continue;
+          const catalog = entry.adapter.getToolCatalog?.();
+          // 旧注入 adapter 只提供异步目录，不能用空快照误撤其启动时已发现的工具。
+          if (!catalog) return undefined;
+          sources.push({ entry, catalog });
+        }
+        const unchanged =
+          sources.length === catalogSources.length &&
+          sources.every(
+            ({ entry, catalog }, index) =>
+              entry === catalogSources[index]?.entry &&
+              catalog.revision === catalogSources[index]?.catalog.revision,
+          );
+        if (!unchanged) {
+          // entry 身份同时覆盖配置换源和同 key 重建，不能只累加各连接的 revision。
+          catalogSources = sources;
+          toolCatalog = {
+            revision: toolCatalog.revision + 1,
+            tools: sources.flatMap(({ catalog }) => catalog.tools),
+          };
+        }
+        return toolCatalog;
+      },
       async callTool(
         request: McpCallToolRequest,
         callOptions?: McpCallToolOptions,

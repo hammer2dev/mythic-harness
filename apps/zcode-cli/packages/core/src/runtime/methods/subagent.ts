@@ -478,7 +478,7 @@ function resolveSubagentToolAllowlist(
     );
     const availableToolNames = [
       ...this.getTools()
-        // child MCP 必须与 parent 启动 snapshot 使用同一批 descriptor，
+        // child MCP 必须与创建时的借用 snapshot 使用同一批 descriptor，
         // 不能从另一份 registry 视图重新推导。
         .filter((tool) => tool.permission?.permission !== "mcp")
         .map((tool) => tool.name),
@@ -550,7 +550,7 @@ async function resolveSubagentMcpAccess(
     };
   }
 
-  // child 不拥有连接生命周期，只能复用 parent constructor 已创建的启动快照。
+  // child 不拥有连接生命周期；启动 promise 只作就绪屏障，避免晚完成的 OAuth 被旧快照隐藏。
   const parentStartupSnapshot = await this.mcpStartupPromise;
   if (!parentStartupSnapshot) {
     if (scopedServerNames) {
@@ -559,8 +559,14 @@ async function resolveSubagentMcpAccess(
     return { config: undefined, parentSnapshot: undefined, port: undefined, snapshot: undefined };
   }
 
+  const parentSnapshot: McpConnectionSnapshot = this.mcpPort.getToolCatalog
+    ? {
+        statuses: await this.mcpPort.status(),
+        tools: [...(this.mcpPort.getToolCatalog()?.tools ?? parentStartupSnapshot.tools)],
+      }
+    : parentStartupSnapshot;
   const unavailableScopedServerNames = (scopedServerNames ?? []).filter(
-    (serverName) => parentStartupSnapshot.statuses[serverName]?.status !== "connected",
+    (serverName) => parentSnapshot.statuses[serverName]?.status !== "connected",
   );
   if (unavailableScopedServerNames.length > 0) {
     throw createCoreError(
@@ -576,14 +582,10 @@ async function resolveSubagentMcpAccess(
     );
   }
 
-  const borrowed = createBorrowedSubagentMcpAccess(
-    this.mcpPort,
-    parentStartupSnapshot,
-    scopedServerNames,
-  );
+  const borrowed = createBorrowedSubagentMcpAccess(this.mcpPort, parentSnapshot, scopedServerNames);
   return {
     config: { enabled: true },
-    parentSnapshot: parentStartupSnapshot,
+    parentSnapshot,
     port: borrowed.port,
     snapshot: borrowed.snapshot,
   };
@@ -641,7 +643,7 @@ function validateSubagentMcpRequirements(
 
   throw createCoreError(
     CoreErrorType.ConfigurationError,
-    `Required MCP tool is not available in the parent startup snapshot: ${missingToolNames.join(", ")}`,
+    `Required MCP tool is not available in the parent MCP snapshot: ${missingToolNames.join(", ")}`,
     {
       context: {
         agentType: request.agentType,

@@ -1,6 +1,8 @@
 // MCP tool bridge - projects MCP descriptors into core tool entries
 
 import {
+  CoreErrorType,
+  createCoreError,
   modelMessageContentToText,
   ZCODE_MCP_ERROR_PRESENTATION_MESSAGE_ONLY,
   ZCODE_MCP_ERROR_PRESENTATION_META_KEY,
@@ -13,6 +15,7 @@ import {
   type ModelToolSideEffectScope,
   type RiskLevel,
 } from "@zcode/contracts";
+import { isDeepStrictEqual } from "node:util";
 import type { ToolRegistry } from "../tool/registry.js";
 import type { ToolEntry } from "../tool/types.js";
 import { createToolRuleNameSet } from "../tool/tool-visibility.js";
@@ -52,11 +55,60 @@ export function registerMcpTools(
     const name = toMcpToolName(descriptor);
     if (allowed && !allowed.has(name)) continue;
     if (disallowed?.has(name)) continue;
-    registry.register(createMcpToolEntry(name, descriptor, mcpPort));
+    const existing = registry.get(name);
+    // 动态目录只管理自己的 MCP 身份，服务端自定义名称不能覆盖内置工具或其他服务。
+    if (existing && !isMatchingMcpEntry(existing, descriptor)) continue;
+    registry.register(createMcpToolEntry(name, descriptor, mcpPort), {
+      silentDuplicateWarning: true,
+    });
     registered.push(name);
   }
 
   return registered;
+}
+
+export function synchronizeMcpTools(
+  registry: ToolRegistry,
+  mcpPort: McpPort,
+  previous: readonly McpToolDescriptor[],
+  current: readonly McpToolDescriptor[],
+  options: RegisterMcpToolsOptions,
+): void {
+  const allowed = options.allowedTools ? new Set(options.allowedTools) : undefined;
+  const disallowed = createToolRuleNameSet(options.disallowedTools);
+  const eligible = current.filter((descriptor) => {
+    const name = toMcpToolName(descriptor);
+    return (!allowed || allowed.has(name)) && !disallowed?.has(name);
+  });
+  const currentDefinitions = new Map(
+    eligible.map((descriptor) => [toMcpToolName(descriptor), descriptor]),
+  );
+  for (const descriptor of previous) {
+    const name = toMcpToolName(descriptor);
+    const next = currentDefinitions.get(name);
+    const entry = registry.get(name);
+    // 同名换源也必须撤下旧身份，否则注册阶段的隔离检查会让旧定义永久滞留。
+    if (isMatchingMcpEntry(entry, descriptor) && (!next || !isMatchingMcpEntry(entry, next))) {
+      registry.unregister(name);
+    }
+  }
+  const oldDefinitions = new Map(
+    previous.map((descriptor) => [toMcpToolName(descriptor), descriptor]),
+  );
+  const changed = eligible.filter((descriptor) => {
+    const name = toMcpToolName(descriptor);
+    return !registry.has(name) || !isDeepStrictEqual(oldDefinitions.get(name), descriptor);
+  });
+  registerMcpTools(registry, mcpPort, changed, options);
+}
+
+function isMatchingMcpEntry(entry: ToolEntry | undefined, descriptor: McpToolDescriptor): boolean {
+  const source = entry?.metadata.mcpPresentation;
+  return (
+    entry?.metadata.name === toMcpToolName(descriptor) &&
+    source?.serverName === descriptor.serverName &&
+    source?.toolName === descriptor.toolName
+  );
 }
 
 function createMcpToolEntry(
@@ -144,6 +196,15 @@ function createMcpToolEntry(
       recordOutput: "summary",
     },
     handler: async (input, context) => {
+      // 审批等待期间目录可能已变化；旧定义不能带着旧审批继续执行，也不能自动换成新 handler。
+      const catalog = mcpPort.getToolCatalog?.();
+      if (catalog && !catalog.tools.some((current) => isDeepStrictEqual(current, descriptor))) {
+        throw createCoreError(
+          CoreErrorType.ToolExecutionFailed,
+          `MCP tool ${name} changed or was removed. Retry using the latest tool definition; use ToolSearch if needed.`,
+          { recoverable: true },
+        );
+      }
       const result = await mcpPort.callTool(
         {
           serverName: descriptor.serverName,

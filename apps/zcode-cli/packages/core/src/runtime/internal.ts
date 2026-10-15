@@ -16,6 +16,7 @@ import type {
   ImageProcessorPort,
   Logger,
   McpConnectionSnapshot,
+  McpToolCatalogSnapshot,
   McpPort,
   MessageHistory,
   MessageId,
@@ -97,6 +98,7 @@ export interface AgentRuntimeInternal
   skillPort?: SkillPort;
   mcpPort?: McpPort;
   mcpStartupPromise?: Promise<McpConnectionSnapshot>;
+  mcpToolCatalog?: McpToolCatalogSnapshot;
   residencyBlockingWorkCount: number;
   mcpInitialized: boolean;
   mcpToolsRegistered: boolean;

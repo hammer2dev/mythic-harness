@@ -2,7 +2,6 @@
 // 契约：解析 canonical text → 冻结 catalog →
 // 与 live Skill/MCP/Subagent inventory 取交集 → 生成本轮 model-only reminder。
 // 失败语义：对话 fail open（任何异常都不阻塞本轮），能力注入 fail closed（异常时不注入）。
-import { toMcpToolName } from "../../mcp/index.js";
 import {
   buildPluginReferenceReminderBody,
   extractPluginReferences,
@@ -24,23 +23,15 @@ async function collectLiveMcpServers(
   // 这里提前 await 不增加额外等待。引用绝不触发 connect/reconnect/OAuth——只读取现状。
   await runtime.initializeMcp(traceContext);
   const statuses = await runtime.mcpPort.status();
-  const snapshot = runtime.mcpStartupPromise ? await runtime.mcpStartupPromise : undefined;
-  const registeredToolNames = new Set(runtime.getTools().map((tool) => tool.name));
   // 与 turn-loop 的 provider 工具过滤保持完全相同的“完整工具名”语义；
   // 带参数的执行规则不会把整个工具从 provider 工具表移除，不能在 reminder 侧扩大解释。
   const turnDisallowedToolNames = new Set(toolDisallowlist ?? []);
   const providerVisibleToolCounts = new Map<string, number>();
-  for (const descriptor of snapshot?.tools ?? []) {
-    // provider-visible = 启动快照里的 tool 先通过 Session 全局 allow/disallow 注册过滤，
-    // 再通过本轮 toolDisallowlist。根因：只看 registry 会把“本轮隐藏、全局仍注册”的
-    // MCP tool 误算成可见能力，reminder 会声称一个 provider 实际拿不到的 server。
-    const toolName = toMcpToolName(descriptor);
-    if (!registeredToolNames.has(toolName)) continue;
-    if (turnDisallowedToolNames.has(toolName)) continue;
-    providerVisibleToolCounts.set(
-      descriptor.serverName,
-      (providerVisibleToolCounts.get(descriptor.serverName) ?? 0) + 1,
-    );
+  for (const tool of runtime.getTools()) {
+    // 启动快照不能代表晚授权/重连后的目录；使用当前 eligible 投影，仍应用本轮禁用规则。
+    const serverName = runtime.registry.get(tool.name)?.metadata.mcpPresentation?.serverName;
+    if (!serverName || turnDisallowedToolNames.has(tool.name)) continue;
+    providerVisibleToolCounts.set(serverName, (providerVisibleToolCounts.get(serverName) ?? 0) + 1);
   }
   return Object.entries(statuses).map(([serverName, status]) => ({
     serverName,

@@ -8,7 +8,7 @@
 - 已确认目标：增加工具搜索，同时覆盖基础 Agent 工具与 MCP 工具，减少同时发送给模型的工具描述和 schema。
 - 已确认首版常驻名单、受限子代理自动补入发现入口、32,000 个估算 token 的可调总预算、单次最多加载 5 个，以及跨模型调用、用户消息、compact 和冷恢复的保留原则。
 - ApplyPatch 作为常驻的内置基础工具接入同一目录。LSP、AST、DependencyGraph 及软件开发插件方案保留设计待定，本轮不注册这些工具；目录不依赖其实现。各自设计见 [专项总览](../SPEC.md)。
-- 首版目标是减少模型请求中的工具定义；MCP 延迟连接、服务端生命周期调整、向量数据库及自动调用搜索结果不属于本设计范围。
+- 首版目标是减少模型请求中的工具定义；不引入按搜索触发的 MCP 延迟连接、向量数据库或自动调用搜索结果。本轮补齐既有连接后的目录同步及旧连接结果隔离，不改变连接授权和自动重连规则。
 
 ## 已确认的首版规则
 
@@ -86,18 +86,18 @@
 
 当前实现接点如下；行为验证状态见末尾。
 
-| 事实                                                                                       | 源码依据                                                                                                                                        |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 内置与 MCP 工具最终进入同一个 ToolRegistry；`toContracts()` 输出 provider-visible contract | `apps/zcode-cli/packages/core/src/tool/registry.ts:104`                                                                                         |
-| MCP 启动快照经会话 allow/disallow 过滤后注册，并使工具缓存失效                             | `apps/zcode-cli/packages/core/src/runtime/methods/mcp.ts:105`；`apps/zcode-cli/packages/core/src/mcp/index.ts:41`                               |
-| `getTools()` 缓存完整可见集合，再按模型投影 contract                                       | `apps/zcode-cli/packages/core/src/runtime/methods/config.ts:137`                                                                                |
-| 每个模型步骤通过 `getExposedTools` 获取常驻与已激活集合，并叠加当前 turn 的禁用规则        | `apps/zcode-cli/packages/core/src/runtime/helpers/tool-exposure.ts`；`apps/zcode-cli/packages/core/src/runtime/methods/turn-loop.ts`            |
-| 子代理继承基础工具时使用父 runtime 的 `getTools()`；MCP 借用父启动快照                     | `apps/zcode-cli/packages/core/src/runtime/methods/subagent.ts:459`                                                                              |
-| 显式子代理 allowlist 补入 `ToolSearch` 和已有的协调工具；显式 disallow 仍生效              | `apps/zcode-cli/packages/core/src/runtime/helpers/tool-allowlist.ts`                                                                            |
-| 插件引用提示和上下文 guidance 也使用 `getTools()`，不能直接改成已加载集合                  | `apps/zcode-cli/packages/core/src/runtime/methods/plugin-reference.ts:28`；`apps/zcode-cli/packages/core/src/runtime/methods/context.ts:144`    |
-| compact summary 请求不携带工具，成功后应用 compact 保留快照                                | `apps/zcode-cli/packages/core/src/runtime/methods/compact-active.ts`；`apps/zcode-cli/packages/core/src/runtime/methods/compact-persistence.ts` |
-| 请求工具已按内置/MCP schema 分别估算上下文占用                                             | `apps/zcode-cli/packages/core/src/runtime/methods/context-usage.ts:142`                                                                         |
-| provider adapter 把请求 tools 转成 AI SDK 工具；当前没有 deferred tool contract            | `apps/zcode-cli/packages/adapters/src/model/tool-transform.ts:20`；`apps/zcode-cli/packages/contracts/src/model/index.ts:460`                   |
+| 事实                                                                                         | 源码依据                                                                                                                                        |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 内置与 MCP 工具最终进入同一个 ToolRegistry；`toContracts()` 输出 provider-visible contract   | `apps/zcode-cli/packages/core/src/tool/registry.ts:104`                                                                                         |
+| MCP 当前目录经会话 allow/disallow 过滤后同步注册，版本变化使工具缓存失效；旧端口沿用启动发现 | `apps/zcode-cli/packages/core/src/runtime/methods/mcp.ts`；`apps/zcode-cli/packages/core/src/mcp/index.ts`                                      |
+| `getTools()` 缓存完整可见集合，再按模型投影 contract                                         | `apps/zcode-cli/packages/core/src/runtime/methods/config.ts:137`                                                                                |
+| 每个模型步骤通过 `getExposedTools` 获取常驻与已激活集合，并叠加当前 turn 的禁用规则          | `apps/zcode-cli/packages/core/src/runtime/helpers/tool-exposure.ts`；`apps/zcode-cli/packages/core/src/runtime/methods/turn-loop.ts`            |
+| 子代理继承基础工具时使用父 runtime 的 `getTools()`；MCP 创建时授权，借用范围内目录持续更新   | `apps/zcode-cli/packages/core/src/runtime/methods/subagent.ts`；`apps/zcode-cli/packages/core/src/subagent/borrowed-mcp-port.ts`                |
+| 显式子代理 allowlist 补入 `ToolSearch` 和已有的协调工具；显式 disallow 仍生效                | `apps/zcode-cli/packages/core/src/runtime/helpers/tool-allowlist.ts`                                                                            |
+| 插件引用提示和上下文 guidance 也使用 `getTools()`，不能直接改成已加载集合                    | `apps/zcode-cli/packages/core/src/runtime/methods/plugin-reference.ts:28`；`apps/zcode-cli/packages/core/src/runtime/methods/context.ts:144`    |
+| compact summary 请求不携带工具，成功后应用 compact 保留快照                                  | `apps/zcode-cli/packages/core/src/runtime/methods/compact-active.ts`；`apps/zcode-cli/packages/core/src/runtime/methods/compact-persistence.ts` |
+| 请求工具已按内置/MCP schema 分别估算上下文占用                                               | `apps/zcode-cli/packages/core/src/runtime/methods/context-usage.ts:142`                                                                         |
+| provider adapter 把请求 tools 转成 AI SDK 工具；当前没有 deferred tool contract              | `apps/zcode-cli/packages/adapters/src/model/tool-transform.ts:20`；`apps/zcode-cli/packages/contracts/src/model/index.ts:460`                   |
 
 ## 设计边界与状态所有者
 
@@ -111,7 +111,7 @@
 | 激活状态              | 当前会话 Runtime                         | 已加载 canonical tool ID 及支持保留策略的使用信息；跨消息复用，冷恢复重验 |
 | Exposed 集合          | Runtime 按请求派生                       | 常驻工具与已激活工具的并集，再与当前 eligible 集合取交集                  |
 | 执行许可              | 既有 executor、permission service/broker | 实际调用仍按工具输入、模式和权限策略执行检查                              |
-| MCP 连接与 descriptor | 既有 McpPort/adapter、启动快照           | 是否已连接与是否向模型发送 schema 是两个不同状态                          |
+| MCP 连接与 descriptor | 既有 McpPort/adapter、当前目录快照       | 是否已连接与是否向模型发送 schema 是两个不同状态                          |
 
 - 不把 `providerVisible: false` 的隐藏兼容入口通过搜索重新暴露；名称别名仍解析到既有 canonical identity。
 - 保留既有模型能力限制、功能开关、子代理原有有效 allowlist、结构性禁用和 turn disallowlist。受限子代理的 `ToolSearch` 入口按已确认规则补入，检索与激活目标仍来自原获准目录，不因入口补入而扩大。
@@ -121,6 +121,31 @@
 - schema 加载成功不代表 LSP server 已就绪；实际 LSP 调用遵守其独立生命周期和错误语义。卸载 `LSP` 定义也不等于关闭语言服务，不改变已确认的文档同步与编辑后诊断反馈规则。
 - 工具搜索及激活状态位于执行会话的 Runtime；Desktop Main、relay、Renderer 均不成为第二状态所有者。
 - 隔离键保留 `workspaceIdentity?.trim() || workspacePath`，并区分 session；远程调用保留 `remoteSessionId`，不按路径合并不同远端目录。
+
+## MCP 目录同步
+
+- MCP adapter 是当前工具 descriptor 的唯一所有者，提供同步、只读的 `getToolCatalog()` 内存快照（revision 与 tools）。同一端口实例内版本单调递增；网络发现仍沿用既有连接与 SDK 通知，不在模型投影或 ToolSearch 内执行网络 IO。旧端口未实现快照时保留原初始化发现路径。
+- 首次连接、延迟 OAuth 完成、重连成功及 SDK 工具目录变化通知后，adapter 提交最新目录；通知刷新串行执行，旧连接代次的结果不得覆盖新连接。刷新失败保留已知目录并记录现有日志。临时断线、同配置重连及既有断开后的自动重连保留已知定义；显式禁用、配置替换、端口关闭/lease 释放或成功发现的目录删除才撤下对应定义，不能把断线当成权限撤销。
+- Runtime 在读取工具目录前按快照版本同步其注册表及派生缓存；首次启动快照仅作为就绪屏障，不能覆盖更新版本。同步按当前 allow/disallow 规则替换本 Runtime 管理的 MCP entry，保留内置工具和未变化的 entry；注册表更新不跨 await，不建立第二套连接状态。
+- 已激活工具的同身份 schema 更新在下一模型请求中生效；被目录移除的工具由既有 exposure prepare 清理。MCP handler 进入调用前同步比较目标 descriptor，审批等待期间目标已移除或定义变化时返回可恢复错误，引导模型按最新定义重试；其他工具更新不影响本调用。已经进入 callTool 的调用继续遵守现有超时、取消及重连流程，不追溯撤销。
+- pool lease 的快照仅聚合该 lease 可访问的连接，版本包括连接绑定变化。子代理借用端口按创建时授予的服务范围转发最新目录，已有具体工具白名单保持不变；新增子代理从当前目录形成白名单。借用端口不管理父连接生命周期，也不新增后台订阅。
+- Desktop continuous 和手机 replayable 都使用 Host 中同一个 Runtime 的当前投影与已持久化工具标识；本轮不新增客户端目录状态、跨端协议或持久化 schema。插件能力提示同样读取当前目录。
+- 核心验收：初始空目录后连接完成可被原会话搜索；已加载工具 schema 更新、删除能反映到后续请求；旧 handler 在目标变化后不调用远端；共享 lease 与子代理白名单保持隔离。使用真实本地 MCP 验证重连和目录通知，同时保留少量 Runtime 核心回归。
+
+```mermaid
+sequenceDiagram
+    participant S as MCP 服务
+    participant A as Adapter 与 scoped lease
+    participant R as Runtime 注册表
+    participant M as 模型
+    S-->>A: 连接完成或工具目录变化
+    A->>S: 获取最新 tools/list
+    A->>A: 校验连接代次并提交目录版本
+    R->>A: getToolCatalog 同步读取
+    A-->>R: 当前 revision 与 descriptors
+    R->>R: 同步 MCP entry 并失效派生缓存
+    R->>M: 下一请求使用当前获准工具定义
+```
 
 ## 拟议工具接口与事件顺序
 

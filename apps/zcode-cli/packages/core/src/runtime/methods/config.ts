@@ -31,6 +31,7 @@ import { resolveExecutionState } from "@zcode/shared";
 import { projectToolModelContract } from "../../tool/model-contract.js";
 import { orderProviderVisibleToolContracts } from "../../tool/provider-visible-order.js";
 import { rebuildContextPrefix } from "./context-refresh.js";
+import { synchronizeRuntimeMcpCatalog } from "./mcp.js";
 import { filterEmbeddedSearchRuntimeVisibleTools } from "./embedded-search-branch.js";
 import {
   initializeSessionShellEnvironmentIfNeeded as initializeSessionShellEnvironment,
@@ -135,6 +136,7 @@ export function getActiveTurnInfo(this: AgentRuntimeInternal): ActiveTurnInfo | 
 }
 
 export function getTools(this: AgentRuntimeInternal, model?: Model): ModelToolContract[] {
+  synchronizeRuntimeMcpCatalog(this);
   if (this.cachedTools === null) {
     this.cachedTools = filterRuntimeVisibleTools.call(this, this.registry.toContracts());
   }

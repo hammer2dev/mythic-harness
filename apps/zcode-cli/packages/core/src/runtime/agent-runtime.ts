@@ -23,6 +23,7 @@ import type {
   ImageProcessorPort,
   Logger,
   McpConnectionSnapshot,
+  McpToolCatalogSnapshot,
   McpPort,
   MessageHistory,
   MessageId,
@@ -170,6 +171,7 @@ export class AgentRuntime {
   private skillPort?: SkillPort;
   private mcpPort?: McpPort;
   private mcpStartupPromise?: Promise<McpConnectionSnapshot>;
+  private mcpToolCatalog?: McpToolCatalogSnapshot;
   private residencyBlockingWorkCount = 0;
   private mcpInitialized = false;
   private mcpToolsRegistered = false;
