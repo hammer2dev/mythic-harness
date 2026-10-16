@@ -45,6 +45,9 @@ import type {
   ExecutionShellSelection,
   FilePartSource,
   FileSystemPort,
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
+  UserIntentEvidencePort,
   HookRunner,
   HooksRuntimeConfig,
   HttpClientPort,
@@ -324,6 +327,9 @@ export interface AgentRuntimeDeps {
   /** browser-use 控制端口；透传到 ToolExecutionContext.browserControlPort 供 node_repl 使用。 */
   browserControlPort?: BrowserControlPort;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
+  userIntentEvidence?: UserIntentEvidencePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;

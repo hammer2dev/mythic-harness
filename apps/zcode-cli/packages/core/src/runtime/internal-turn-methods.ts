@@ -404,6 +404,7 @@ export interface AgentRuntimeTurnMethods {
   }): Promise<void>;
   persistAssistantTimelinePartForSession(options: {
     sessionId: SessionId;
+    expectedBranchGeneration?: number;
     messageID?: MessageId;
     partID?: PartId;
     parentID?: MessageId;

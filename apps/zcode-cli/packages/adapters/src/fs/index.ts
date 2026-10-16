@@ -181,12 +181,15 @@ export class NodeFileSystemAdapter implements FileSystemPort {
       const encoding = decoded.encoding;
       const isText = shouldNormalizeLineEndings(encoding);
       const lineEndings = isText ? detectLineEndings(rawContent) : undefined;
-      const content = isText ? normalizeLineEndings(rawContent) : rawContent;
+      // LSP 快照需与 JDT didSave 后重新读取的磁盘文本一致，不能强制把 CRLF 改为 LF。
+      const content =
+        isText && !request.preserveLineEndings ? normalizeLineEndings(rawContent) : rawContent;
 
       return {
         path,
         content,
         encoding,
+        ...(request.preserveLineEndings ? { lineEndingsPreserved: true } : {}),
         lineEndings,
         mode: info.mode & 0o7777,
         bytesRead: buffer.byteLength,

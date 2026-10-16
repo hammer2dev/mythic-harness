@@ -2,6 +2,8 @@ import type { ZCodeMessagePart, ZCodeMessageWithParts, ZCodeToolState } from "@z
 import type { MessagePart, MessageWithParts, ToolState } from "@zcode/contracts";
 import { shouldHideInvalidToolCallFromProduct } from "../tool-call-product-visibility.js";
 
+type LegacyMessagePart = Exclude<MessagePart, { type: "timeline"; timelineType: "mcp_reconnect" }>;
+
 export function mapMessageWithParts(message: MessageWithParts): ZCodeMessageWithParts {
   return {
     info:
@@ -52,6 +54,11 @@ export function mapMessageWithParts(message: MessageWithParts): ZCodeMessageWith
             tokens: message.info.tokens,
           },
     parts: message.parts
+      // MCP 恢复由 V4 直接读取持久 timeline；旧协议四类 timeline 不接收新操作状态。
+      .filter(
+        (part): part is LegacyMessagePart =>
+          part.type !== "timeline" || part.timelineType !== "mcp_reconnect",
+      )
       .filter(
         (part) =>
           part.type !== "tool" || !shouldHideInvalidToolCallFromProduct(part.tool, part.metadata),
@@ -60,7 +67,7 @@ export function mapMessageWithParts(message: MessageWithParts): ZCodeMessageWith
   };
 }
 
-function mapMessagePart(part: MessagePart): ZCodeMessagePart {
+function mapMessagePart(part: LegacyMessagePart): ZCodeMessagePart {
   const base = {
     messageId: String(part.messageID),
     partId: String(part.id),

@@ -170,6 +170,7 @@ import {
   type V4VisibleSlashCommand,
 } from "@/v4/slashCommands.js";
 import { useSlashCommands } from "@/hooks/useSlashCommands.js";
+import { parseMcpSlashCommand, submitMcpReconnectCommand } from "@/v4/mcpReconnectCommand.js";
 import { useV4Conversation } from "@/v4/V4ConversationContext.js";
 import { useConversationProjection } from "@/v4/useConversationProjection.js";
 import { usePendingCommandRecovery } from "@/v4/usePendingCommandRecovery.js";
@@ -1094,12 +1095,12 @@ export function SessionPane({
         // target 发命令；统一 same-sub recovery 后才能基于同代 rowId/entityId 再裁决。
         lease?.store?.recoverFromStaleAuthority();
       }
+      // 恢复连接 ACK 只收口发送 overlay；等待和结果由持久 marker 表达，不能把 accepted 当已连接。
       // rejected/stale/failed 时若不 settle，optimistic overlay 会永久残留。
       if (
         lease?.store &&
         type !== "createSession" &&
-        ack.status !== "accepted" &&
-        ack.status !== "duplicate"
+        (type === "reconnectMcpServer" || (ack.status !== "accepted" && ack.status !== "duplicate"))
       ) {
         lease.store.settleCommand(envelope.commandId);
       }
@@ -2426,6 +2427,24 @@ export function SessionPane({
 
   const dispatchSendText = useCallback(
     (text: string, options?: ConversationComposerSendOptions) => {
+      const mcpCommand = parseMcpSlashCommand(
+        text,
+        Boolean(options?.attachments?.length || options?.contextAttachmentCount),
+      );
+      // 会话维护不依赖模型或草稿配置，必须在普通发送的模型屏障和 draft promotion 之前消费。
+      if (mcpCommand) {
+        return submitMcpReconnectCommand({
+          command: mcpCommand,
+          sessionId,
+          snapshot: snapshotRef.current,
+          dispatch: (payload, targetSessionId, epoch) =>
+            dispatchCommand("reconnectMcpServer", payload, targetSessionId, undefined, epoch),
+          notify: (issue, reason) =>
+            toast(
+              intl.formatMessage({ id: `chat.mcpReconnect.${issue}` }, { reason: reason ?? "" }),
+            ),
+        });
+      }
       const createSource = useZCodeSessionStore
         .getState()
         .getWorkspaceState(workspacePath, workspaceIdentity).draftCreateSource;
@@ -2461,6 +2480,8 @@ export function SessionPane({
     },
     [
       configCommandBarrier,
+      dispatchCommand,
+      intl,
       createSubmissionFromComposer,
       dispatchSendTextAfterConfig,
       readProjectWorkspace,

@@ -87,6 +87,7 @@ export async function persistAssistantTimelinePartForSession(
   this: AgentRuntimeInternal,
   options: {
     sessionId: SessionId;
+    expectedBranchGeneration?: number;
     messageID?: MessageId;
     partID?: PartId;
     parentID?: MessageId;
@@ -106,6 +107,10 @@ export async function persistAssistantTimelinePartForSession(
 
   const messageID = options.messageID ?? createMessageId();
   const partID = options.partID ?? createPartId();
+  const isStaleBranch = (): boolean =>
+    options.expectedBranchGeneration !== undefined &&
+    options.expectedBranchGeneration !== this.branchGeneration;
+  if (isStaleBranch()) return { messageID, partID };
   const created = options.created ?? options.timeline.time?.start ?? Date.now();
   const selection = this.getSessionModelSelection();
   await this.persistMessage(
@@ -140,6 +145,9 @@ export async function persistAssistantTimelinePartForSession(
     },
     options.traceContext,
   );
+  // message 写入的 await 可能跨过 rewind；当前 SQLite 的 part 写入在首个 await 前提交。
+  // 在第二次写入前检查同一 owner 代次，不能把旧 part 重新插到新分支。
+  if (isStaleBranch()) return { messageID, partID };
   await this.persistPart(
     {
       ...options.timeline,

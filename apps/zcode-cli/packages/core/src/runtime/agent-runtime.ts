@@ -7,6 +7,10 @@ import { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
 import type { RuntimeCommandQueue } from "./command-queue.js";
 import { createRuntimeCommandQueue } from "./command-queue.js";
+import { cancelQueuedMcpReconnects } from "./methods/mcp-reconnect.js";
+import { observeLanguageFileCommits } from "./helpers/language-file-commits.js";
+import { TurnUserIntentEvidence } from "./user-intent-evidence.js";
+import type { McpReconnectRequest, McpServerConfig, McpServerStatus } from "@zcode/contracts";
 import type {
   BackgroundTaskCancelResult,
   CollaborationMode,
@@ -19,6 +23,8 @@ import type {
   ExecutionPort,
   ExecutionShellSelection,
   FileSystemPort,
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
   HookRunner,
   ImageProcessorPort,
   Logger,
@@ -175,6 +181,7 @@ export class AgentRuntime {
   private residencyBlockingWorkCount = 0;
   private mcpInitialized = false;
   private mcpToolsRegistered = false;
+  private mcpReconnectInFlight?: Promise<void>;
   private subagentPort?: SubagentPort;
   private dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   private modelCatalogPort?: ModelCatalogPort;
@@ -183,6 +190,9 @@ export class AgentRuntime {
   private artifactStore?: ToolArtifactStorePort;
   private executionPort?: ExecutionPort;
   private fileSystemPort?: FileSystemPort;
+  private languageServicePort?: WorkspaceLanguageServicePort;
+  private javaRuntimePort?: JavaRuntimePort;
+  private userIntentEvidence = new TurnUserIntentEvidence();
   private imageProcessorPort?: ImageProcessorPort;
   private pdfDocumentPort?: PdfDocumentPort;
   private skillLoadOutcome?: SkillLoadOutcome;
@@ -234,6 +244,27 @@ export class AgentRuntime {
 
   constructor(sessionId: SessionId, config: AgentRuntimeConfig, deps: AgentRuntimeDeps) {
     const runtime = this as unknown as AgentRuntimeInternal;
+    deps = { ...deps, userIntentEvidence: this.userIntentEvidence };
+    const languageService = deps.languageServicePort;
+    if (deps.fileSystemPort && languageService) {
+      deps = {
+        ...deps,
+        fileSystemPort: observeLanguageFileCommits(
+          deps.fileSystemPort,
+          (change) => {
+            // 文件提交是共享事实；受限子代理也需同步已有 buffer，但不能借此启动额外分析。
+            languageService.recordCommit({
+              ...change,
+              analyze: runtime.registry.get("LSP") !== undefined,
+            });
+          },
+          (error) =>
+            deps.logger?.warn("Language synchronization registration failed", {
+              error: error instanceof Error ? error.message : String(error),
+            }),
+        ),
+      };
+    }
     this.sessionId = sessionId;
     this.turnNumber = 0;
     // 3.12.2：兼容旧 Host/内部调用传入 legacy，但本版本 Runtime、日志和子 Agent 只使用 preflight。
@@ -292,6 +323,8 @@ export class AgentRuntime {
     this.artifactStore = deps.artifactStore;
     this.executionPort = deps.executionPort;
     this.fileSystemPort = deps.fileSystemPort;
+    this.languageServicePort = deps.languageServicePort;
+    this.javaRuntimePort = deps.javaRuntimePort;
     this.imageProcessorPort = deps.imageProcessorPort;
     this.pdfDocumentPort = deps.pdfDocumentPort;
     this.subagentPort = deps.subagentPort ?? runtime.createDefaultSubagentPort(deps);
@@ -315,6 +348,8 @@ export class AgentRuntime {
 
   async closeBrowserSession(): Promise<void> {
     this.beginShutdown();
+    await cancelQueuedMcpReconnects(this as unknown as AgentRuntimeInternal);
+    await this.mcpReconnectInFlight;
     disposeNodeReplSession(this.sessionId);
     try {
       await this.browserControlPort?.closeSession?.({
@@ -334,6 +369,7 @@ export class AgentRuntime {
     // ExecutionPort.close() 会把后台 Bash 收口为 cancelled；若允许
     // teardown terminal event 再唤醒模型，并与随后关闭的 session store 竞态。
     this.shuttingDown = true;
+    this.activeForegroundExecution?.controller.abort(new Error("Session owner closed"));
     // 关闭单个 session 后进程仍存活，
     // 因此必须先终止该 runtime 的 Extraction，不能只在超时后放弃等待。
     this.memoryExtractionScheduler?.shutdown();
@@ -341,6 +377,12 @@ export class AgentRuntime {
 }
 
 export interface AgentRuntime {
+  requestMcpReconnect(input: McpReconnectRequest & { config: McpServerConfig }): Promise<void>;
+  connectMcpServer(
+    serverName: string,
+    config: McpServerConfig,
+    options?: { signal?: AbortSignal; traceContext?: TraceContext },
+  ): Promise<McpServerStatus>;
   lastPermissionGrantId?: string;
   beginShutdown(): void;
   closeBrowserSession(): Promise<void>;

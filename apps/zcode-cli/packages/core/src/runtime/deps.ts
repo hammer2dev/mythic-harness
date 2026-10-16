@@ -110,6 +110,9 @@ export {
   SESSION_ENTRY_WORKSPACE_FILE_REWIND,
 } from "@zcode/contracts";
 export type {
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
+  UserIntentEvidencePort,
   CollaborationMode,
   GoalStatus,
   Logger,

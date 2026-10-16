@@ -18,6 +18,8 @@ import type {
   ExecutionPort,
   ExecutionShellSelection,
   FileSystemPort,
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
   GoalStatus,
   HttpClientPort,
   ImageProcessorPort,
@@ -157,6 +159,8 @@ export interface ZCodeAppOptions {
   /** 可由协议宿主注入的进程级 node_repl Browser broker；缺省时 app 自建并拥有。 */
   nodeReplBrowserBroker?: NodeReplBrowserBroker;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
@@ -390,6 +394,14 @@ export interface ZCodeApp {
   getSkillCatalog(): Promise<SkillLoadOutcome>;
   listMcpServers(): Promise<Record<string, McpServerStatus>>;
   connectMcpServer(name: string): Promise<McpServerStatus>;
+  requestMcpReconnect(input: {
+    serverName: string;
+    sourceCommandId: string;
+    expectedForegroundExecutionId: string | null;
+    traceContext?: TraceContext;
+    /** 内部 admission 回调，不进入 wire payload。 */
+    onAdmitted?: () => Promise<void>;
+  }): Promise<void>;
   readBackgroundBashOutput(workId: string, sessionId?: string): Promise<BackgroundBashOutputResult>;
   cancelBackgroundTask?(
     taskId: string,

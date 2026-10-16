@@ -1,4 +1,4 @@
-# Maintainer contract: docs/skills/feature-boundary-graph.md
+# Maintainer guidance: ../SKILL.md (Maintain The Seed Graph).
 # Search aliases and IDs first; read only the relevant nodes and one-hop relationships.
 schemaVersion: 1
 graphId: zcode-feature-relationships
@@ -497,7 +497,19 @@ nodes:
       - file: apps/zcode-cli/packages/core/src/runtime/methods/mcp.ts
         symbol: initializeMcp
     invariants:
-      - The registry owns current registered definitions and execution entries. ToolSearch is proposed in specs/agent-tool-optimization/tool-search/SPEC.md and is not implemented by these seeds.
+      - The registry owns current registered definitions and execution entries. ToolSearch is implemented; MCP descriptor changes synchronize through the Runtime before eligible tool projection.
+  - id: service.session-mcp-recovery
+    kind: service
+    label: Existing-session MCP connection recovery
+    aliases:
+      - /mcp connect
+      - MCP 会话恢复
+    codeSeeds:
+      - file: apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/mcp-reconnect.ts
+        symbol: mcpReconnectHandlers
+    invariants:
+      - Recovery targets the existing session Runtime and MCP lease. Command admission must not wait for network connection or a model request boundary.
+      - Connection results are persistent timeline facts, not model tool calls or a second client-side recovery queue.
   - id: service.agent-tool-exposure
     kind: service
     label: Runtime model tool projection and visibility
@@ -511,7 +523,7 @@ nodes:
       - file: apps/zcode-cli/packages/core/src/runtime/methods/config.ts
         symbol: invalidateToolCache
     invariants:
-      - Current getTools is also consumed by subagent inheritance. A future exposed-for-request subset must not silently narrow the eligible tool catalog or grant execution permission.
+      - getTools is also consumed by subagent inheritance. ToolExposureState derives the request subset without narrowing the eligible catalog or granting execution permission; plugin-native LSP and JavaRuntime remain deferred builtin tools.
   - id: service.agent-runtime-resources
     kind: service
     label: Protocol Agent app resource lifecycle
@@ -523,7 +535,7 @@ nodes:
       - file: apps/zcode-cli/packages/bootstrap/src/zcode-protocol/runtime-resources.ts
         symbol: ProtocolRuntimeResources
     invariants:
-      - This seed tracks existing app resources; the workspace language service owner in specs/agent-tool-optimization/java-lsp/SPEC.md is proposed and does not exist yet.
+      - ProtocolRuntimeResources owns app lifecycle. Bootstrap separately acquires and releases workspace language service leases; Main, relay and renderer do not own language processes or diagnostic facts.
   - id: service.agent-file-mutations
     kind: service
     label: Existing Agent file writes and patch integration points
@@ -537,21 +549,143 @@ nodes:
         symbol: writeToolEntry
       - file: apps/zcode-cli/packages/core/src/tool/handlers/edit.ts
         symbol: editToolEntry
+      - file: apps/zcode-cli/packages/core/src/tool/handlers/apply-patch.ts
+        symbol: applyPatchToolEntry
       - file: apps/zcode-cli/packages/contracts/src/interfaces/file-system.port.ts
         symbol: FileSystemPort
       - file: apps/zcode-cli/packages/contracts/src/tools/apply-patch.ts
         symbol: ApplyPatchInputSchema
       - file: apps/zcode-cli/packages/core/src/runtime/helpers/rewind.ts
         symbol: getFileMutationCheckpointCandidate
+      - file: apps/zcode-cli/packages/core/src/runtime/helpers/language-file-commits.ts
+        symbol: observeLanguageFileCommits
     invariants:
-      - Edit and Write commit through FileSystemPort. The ApplyPatch contract exists but no handler is registered; multi-file and partial-success checkpoint handling remain proposed in specs/agent-tool-optimization/apply-patch/SPEC.md.
-      - AST, LSP and dependency graph invalidation are proposed consumers of committed file changes, not implemented by these seeds. Optional checkpoint artifacts cannot serve as the sole file change signal.
+      - Edit, Write and the registered ApplyPatch handler commit through FileSystemPort. ApplyPatch reports actual committedChanges, including partial success; checkpoint and rewind consume the actual committed paths.
+      - The FileSystemPort decorator records committed Java changes independently of PostToolUse, cancellation settlement and optional checkpoint artifacts. Restricted children can synchronize an existing shared service with analyze:false without starting language analysis.
+      - AST and dependency graph invalidation remain planned consumers; no placeholder tools are registered.
+  - id: capability.code-development-plugin
+    kind: capability
+    label: Built-in code development plugin
+    aliases:
+      - code-development
+      - 通用代码开发插件
+      - Java LSP
+    codeSeeds:
+      - file: apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts
+        symbol: OFFICIAL_PLUGIN_DEFINITIONS
+      - file: apps/zcode-cli/packages/bootstrap/src/app/code-development-runtime.ts
+        symbol: createCodeDevelopmentRuntime
+      - file: apps/zcode-cli/packages/core/src/runtime/helpers/language-tools.ts
+        symbol: synchronizeRuntimeLanguageTools
+    invariants:
+      - The installed built-in plugin is enabled by default; explicit disable and suppression remain authoritative. LSP and JavaRuntime use ToolSearch's existing builtin source and budget, leaving the common resident tool list unchanged.
+      - Native host bridging does not implement arbitrary third-party manifest lspServers. TS/JS, AST and dependency graph remain unimplemented extensions.
+  - id: state.code-development-policy
+    kind: state-owner
+    label: Effective code development activation policy
+    aliases:
+      - plugin hot disable
+      - 原会话插件启停
+    codeSeeds:
+      - file: apps/zcode-cli/packages/adapters/src/language-service/plugin-policy.ts
+        symbol: CodeDevelopmentPluginPolicyOwner
+    invariants:
+      - Persisted user and workspace configuration is the fact source. Directory watchers and call-boundary refresh share one owner, preserve scope priority and prevent suppressed built-ins from being revived.
+      - Observed disable closes admission and cancels the affected lease; a configuration save is not a cross-process cancellation barrier.
+  - id: service.workspace-language-service
+    kind: service
+    label: Shared workspace Java language service
+    aliases:
+      - LSP
+      - JDT LS
+      - 文档同步
+      - Java 诊断
+    codeSeeds:
+      - file: apps/zcode-cli/packages/contracts/src/interfaces/language-service.port.ts
+        symbol: WorkspaceLanguageServicePort
+      - file: apps/zcode-cli/packages/adapters/src/language-service/workspace-service.ts
+        symbol: WorkspaceLanguageServiceOwner
+      - file: apps/zcode-cli/packages/adapters/src/language-service/commits.ts
+        symbol: LanguageCommitSynchronizer
+      - file: apps/zcode-cli/packages/core/src/tool/handlers/lsp.ts
+        symbol: lspToolEntry
+      - file: apps/zcode-cli/packages/core/src/runtime/helpers/language-diagnostics.ts
+        symbol: collectLanguageDiagnosticSummary
+      - file: apps/zcode-cli/packages/code-development-plugin/java/src/com/zcode/java/DiagnosticsSnapshotHandler.java
+        symbol: DiagnosticsSnapshotHandler
+    invariants:
+      - Workspace identity and execution owner isolate processes and document caches; sessions borrow leases. Only eligible queries or committed edits may start a server, never schema loading alone.
+      - File diagnostics require server-analyzed content hashes plus current host content and epoch checks. Original line endings are preserved, and unversioned notifications or incomplete results never imply a clean check.
+      - Workspace diagnostic facts are shared, while each session owns its displayed baseline; truncated results cannot establish resolved diagnostics.
+  - id: persistence.java-runtime-configuration
+    kind: persistence
+    label: Execution-environment JDK registrations and explicit selections
+    aliases:
+      - JavaRuntime
+      - JDK 对话配置
+    codeSeeds:
+      - file: apps/zcode-cli/packages/adapters/src/language-service/jdk-store.ts
+        symbol: JdkStore
+      - file: apps/zcode-cli/packages/core/src/tool/handlers/java-runtime.ts
+        symbol: javaRuntimeToolEntry
+      - file: apps/zcode-cli/packages/core/src/runtime/user-intent-evidence.ts
+        symbol: TurnUserIntentEvidence
+    invariants:
+      - User registrations are environment-wide candidates; project and build JVM selections require explicit scope. Tooling Java is separate, and no settings page or per-directory mandatory configuration is introduced.
+      - Writes require current trusted user intent, preserve explicit deny and revalidate evidence in the handler. Model or hook text and replayed history cannot authorize configuration writes.
+  - id: service.code-development-resources
+    kind: service
+    label: Targeted Java plugin resource preparation
+    aliases:
+      - bundled JDT LS
+      - tooling Java
+      - Java 随包资源
+    codeSeeds:
+      - file: apps/zcode-cli/packages/code-development-plugin/scripts/prepare-runtime.mjs
+        symbol: prepareCodeDevelopmentRuntime
+      - file: apps/zcode-cli/packages/code-development-plugin/scripts/prepare-runtime.mjs
+        symbol: assertCodeDevelopmentTarget
+    invariants:
+      - Build-time preparation pins resource hashes and uses a host Java 25 compiler for the extension. Target resources are staged serially; application startup never downloads them.
+      - Five platform targets have resource definitions; Windows ARM64 is explicitly unsupported. Resource definitions and Windows validation are not evidence of execution on untested targets.
 edges:
+  - from: capability.code-development-plugin
+    to: state.code-development-policy
+    type: gated-by
+    rank: must-inspect
+  - from: capability.code-development-plugin
+    to: service.workspace-language-service
+    type: implemented-by
+    rank: must-inspect
+  - from: capability.code-development-plugin
+    to: service.agent-tool-registry
+    type: registers-native-tools-in
+    rank: must-inspect
+  - from: service.agent-file-mutations
+    to: service.workspace-language-service
+    type: synchronizes-commits-to
+    rank: must-inspect
+  - from: service.agent-runtime-resources
+    to: service.workspace-language-service
+    type: releases-with-app
+    rank: must-inspect
+  - from: state.code-development-policy
+    to: service.workspace-language-service
+    type: gates-leases-of
+    rank: must-inspect
+  - from: persistence.java-runtime-configuration
+    to: service.workspace-language-service
+    type: supplies-project-runtime-candidates-to
+    rank: must-inspect
+  - from: service.code-development-resources
+    to: capability.code-development-plugin
+    type: bundles-resources-for
+    rank: must-inspect
   - from: service.agent-file-mutations
     to: service.agent-tool-registry
     type: registered-in
     rank: must-inspect
-    condition: registerBuiltInTools registers the existing Edit and Write entries; the ApplyPatch entry remains unimplemented.
+    condition: registerBuiltInTools registers the existing Edit, Write and ApplyPatch entries.
   - from: service.agent-tool-exposure
     to: service.agent-tool-registry
     type: projects-model-contracts-from
@@ -715,6 +849,15 @@ edges:
   - from: capability.conversation-runtime
     to: service.conversation-command-inbox
     type: admits-commands-through
+    rank: must-inspect
+  - from: service.conversation-command-inbox
+    to: service.session-mcp-recovery
+    type: admits-commands-through
+    rank: conditional
+    condition: Explicit reconnectMcpServer commands target an existing session.
+  - from: service.session-mcp-recovery
+    to: service.agent-tool-registry
+    type: synchronizes-tools-through
     rank: must-inspect
   - from: capability.conversation-runtime
     to: state.conversation-product-projection

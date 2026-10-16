@@ -71,6 +71,7 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
     // node_repl/browser-use 由 ZCode 官方 browser-use 插件启停推导出的 runtimeFeatures 控制。
     includeNodeRepl: nodeReplEnabled,
     includeBrowserUse: browserUseEnabled,
+    includeLanguageService: deps.languageServicePort?.enabled === true,
     embeddedSearchEnabled: resolveRuntimeEmbeddedSearchEnabled(runtime),
     agentProfiles: runtime.config.subagents?.profiles,
     allowedTools: resolveBuiltInToolAllowlist(runtime.config),
@@ -172,6 +173,11 @@ function createRuntimeToolExecutor(
       ? runtime.config.runtimeFeatures?.browserDocumentationRoot
       : undefined,
     fileSystemPort: deps.fileSystemPort,
+    languageServicePort: deps.languageServicePort,
+    javaRuntimePort: deps.javaRuntimePort,
+    userIntentEvidence: deps.userIntentEvidence,
+    recordTrustedUserAnswers: (turnId, answers) =>
+      runtime.userIntentEvidence.recordAnswers(turnId, answers),
     httpClientPort: deps.httpClientPort,
     imageProcessorPort: deps.imageProcessorPort,
     // 合并删除旧模型连接时曾漏掉此端口；Read 分页渲染与整份 PDF 页数检查仍依赖宿主注入。

@@ -20,6 +20,7 @@ import type {
   ModelNetworkStatusPayload,
   ModelSelectedPayload,
   ModelStreamingPayload,
+  McpReconnectUpdatedPayload,
   ModelUsage,
   PermissionDeniedPayload,
   PermissionRequestedPayload,
@@ -450,6 +451,7 @@ export class ProductProjection {
   private stableCompactCoverageBoundaryRowId: number | null = null;
   private turnHeaderRowIdByTurnId = new Map<string, number>();
   private compactMarkerRowIdByOperationId = new Map<string, number>();
+  private mcpReconnectRowIdByCommandId = new Map<string, number>();
   // goal verify boundary 身份 = targetId_goalIteration
   // （verificationId 仅 attempt alias——同 iteration 重试携带新 verificationId，
   // 旧实现按 verificationId keying 会长出第二个 marker）。
@@ -976,7 +978,10 @@ export class ProductProjection {
       // 以新事件恢复资格。hydration 期间 seed 尚未建立排除集合，不会误放历史引用。
       if (childSessionId) this.invalidSubagentChildSessionIds.delete(childSessionId);
     }
-    const runtimeTurnId = String(event.turnId ?? this.currentTurnId ?? "turn-unknown");
+    const runtimeTurnId =
+      event.type === SessionEventType.McpReconnectUpdated
+        ? String((event.payload as McpReconnectUpdatedPayload).anchorTurnId ?? "")
+        : String(event.turnId ?? this.currentTurnId ?? "turn-unknown");
     const productTurnId =
       event.type === SessionEventType.TurnStarted
         ? undefined
@@ -1085,6 +1090,7 @@ export class ProductProjection {
     clone.stableCompactCoverageBoundaryRowId = this.stableCompactCoverageBoundaryRowId;
     clone.turnHeaderRowIdByTurnId = new Map(this.turnHeaderRowIdByTurnId);
     clone.compactMarkerRowIdByOperationId = new Map(this.compactMarkerRowIdByOperationId);
+    clone.mcpReconnectRowIdByCommandId = new Map(this.mcpReconnectRowIdByCommandId);
     clone.goalVerifyMarkerRowIdByLifecycleKey = new Map(this.goalVerifyMarkerRowIdByLifecycleKey);
     clone.productTurnIdByRuntimeTurnId = new Map(this.productTurnIdByRuntimeTurnId);
     clone.runtimeTurnIdByProductTurnId = new Map(this.runtimeTurnIdByProductTurnId);
@@ -1130,6 +1136,7 @@ export class ProductProjection {
     this.stableCompactCoverageBoundaryRowId = candidate.stableCompactCoverageBoundaryRowId;
     this.turnHeaderRowIdByTurnId = candidate.turnHeaderRowIdByTurnId;
     this.compactMarkerRowIdByOperationId = candidate.compactMarkerRowIdByOperationId;
+    this.mcpReconnectRowIdByCommandId = candidate.mcpReconnectRowIdByCommandId;
     this.goalVerifyMarkerRowIdByLifecycleKey = candidate.goalVerifyMarkerRowIdByLifecycleKey;
     this.productTurnIdByRuntimeTurnId = candidate.productTurnIdByRuntimeTurnId;
     this.runtimeTurnIdByProductTurnId = candidate.runtimeTurnIdByProductTurnId;
@@ -1296,6 +1303,8 @@ export class ProductProjection {
         return this.onSessionCreated(event);
       case SessionEventType.SessionResumed:
         return this.onSessionResumed(event);
+      case SessionEventType.McpReconnectUpdated:
+        return this.onMcpReconnectUpdated(fact);
       case SessionEventType.SessionTitleUpdated:
         return this.onSessionTitleUpdated(event);
       case SessionEventType.TurnStarted:
@@ -1424,6 +1433,16 @@ export class ProductProjection {
     // 新 Runtime 会重新产生自己的 resume SessionStart lifecycle。
     this.pendingSessionHookInvocations.clear();
     for (const row of this.snapshot.rows.window) {
+      if (
+        row.kind === "timelineMarker" &&
+        row.marker.type === "mcpReconnect" &&
+        (row.marker.phase === "queued" || row.marker.phase === "connecting")
+      ) {
+        deltas.push({
+          op: "row.upserted",
+          row: { ...row, marker: { ...row.marker, phase: "interrupted" } },
+        });
+      }
       if (row.kind !== "hookInvocation" || row.state !== "running") continue;
       const executions = row.executions.map(
         (execution): HookExecutionProjection =>
@@ -4524,6 +4543,29 @@ export class ProductProjection {
     // ModelComplete 是缺少 network completed 事件时的成功兜底，不能让重试提示悬挂。
     deltas.push(...retryClearDeltas);
     return deltas;
+  }
+
+  private onMcpReconnectUpdated(fact: CanonicalConversationFact): ConversationDelta[] {
+    const { state } = fact.event.payload as McpReconnectUpdatedPayload;
+    const rowId = this.mcpReconnectRowIdByCommandId.get(state.sourceCommandId);
+    const existing = rowId === undefined ? undefined : this.findRow(rowId);
+    const marker: TimelineMarkerPayload = { type: "mcpReconnect", ...state };
+    if (existing?.kind === "timelineMarker") {
+      // 网络/OAuth 完成可能晚于其他轮，更新原操作行并保留首次归属，不能漂移到当前轮。
+      return [{ op: "row.upserted", row: { ...existing, marker } }];
+    }
+    const base = this.rowBase(fact.event, fact.productTurnId, fact.entityId);
+    const { productTurnId, ...unanchoredBase } = base;
+    const row: TimelineMarkerRow = {
+      // 空会话没有产品轮；省略可选 productTurnId，不虚构一个轮来通过协议校验。
+      ...(productTurnId ? base : unanchoredBase),
+      kind: "timelineMarker",
+      lane: "lightBoundary",
+      sourceCommandId: state.sourceCommandId,
+      marker,
+    };
+    this.mcpReconnectRowIdByCommandId.set(state.sourceCommandId, row.rowId);
+    return [{ op: "row.appended", row }];
   }
 
   // ── compact marker（compact 命令效果）──

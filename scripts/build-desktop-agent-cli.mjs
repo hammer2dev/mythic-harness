@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageAgentBundle } from "../packages/desktop/scripts/stage-agent-bundle.mjs";
 import { runCommand } from "./spawn-command.mjs";
+import { prepareCodeDevelopmentRuntime } from "../apps/zcode-cli/packages/code-development-plugin/scripts/prepare-runtime.mjs";
 
 // adapters tsc 在内存受限机器上会 OOM（exit 134），给整条构建链路提高堆上限。
 process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ? process.env.NODE_OPTIONS + " " : ""}--max-old-space-size=8192`;
@@ -137,12 +138,14 @@ async function runBootstrapWithRemoteBuild() {
 }
 
 if (useBootstrapWithRemoteBuild) {
+  await prepareCodeDevelopmentRuntime();
   await runBootstrapWithRemoteBuild();
   stageDevAgentBundle();
   process.exit(0);
 }
 
 if (!useTurboBuild) {
+  await prepareCodeDevelopmentRuntime();
   // Linux 容器 demo 里没有仓库级 turbo 根，`turbo --cwd apps/zcode-cli`
   // 会把 apps/zcode-cli 当根目录，并拒绝 turbo.json 中指向 ../../packages/shared 的 inputs。
   // 同时 agent 子 workspace 不包含根 packages/shared，但 agent 包依赖 @zcode/shared。
@@ -163,6 +166,7 @@ if (!useTurboBuild) {
   process.exit(0);
 }
 
+await prepareCodeDevelopmentRuntime();
 runCommand(
   "pnpm",
   [

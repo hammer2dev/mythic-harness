@@ -1196,6 +1196,13 @@ async function drainPendingInputUnlocked(
   }> = [];
   for (const pendingInput of pendingInputs) {
     const messageId = createMessageId();
+    if (
+      !pendingInput.source &&
+      this.config.taskType !== "subagent_child" &&
+      this.config.taskType !== "workflow_child"
+    ) {
+      this.userIntentEvidence.recordUserText(options.activeTurn.turnId, pendingInput.input);
+    }
     // 投递语义缺省按 queue（排队消费=独立轮）；guide 由 v4 命令面
     // 按 inputRouting 显式标注。落到持久 metadata 供冷恢复还原同一切分。
     const delivery = pendingInput.delivery ?? "queue";

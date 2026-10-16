@@ -19,6 +19,7 @@ import { createErrorResult, createPermissionErrorResult } from "./errors.js";
 import { emitPermissionDenied, emitPermissionRequested, emitPermissionResolved } from "./events.js";
 import { applyPreToolPermissionDecision, runPermissionRequestHooks } from "./hook-flow.js";
 import { racePermissionResponders } from "./permission-responder-race.js";
+import { recordTrustedPermissionAnswers } from "./permission-user-input.js";
 import {
   loadProjectPermissionRuleset,
   persistProjectPermissionUpdates,
@@ -234,7 +235,7 @@ export async function resolveToolPermission(
         ),
       ...(signal === undefined ? {} : { signal }),
     });
-    brokerResult = raceOutcome.result;
+    brokerResult = recordTrustedPermissionAnswers(deps, raceOutcome, traceContext, signal);
     const permissionHookResult = raceOutcome.source === "hook" ? raceOutcome.result : undefined;
 
     if (permissionHookResult?.decision === "modify") {

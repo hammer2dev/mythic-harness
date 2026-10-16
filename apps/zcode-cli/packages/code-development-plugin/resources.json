@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "jdtls": {
+    "version": "1.62.0.202610131109",
+    "file": "jdt-language-server-1.62.0-202610131109.tar.gz",
+    "url": "https://download.eclipse.org/jdtls/milestones/1.62.0/jdt-language-server-1.62.0-202610131109.tar.gz",
+    "sha256": "f587dafd8410633c2c2bf005e853a2bbb03cddee88933d49bfe6d9cb1cf09342",
+    "license": "EPL-2.0 and bundled third-party notices",
+    "source": "https://github.com/eclipse-jdtls/eclipse.jdt.ls/tree/v1.62.0"
+  },
+  "lombok": {
+    "version": "1.18.48",
+    "file": "lombok-1.18.48.jar",
+    "url": "https://repo.maven.apache.org/maven2/org/projectlombok/lombok/1.18.48/lombok-1.18.48.jar",
+    "sha256": "85477a4655ebb2c074a9099cfb749be454449fee564d4282610df1b85f7c508b",
+    "license": "MIT",
+    "source": "https://github.com/projectlombok/lombok/tree/v1.18.48"
+  },
+  "java": {
+    "version": "25.0.4.1+1",
+    "baseUrl": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1",
+    "license": "GPL-2.0-only WITH Classpath-exception-2.0",
+    "source": "https://github.com/adoptium/temurin25-binaries/releases/tag/jdk-25.0.4.1%2B1",
+    "targets": {
+      "win32-x64": {
+        "file": "OpenJDK25U-jdk_x64_windows_hotspot_25.0.4.1_1.zip",
+        "sha256": "00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283",
+        "root": "jdk-25.0.4.1+1",
+        "configuration": "config_win"
+      },
+      "darwin-x64": {
+        "file": "OpenJDK25U-jdk_x64_mac_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "e6229d9504f7922053ab31821b9e6bee8761daf7b026a3476d1a027563009880",
+        "root": "jdk-25.0.4.1+1/Contents/Home",
+        "configuration": "config_mac"
+      },
+      "darwin-arm64": {
+        "file": "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "61979887f7506a24a57439ff99adb8b3a7fc89977d9cfe3b8984f58a981b7b9d",
+        "root": "jdk-25.0.4.1+1/Contents/Home",
+        "configuration": "config_mac_arm"
+      },
+      "linux-x64": {
+        "file": "OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e",
+        "root": "jdk-25.0.4.1+1",
+        "configuration": "config_linux"
+      },
+      "linux-arm64": {
+        "file": "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "69df11a02cfa3ef7d7ca645e03edce6778ec090e100f6ae2b42097865730ac52",
+        "root": "jdk-25.0.4.1+1",
+        "configuration": "config_linux_arm"
+      }
+    }
+  }
+}

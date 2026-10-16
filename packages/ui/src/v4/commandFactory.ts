@@ -3,7 +3,7 @@
 // 服务端幂等表与 pendingCommands 展示都以它区分提交端。
 import {
   COMMANDS_REQUIRING_BASE_REVISION,
-  ROW_TARGETING_COMMANDS,
+  COMMANDS_REQUIRING_LOG_EPOCH,
   type CommandEnvelope,
   type CommandPayloadMap,
   type CommandType,
@@ -54,8 +54,8 @@ export function createCommandEnvelope<T extends CommandType>(
   if (COMMANDS_REQUIRING_BASE_REVISION.has(input.type) && input.baseRevision === undefined) {
     throw new Error(`command ${input.type} 是 CAS 命令，必须携带 baseRevision`);
   }
-  if (ROW_TARGETING_COMMANDS.has(input.type) && !input.baseLogEpoch) {
-    throw new Error(`command ${input.type} 是 row target 命令，必须携带 baseLogEpoch`);
+  if (COMMANDS_REQUIRING_LOG_EPOCH.has(input.type) && !input.baseLogEpoch) {
+    throw new Error(`command ${input.type} 必须携带 baseLogEpoch`);
   }
   return {
     commandId: uuidv7(),

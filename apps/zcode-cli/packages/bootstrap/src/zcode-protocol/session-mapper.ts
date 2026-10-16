@@ -357,6 +357,10 @@ export function mapSessionEvents(
 }
 
 export function shouldExposeSessionEventToProtocol(event: SessionEvent): boolean {
+  if (event.type === SessionEventType.McpReconnectUpdated) {
+    // MCP 恢复由 V4 的同一 marker 承载；旧协议不把未知事件误投影为通用 session.updated。
+    return false;
+  }
   if (event.type === SessionEventType.StreamingToolLedgerUpdated) {
     // 性能修复：StreamingToolLedgerUpdated 是 runtime replay 账本，常在 closed/queued/started/committed
     // 阶段携带同一份完整 tool input。UI 协议流已有 model.streaming/tool.updated 生命周期，

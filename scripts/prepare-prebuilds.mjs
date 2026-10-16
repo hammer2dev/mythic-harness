@@ -33,6 +33,10 @@ import {
 } from "./deterministic-tar-archive.mjs";
 import { runCommand } from "./spawn-command.mjs";
 import { resolveIntranetDepsBaseUrl } from "./intranetDefaults.mjs";
+import {
+  prepareCodeDevelopmentRuntime,
+  stageCodeDevelopmentPlugin,
+} from "../apps/zcode-cli/packages/code-development-plugin/scripts/prepare-runtime.mjs";
 
 export { computeComponentSourceSha256, packComponentSourceAsArchive };
 
@@ -93,6 +97,14 @@ const browserUseRequiredRuntimePaths = [
 ];
 const remoteOfficialPluginPackages = [
   {
+    packageName: "@zcode/code-development-plugin",
+    relativePath: "apps/zcode-cli/packages/code-development-plugin",
+    requiresRuntime: true,
+    targetSpecific: true,
+    requiredRuntimePaths: ["runtime/manifest.json"],
+    stagedPath: "packages/code-development-plugin",
+  },
+  {
     // 远端 shared-host 必须部署 node_repl runtime，否则只剩 skill 而没有 mcp__node_repl__js ——
     // 该 runtime 现由 @zcode/node-repl-host 提供（见下一个条目），browser-use 只带自己的
     // client script 与 skill/docs。
@@ -138,6 +150,8 @@ const remoteOfficialPluginTopLevelPaths = new Set([
   "hooks",
   "output-styles",
   "package.json",
+  "runtime",
+  "resources.json",
   "scripts",
   "skills",
   "templates",
@@ -156,6 +170,8 @@ function shouldCopyOfficialPluginAsset(sourcePath) {
 const remoteOfficialPluginRequiredPaths = [
   "packages/browser-use-plugin/.zcode-plugin/plugin.json",
   "packages/node-repl-host/.zcode-plugin/plugin.json",
+  "packages/code-development-plugin/.zcode-plugin/plugin.json",
+  "packages/code-development-plugin/runtime/manifest.json",
 ];
 
 function readZCodeAgentRuntimeVersion() {
@@ -407,6 +423,7 @@ function copyNodePtyPrebuilds() {
 
 function buildRemoteOfficialPluginRuntimes() {
   for (const plugin of remoteOfficialPluginPackages) {
+    if (plugin.targetSpecific) continue;
     if (!plugin.requiresRuntime) continue;
     console.log(`==> Building remote official plugin runtime: ${plugin.packageName}`);
     if (isBootstrapWithRemote) {
@@ -461,8 +478,14 @@ function assertRemoteOfficialPluginRuntime(plugin) {
   }
 }
 
-function stageRemoteOfficialPlugins(glmDir) {
+async function stageRemoteOfficialPlugins(glmDir, target) {
   for (const plugin of remoteOfficialPluginPackages) {
+    if (plugin.targetSpecific) {
+      // 目标 Java 必须在该平台目录复制前准备；不能把宿主 runtime 复用给所有远端平台。
+      await prepareCodeDevelopmentRuntime({ target });
+      await stageCodeDevelopmentPlugin(join(glmDir, plugin.stagedPath), target);
+      continue;
+    }
     const sourceRoot = join(rootDir, plugin.relativePath);
     const manifestPath = join(sourceRoot, ".zcode-plugin", "plugin.json");
     if (!existsSync(manifestPath)) {
@@ -538,7 +561,7 @@ async function stageRemoteAgentBundles() {
     rmSync(glmDir, { recursive: true, force: true });
     mkdirSync(glmDir, { recursive: true });
     copyFileSync(cliBundlePath, join(glmDir, "zcode.cjs"));
-    stageRemoteOfficialPlugins(glmDir);
+    await stageRemoteOfficialPlugins(glmDir, platformKey);
     await stageRemoteBundledSkillPack(glmDir);
     console.log(`  [ok] mock-cdn glm/${platformKey}/zcode.cjs`);
   }

@@ -3,6 +3,7 @@
 // 结构变化换整行（row.upserted），文本增长用 append（row.delta）；turn 是 row 上的标签不是容器。
 import { z } from "zod";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
+import { zcodeMcpReconnectStateSchema } from "../mcp-status.js";
 import { timestampSchema } from "./core.js";
 import { backgroundResultOriginMetaSchema, workflowLaunchMetaSchema } from "./workflow-row-meta.js";
 
@@ -329,6 +330,7 @@ export type HookInvocationRow = z.infer<typeof hookInvocationRowSchema>;
 // timelineMarker。
 // compact.status=cancelled 表示 auto compact 被 stop；失败终态为 failed。
 export const timelineMarkerPayloadSchema = z.union([
+  zcodeMcpReconnectStateSchema.extend({ type: z.literal("mcpReconnect") }),
   z.object({
     type: z.literal("compact"),
     origin: z.enum(["manual", "auto"]),

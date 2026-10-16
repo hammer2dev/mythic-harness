@@ -127,6 +127,12 @@ export const commandPayloadSchemas = {
   // compact 是输入型维护命令：idle 时立即执行，busy/held 时进入 FIFO。
   // 因为 admission 与当前 revision 无关，不走 CAS；sourceCommandId 提供幂等边界。
   compact: z.object({}),
+  reconnectMcpServer: z
+    .object({
+      serverName: z.string().trim().min(1),
+      expectedForegroundExecutionId: z.string().min(1).nullable(),
+    })
+    .strict(),
   // running 时对稳定 assistant row 可用。
   forkAssistant: z.object({ target: conversationRowTargetSchema }),
   applyFileRewind: z.object({ target: conversationRowTargetSchema }),
@@ -297,6 +303,12 @@ export const ROW_TARGETING_COMMANDS: ReadonlySet<CommandType> = new Set([
   "setAssistantFeedback",
 ]);
 
+/** 恢复连接只约束分支代次，不因模型流式更新产生的 revision 变化拒绝请求。 */
+export const COMMANDS_REQUIRING_LOG_EPOCH: ReadonlySet<CommandType> = new Set([
+  ...ROW_TARGETING_COMMANDS,
+  "reconnectMcpServer",
+]);
+
 // ── 信封 ──
 export const commandEnvelopeSchema = z.object({
   ttft: localTtftContextSchema.optional(),
@@ -325,15 +337,21 @@ export function parseCommandEnvelope(
   if (
     (COMMANDS_REQUIRING_BASE_REVISION.has(envelope.data.type) &&
       envelope.data.baseRevision === undefined) ||
-    (ROW_TARGETING_COMMANDS.has(envelope.data.type) && envelope.data.baseLogEpoch === undefined)
+    (COMMANDS_REQUIRING_LOG_EPOCH.has(envelope.data.type) &&
+      envelope.data.baseLogEpoch === undefined)
   ) {
     return {
       ok: false,
       error: new z.ZodError([
         {
           code: "custom",
-          path: [envelope.data.baseRevision === undefined ? "baseRevision" : "baseLogEpoch"],
-          message: "CAS commands require baseRevision and baseLogEpoch",
+          path: [
+            COMMANDS_REQUIRING_BASE_REVISION.has(envelope.data.type) &&
+            envelope.data.baseRevision === undefined
+              ? "baseRevision"
+              : "baseLogEpoch",
+          ],
+          message: "Command requires its revision or log epoch precondition",
         },
       ]),
     };
@@ -346,6 +364,12 @@ export function parseCommandEnvelope(
 
 // ── ACK ──
 export const commandResultSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("reconnectMcpServer"),
+    serverName: z.string(),
+    // ACK 仅表示已持久受理，实际结果由会话时间线记录发布。
+    disposition: z.literal("queued"),
+  }),
   z.object({
     type: z.enum(["createSession", "createSelectionSideSession", "forkAssistant"]),
     sessionId: z.string(),

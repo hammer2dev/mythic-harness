@@ -1,3 +1,7 @@
+import {
+  createCodeDevelopmentRuntime,
+  type CodeDevelopmentRuntime,
+} from "./code-development-runtime.js";
 import { createConfig, resolvePath } from "@zcode/adapters/config";
 import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import {
@@ -196,6 +200,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
   let nodeReplBrowserBroker: NodeReplBrowserBroker | undefined;
   let ownedNodeReplBrowserBroker: NodeReplBrowserBroker | undefined;
   let providerModelRuntime: ApiProviderModelRuntime | undefined;
+  let codeDevelopment: CodeDevelopmentRuntime | undefined;
   try {
     const storageRoot = resolvePath(configResult.config.storage.dir);
     const cliStorageRoot = getCliStorageRoot(storageRoot);
@@ -406,6 +411,22 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       options.pdfDocumentPort ?? createPopplerPdfDocumentAdapter({ executionPort });
     // browser-use 控制端口：仅当宿主（desktop）注入时可用，无本地 fallback（纯 CLI 无浏览器底座）。
     const fileSystemPort = options.fileSystemPort ?? createNodeFileSystemAdapter();
+    codeDevelopment = options.languageServicePort
+      ? undefined
+      : await createCodeDevelopmentRuntime({
+          plugins: pluginOutcome.plugins,
+          cliStorageRoot,
+          userConfigPath: configResult.sources.user.path,
+          projectConfigPath: options.projectConfigPath,
+          skipUserConfig: options.skipUserConfig,
+          workspaceRoot: workingDirectory,
+          workspaceIdentity: runtimeConfig.workspaceIdentity?.toString(),
+          fileSystem: fileSystemPort,
+          env: options.env,
+          logger,
+        });
+    const languageServicePort = options.languageServicePort ?? codeDevelopment?.port;
+    const javaRuntimePort = options.javaRuntimePort ?? codeDevelopment?.javaRuntimePort;
     const httpClientPort =
       options.httpClientPort ??
       createNodeWebFetchHttpClientAdapter({
@@ -555,6 +576,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     // 新建的 Model 才看得到，child 不各自冻结一份。
     const modelFactory = providerModelRuntime.modelFactory;
     const scriptWorkflowFacade = createScriptWorkflowBridge({
+      languageServicePort,
+      javaRuntimePort,
       agentTelemetry: modelTelemetry.agentExecution,
       appOptions: options,
       appVersion,
@@ -625,6 +648,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                   ).configOverrides,
                 },
                 deps: {
+                  languageServicePort,
+                  javaRuntimePort,
                   agentTelemetry: modelTelemetry.agentExecution,
                   appOptions: options,
                   appVersion,
@@ -724,6 +749,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       currentSelection: () => getRuntime().getSessionModelSelection(),
     });
     runtime = new AgentRuntime(sessionId, runtimeConfig, {
+      languageServicePort,
+      javaRuntimePort,
       agentTelemetry: modelTelemetry.agentExecution,
       // 主代理的模型请求过治理器的 observer：立即放行，但让治理器看见它的 429 / 成功。
       modelRequestAdmission: workflowConcurrencyGovernor.observer(),
@@ -820,6 +847,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       traceContext,
     });
     const workflowFacade = createWorkflowFacade({
+      languageServicePort,
+      javaRuntimePort,
       agentTelemetry: modelTelemetry.agentExecution,
       appOptions: options,
       appVersion,
@@ -1106,7 +1135,11 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       ...sessionFacade,
       close: async () => {
         try {
-          await closeSession?.();
+          try {
+            await closeSession?.();
+          } finally {
+            await codeDevelopment?.close();
+          }
         } finally {
           try {
             providerModelRuntime?.dispose();
@@ -1275,6 +1308,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       ...inputFacade,
     };
   } catch (error) {
+    await codeDevelopment?.close();
     providerModelRuntime?.dispose();
     void modelTelemetry.shutdown().catch(() => undefined);
     void ownedNodeReplBrowserBroker?.close();

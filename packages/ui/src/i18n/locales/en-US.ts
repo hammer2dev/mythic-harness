@@ -3766,6 +3766,21 @@ const enUS: Record<string, string> = {
     "The /plan shortcut supports text only for now. Remove attachments or context and try again.",
   "chat.compact.runningBlocked": "Compact context after the current task finishes.",
   "chat.compact.queued": "Compaction queued and will run in order.",
+  "chat.mcpReconnect.usage":
+    "Usage: /mcp connect <server>. Quote server names containing spaces. Other actions and attachments are not supported.",
+  "chat.mcpReconnect.sessionRequired": "Use an existing conversation to restore an MCP connection.",
+  "chat.mcpReconnect.sessionUnavailable":
+    "The conversation is not ready. Wait for it to load, then retry.",
+  "chat.mcpReconnect.rejected": "MCP recovery request was not accepted: {reason}",
+  "chat.mcpReconnect.phase.queued": "Accepted, waiting to restore {server}",
+  "chat.mcpReconnect.phase.connecting": "Restoring {server}",
+  "chat.mcpReconnect.phase.connected": "Connected to {server}",
+  "chat.mcpReconnect.phase.awaiting_authorization": "{server} is awaiting authorization",
+  "chat.mcpReconnect.phase.failed": "Failed to restore {server}",
+  "chat.mcpReconnect.phase.cancelled": "Recovery cancelled for {server}",
+  "chat.mcpReconnect.phase.interrupted":
+    "Recovery interrupted for {server}. Send the connect command again.",
+  "chat.mcpReconnect.toolCount": "Tools available to this conversation: {count}",
   "chat.compact.duplicateBlocked": "A compaction is already running or queued.",
   "chat.modelSwitch.contextWindowGuard.title": "Compress context before switching models",
   "chat.modelSwitch.contextWindowGuard.description":

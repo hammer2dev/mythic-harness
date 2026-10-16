@@ -661,6 +661,8 @@ function modeForSeedFile(filePath: string, sourceMode?: number): number {
   if (sourceMode !== undefined && (sourceMode & 0o111) !== 0) return 0o755;
 
   const normalizedPath = toPosixPath(filePath);
+  // Windows 交叉打包时 stat 不能保留 Unix 执行位；Java 及进程启动 helper 必须按资源契约恢复。
+  if (/^runtime\/java\/(?:bin\/[^/]+|lib\/jspawnhelper)$/u.test(normalizedPath)) return 0o755;
   // official plugin seed 会重写缓存文件权限。部分插件通过 polyglot shell wrapper
   // 直接执行 hook 脚本，若落盘成 0644 会 permission denied。这里保留源码执行位，
   // 并对 SEA/旧 manifest 缺少 mode 的 hook 脚本兜底。

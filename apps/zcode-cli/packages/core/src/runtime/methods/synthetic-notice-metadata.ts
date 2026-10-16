@@ -56,6 +56,7 @@ function syntheticUserNoticeKind(source: SyntheticUserMessageSource): MessageSem
     // goal_state_change 是 trajectory 分支新增的 runtime 注入源（target.ts 目标变更通知），
     // 与 goal-continuation 同属 system reminder 语义。
     case "goal_state_change":
+    case "code_diagnostics":
       return "system_reminder";
     case "goal-continuation":
       return "system_reminder";

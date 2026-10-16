@@ -1,4 +1,5 @@
 import type { ExecutionOutputPreview } from "../interfaces/execution.port.js";
+import type { ZCodeMcpReconnectState } from "@zcode/shared";
 import type { RuntimeInputPresentation } from "../interfaces/runtime-input-presentation.js";
 /* eslint-disable max-lines -- session event 契约集中在单文件导出，避免 app/agent 协议类型分散后漂移。 */
 // ============================================================
@@ -112,6 +113,7 @@ export const SessionEventType = {
   AssistantMessage: "assistant_message",
   AssistantFeedbackUpdated: "assistant_feedback_updated",
   SystemMessage: "system_message",
+  McpReconnectUpdated: "mcp_reconnect_updated",
   ModelRequest: "model_request",
   ModelSelected: "model_selected",
   ModelStreaming: "model_streaming",
@@ -622,6 +624,11 @@ export interface SystemMessagePayload {
   type: "init" | "compact_boundary" | "interrupted";
   content: string;
   compactBoundary?: CompactBoundaryPayload;
+}
+
+export interface McpReconnectUpdatedPayload {
+  state: ZCodeMcpReconnectState;
+  anchorTurnId?: TurnId;
 }
 
 export interface SessionTitleUpdatedPayload {
@@ -1189,6 +1196,7 @@ export type SessionEventPayload =
   | UserMessagePayload
   | AssistantMessagePayload
   | SystemMessagePayload
+  | McpReconnectUpdatedPayload
   | ModelRequestPayload
   | ModelSelectedPayload
   | ModelStreamingPayload

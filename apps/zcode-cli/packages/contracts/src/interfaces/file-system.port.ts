@@ -88,6 +88,8 @@ export interface FileSystemReadTextRequest {
   /** Normalized absolute path. Relative paths are resolved by the tool layer. */
   path: string;
   encoding?: FileSystemTextEncoding;
+  /** 语言服务同步需要原始文本换行；默认仍按现有工具约定归一为 LF。 */
+  preserveLineEndings?: boolean;
   maxBytes?: number;
   trace?: TraceContext;
 }
@@ -95,10 +97,12 @@ export interface FileSystemReadTextRequest {
 export interface FileSystemReadTextResult {
   path: string;
   /**
-   * Text content normalized to LF line endings for tool/core consumption.
+   * Text content normalized to LF by default; preserveLineEndings requests the original text.
    * The original dominant file line ending is reported via `lineEndings`.
    */
   content: string;
+  /** true 证明 adapter 已按请求保留原始换行；旧 adapter 不应被假定支持。 */
+  lineEndingsPreserved?: boolean;
   encoding: FileSystemTextEncoding;
   /** Dominant line ending style observed before LF normalization. */
   lineEndings?: FileSystemLineEndings;

@@ -1,5 +1,11 @@
 import type { TraceContext, TurnState } from "./deps.js";
-import type { BackgroundResultOriginMeta, WorkflowLaunchMeta } from "@zcode/contracts";
+import type {
+  BackgroundResultOriginMeta,
+  WorkflowLaunchMeta,
+  McpServerConfig,
+  MessageId,
+  TurnId,
+} from "@zcode/contracts";
 import type {
   ActiveTurnStartReservation,
   ContinueActiveTargetLoopOptions,
@@ -14,6 +20,7 @@ export type RuntimeCommandMode =
   | "target-continuation-loop"
   | "task-notification"
   | "subagent-message"
+  | "mcp-reconnect"
   | "control-only-turn";
 export type RuntimeCommandId = string & {
   readonly __runtimeCommandId: unique symbol;
@@ -106,7 +113,19 @@ export interface ControlOnlyTurnRuntimeCommand extends RuntimeCommandBase {
   readonly workflowLaunch: WorkflowLaunchMeta;
 }
 
+export interface McpReconnectRuntimeCommand extends RuntimeCommandBase {
+  readonly mode: "mcp-reconnect";
+  readonly branchGeneration: number;
+  readonly serverName: string;
+  readonly config: McpServerConfig;
+  readonly sourceCommandId: string;
+  readonly expectedForegroundExecutionId: string | null;
+  readonly targetTurnId?: TurnId;
+  readonly anchorMessageId?: MessageId;
+}
+
 export type RuntimeCommand =
+  | McpReconnectRuntimeCommand
   | PromptRuntimeCommand
   | TargetContinuationRuntimeCommand
   | TargetContinuationLoopRuntimeCommand

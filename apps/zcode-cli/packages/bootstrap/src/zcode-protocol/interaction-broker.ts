@@ -1,4 +1,5 @@
 import { raceClientRequestWithV4Interaction } from "./interaction-response-race.js";
+import { buildTrustedUserAnswers } from "./interaction-user-input-evidence.js";
 import {
   ASK_USER_QUESTION_TOOL_NAME,
   AskUserQuestionInputSchema,
@@ -244,7 +245,7 @@ async function requestUserInput(
     ),
   );
 
-  return userInputResponseToBrokerResult(request, response);
+  return userInputResponseToBrokerResult(request, response, parsed.data.questions);
 }
 
 function v4AnswerToUserInputResponse(answer: V4InteractionAnswer): ZCodeUserInputResponse {
@@ -370,6 +371,7 @@ function mapAskUserQuestion(question: AskUserQuestion): ZCodeUserInputQuestion {
 function userInputResponseToBrokerResult(
   request: PermissionBrokerRequest,
   response: ZCodeUserInputResponse,
+  questions: readonly AskUserQuestion[],
 ): PermissionBrokerResult {
   if (response.action !== "accept") {
     return {
@@ -385,8 +387,10 @@ function userInputResponseToBrokerResult(
 
   const input = isRecord(request.input) ? request.input : {};
   const content = normalizeAskUserQuestionResponseContent(input, response.content);
+  const trustedUserAnswers = buildTrustedUserAnswers(questions, content);
   return {
     decision: "modify",
+    ...(trustedUserAnswers.length ? { trustedUserAnswers } : {}),
     modifiedInput: {
       ...input,
       ...content,

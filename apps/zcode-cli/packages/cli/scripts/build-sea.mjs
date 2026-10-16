@@ -154,6 +154,7 @@ const prepareSeaBlob = async (target, nodeVersion) => {
     requireRuntime: true,
     root,
     stagingDirectory: seaAssetStagingForTarget(`${target}-official-plugins`),
+    target,
   });
   const { assets: bundledSkillAssets, manifest: bundledSkillManifest } =
     await collectSeaBundledSkillAssets({

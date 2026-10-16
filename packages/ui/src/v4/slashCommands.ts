@@ -1,4 +1,7 @@
+import { parseMcpSlashCommand, type McpSlashCommand } from "./mcpReconnectCommand.js";
+
 export type V4VisibleSlashCommand =
+  | McpSlashCommand
   | {
       kind: "compact";
       displayText: string;
@@ -61,6 +64,13 @@ export function parseV4VisibleSlashCommand(
   if (!match) return null;
   const commandName = match[1]?.toLowerCase() ?? "";
   const args = match[2]?.trim() ?? "";
+
+  if (commandName === "mcp") {
+    return parseMcpSlashCommand(
+      displayText,
+      attachments.length > 0 || (options.contextAttachmentCount ?? 0) > 0,
+    );
+  }
 
   if (commandName === "plan") {
     const hasUnsupportedPayload =

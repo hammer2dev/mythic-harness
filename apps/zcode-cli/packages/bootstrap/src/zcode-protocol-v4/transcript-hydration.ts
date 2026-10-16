@@ -34,6 +34,7 @@ import {
   getConversationModelOnlyTurnTriggerSource,
   getConversationMessageProjectionPolicy,
   isConversationRealUserTurnStarter,
+  zcodeMcpReconnectStateSchema,
 } from "@zcode/shared";
 import {
   conversationInputIntentSchema,
@@ -1119,6 +1120,39 @@ function modelChangeToModelOf(message: MessageWithParts): HydratedTimelineModel 
   return null;
 }
 
+function synthesizeMcpReconnectMessage(
+  message: MessageWithParts,
+  productTurnByRuntimeAnchor: ReadonlyMap<string, string>,
+  push: PushEvent,
+): boolean {
+  if (getConversationMessageProjectionPolicy(message) !== "timelineOnly") return false;
+  const parts = message.parts.filter(
+    (part) => part.type === "timeline" && part.timelineType === "mcp_reconnect",
+  );
+  for (const part of parts) {
+    const state = zcodeMcpReconnectStateSchema.parse({
+      sourceCommandId: part.sourceCommandId,
+      serverName: part.serverName,
+      phase: part.phase === "queued" || part.phase === "connecting" ? "interrupted" : part.phase,
+      toolCount: part.toolCount,
+      catalogRevision: part.catalogRevision,
+      reason: part.reason,
+      failureKind: part.failureKind,
+    });
+    const anchorTurnId = part.anchorTurnId
+      ? (productTurnByRuntimeAnchor.get(String(part.anchorTurnId)) ?? String(part.anchorTurnId))
+      : undefined;
+    // 控制操作宿主只恢复 marker，不合成助手轮；未完成历史不触发重新连接。
+    push(
+      SessionEventType.McpReconnectUpdated,
+      { state, ...(anchorTurnId ? { anchorTurnId } : {}) },
+      anchorTurnId,
+      part.time?.start ?? message.info.time.created,
+    );
+  }
+  return parts.length > 0;
+}
+
 // preface 轮开轮门槛：只含 model_change/session_fork 宿主等不可渲染内容的 assistant
 // 消息不开轮，避免合成出只有「已工作」壳的空轮。
 function assistantMessageHasSynthesizableContent(message: MessageWithParts): boolean {
@@ -1365,6 +1399,7 @@ function collectTurnOutput(options: {
   emittedGoalVerifications: Set<string>;
   goalVerificationsByAnchor: ReadonlyMap<string, GoalVerificationFact[]>;
   onModelChange: (selection: HydratedTimelineModel) => void;
+  onMcpReconnect: (message: MessageWithParts) => boolean;
   push: PushEvent;
 }): TurnOutputCollection {
   const { messages, turnId, push } = options;
@@ -1383,6 +1418,10 @@ function collectTurnOutput(options: {
       // selection side chat 会把继承的 assistant 历史标成 model-only，
       // 旧 cold hydration 却只隐藏 user carrier，随后把 assistant 当作 preface/上一轮输出合成，
       // 导致副屏首次打开和冷恢复都泄漏父时间线。统一服从 projection policy，整条跳过。
+      index += 1;
+      continue;
+    }
+    if (options.onMcpReconnect(message)) {
       index += 1;
       continue;
     }
@@ -1544,6 +1583,10 @@ export function synthesizeEventsFromMessages(
   let seq = 0;
   const baseMs = options.baseTimestampMs ?? messages[0]?.info.time.created ?? 0;
   const events: SessionEvent[] = [];
+  const runtimeAnchorByMessageId = new Map(
+    messages.map((message) => [String(message.info.id), message.info.anchor?.turnId]),
+  );
+  const productTurnByRuntimeAnchor = new Map<string, string>();
 
   const push = (
     type: SessionEventType,
@@ -1551,6 +1594,11 @@ export function synthesizeEventsFromMessages(
     turnId?: string,
     sourceTimestampMs?: number,
   ): void => {
+    if (type === SessionEventType.TurnStarted) {
+      const messageId = (payload as { messageId?: string }).messageId;
+      const anchor = messageId ? runtimeAnchorByMessageId.get(messageId) : undefined;
+      if (anchor && messageId) productTurnByRuntimeAnchor.set(String(anchor), messageId);
+    }
     seq += 1;
     events.push({
       id: `hydrate-${seq}` as EventId,
@@ -1564,6 +1612,8 @@ export function synthesizeEventsFromMessages(
       payload,
     });
   };
+  const consumeMcpReconnect = (message: MessageWithParts): boolean =>
+    synthesizeMcpReconnectMessage(message, productTurnByRuntimeAnchor, push);
 
   // 历史消息不声明模型容量；调用方未知时保持未知，不能合成默认分母。
   const contextWindow = options.contextWindow;
@@ -1701,6 +1751,10 @@ export function synthesizeEventsFromMessages(
       index += 1;
       continue;
     }
+    if (consumeMcpReconnect(message)) {
+      index += 1;
+      continue;
+    }
     if (isLegacyCompactMaintenanceInput(message, messages[index + 1])) {
       // 旧手动 compact 的 user 宿主只是维护命令，不是 real-user intent；跳过宿主后，
       // 下一条 assistant compact fact 会走 preface model-only 轮并生成 canonical marker。
@@ -1769,6 +1823,7 @@ export function synthesizeEventsFromMessages(
         emittedGoalVerifications,
         goalVerificationsByAnchor,
         onModelChange: recordTimelineModel,
+        onMcpReconnect: consumeMcpReconnect,
         push,
       });
       index = collected.nextIndex;
@@ -1826,6 +1881,7 @@ export function synthesizeEventsFromMessages(
           emittedGoalVerifications,
           goalVerificationsByAnchor,
           onModelChange: recordTimelineModel,
+          onMcpReconnect: consumeMcpReconnect,
           push,
         });
         index = collected.nextIndex;
@@ -1871,6 +1927,7 @@ export function synthesizeEventsFromMessages(
         emittedGoalVerifications,
         goalVerificationsByAnchor,
         onModelChange: recordTimelineModel,
+        onMcpReconnect: consumeMcpReconnect,
         push,
       });
       index = collected.nextIndex;
@@ -1931,6 +1988,7 @@ export function synthesizeEventsFromMessages(
       emittedGoalVerifications,
       goalVerificationsByAnchor,
       onModelChange: recordTimelineModel,
+      onMcpReconnect: consumeMcpReconnect,
       push,
     });
     index = collected.nextIndex;

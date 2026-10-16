@@ -23,6 +23,8 @@ import { writeToolEntry } from "./write.js";
 import { editToolEntry } from "./edit.js";
 import { applyPatchToolEntry } from "./apply-patch.js";
 import { toolSearchToolEntry } from "./tool-search.js";
+import { lspToolEntry } from "./lsp.js";
+import { javaRuntimeToolEntry } from "./java-runtime.js";
 import { bashToolEntry, createBashToolEntry } from "./bash.js";
 import type { BashTimeoutPolicy } from "../bash-timeout-policy.js";
 import { createJsToolEntry, jsToolEntry } from "./node-repl.js";
@@ -80,6 +82,8 @@ export const builtInTools: ToolEntry[] = [
   editToolEntry,
   applyPatchToolEntry,
   toolSearchToolEntry,
+  lspToolEntry,
+  javaRuntimeToolEntry,
   bashToolEntry,
   globToolEntry,
   grepToolEntry,
@@ -183,6 +187,7 @@ interface RegisterBuiltInToolsOptions {
   includeNodeRepl?: boolean;
   /** browser-use 说明和 agent.browsers 注入由官方 browser-use 插件 + 宿主 browser bridge 共同启用。 */
   includeBrowserUse?: boolean;
+  includeLanguageService?: boolean;
   embeddedSearchEnabled?: boolean;
   agentProfiles?: readonly AgentProfile[];
   allowedTools?: readonly string[];
@@ -200,6 +205,11 @@ export function registerBuiltInTools(
   const disallowedTools = createToolRuleNameSet(options.disallowedTools);
 
   for (const entry of builtInTools) {
+    if (
+      (entry.metadata.name === "LSP" || entry.metadata.name === "JavaRuntime") &&
+      options.includeLanguageService !== true
+    )
+      continue;
     if (
       options.embeddedSearchEnabled === true &&
       (entry.metadata.name === "Glob" || entry.metadata.name === "Grep")

@@ -187,6 +187,8 @@ export interface McpCallToolOptions {
 }
 
 export interface McpPort {
+  /** 借用端口不拥有父连接生命周期；旧注入端口缺省保留原有管理能力。 */
+  readonly supportsConnectionLifecycle?: boolean;
   connectConfiguredServers(
     servers: Record<string, McpServerConfig>,
     options?: McpConnectOptions,
@@ -209,4 +211,32 @@ export interface McpPort {
   getToolCatalog?(): McpToolCatalogSnapshot | undefined;
   callTool(request: McpCallToolRequest, options?: McpCallToolOptions): Promise<McpToolCallResult>;
   close(): Promise<void>;
+}
+
+export type McpReconnectRejectReasonCode =
+  | "fault.mcp.serverNotConfigured"
+  | "fault.mcp.disabled"
+  | "fault.mcp.serverUntrusted"
+  | "fault.mcp.borrowedLifecycle"
+  | "fault.mcp.foregroundMismatch"
+  | "fault.mcp.turnNotSteerable"
+  | "fault.mcp.runtimeClosing";
+
+export class McpReconnectRejectedError extends Error {
+  constructor(
+    readonly reasonCode: McpReconnectRejectReasonCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "McpReconnectRejectedError";
+  }
+}
+
+export interface McpReconnectRequest {
+  serverName: string;
+  sourceCommandId: string;
+  expectedForegroundExecutionId: string | null;
+  traceContext?: TraceContext;
+  /** 内部持久 admission 钩子，不进入客户端协议，也不执行 MCP 网络请求。 */
+  onAdmitted?: () => Promise<void>;
 }

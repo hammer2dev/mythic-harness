@@ -377,6 +377,34 @@ async function createComponentArchive(
 
 /** 组装 `zcode-server-<os>-<arch>/` 发行目录；只做本地组装，不上传、不发布。 */
 export async function stageRelease(options: StageOptions): Promise<StagedRelease> {
+  if (options.officialPluginsDir) {
+    const pluginRoot = join(options.officialPluginsDir, "code-development-plugin");
+    let hasCodeDevelopment = true;
+    try {
+      await access(pluginRoot);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      hasCodeDevelopment = false;
+    }
+    if (hasCodeDevelopment) {
+      const manifest = JSON.parse(
+        await readFile(join(pluginRoot, "runtime", "manifest.json"), "utf8"),
+      ) as {
+        version?: number;
+        target?: string;
+        supported?: boolean;
+      };
+      // Java 是目标平台原生资源；不能把同一份宿主插件目录复制到其他平台发行包。
+      if (
+        manifest.version !== 1 ||
+        manifest.target !== options.target ||
+        (manifest.supported !== true &&
+          !(manifest.supported === false && options.target === "win32-arm64"))
+      ) {
+        throw new Error(`Code development runtime does not match server target ${options.target}`);
+      }
+    }
+  }
   for (const [name, value] of Object.entries(options.notices)) {
     if (!value.trim()) throw new Error(`Missing distribution notice: ${name}`);
   }

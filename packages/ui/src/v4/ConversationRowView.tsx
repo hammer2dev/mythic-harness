@@ -74,6 +74,7 @@ import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { WorkflowToolSummary } from "@/v4/WorkflowToolSummary.js";
+import { mcpReconnectMarkerView } from "@/v4/mcpReconnectMarkerView.js";
 import {
   readWorkflowName,
   readWorkflowRetuneCall,
@@ -1751,6 +1752,8 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
     running: boolean;
   } | null => {
     switch (marker.type) {
+      case "mcpReconnect":
+        return mcpReconnectMarkerView(marker, intl);
       case "compact": {
         const running = marker.status === "running";
         const scope = "chat.contextCompaction";
@@ -1855,13 +1858,15 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
       rowId={row.rowId}
       markerType={marker.type}
       markerStatus={
-        marker.type === "compact"
-          ? marker.status
-          : marker.type === "goalVerify"
-            ? marker.outcome
-            : marker.type === "forkNotice"
-              ? "created"
-              : "applied"
+        marker.type === "mcpReconnect"
+          ? marker.phase
+          : marker.type === "compact"
+            ? marker.status
+            : marker.type === "goalVerify"
+              ? marker.outcome
+              : marker.type === "forkNotice"
+                ? "created"
+                : "applied"
       }
       markerOrigin={marker.type === "compact" ? marker.origin : undefined}
       markerSourceCommandId={row.sourceCommandId}

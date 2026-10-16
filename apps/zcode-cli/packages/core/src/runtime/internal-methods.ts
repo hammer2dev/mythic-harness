@@ -36,6 +36,7 @@ import type {
 } from "./deps.js";
 import type { BackgroundResultOriginMeta, ContextUsageBreakdownItem } from "@zcode/contracts";
 import type { RuntimeCommand, RuntimeCommandId } from "./command-queue.js";
+import type { McpReconnectRequest, McpServerConfig, McpServerStatus } from "@zcode/contracts";
 import type { RuntimeMessageEntry } from "../agent/message-history.js";
 import type {
   ActiveTurnInfo,
@@ -271,6 +272,12 @@ export interface AgentRuntimeCoreMethods {
   ): Promise<void>;
   startMcpStartup(traceContext: TraceContext): Promise<McpConnectionSnapshot> | undefined;
   initializeMcp(traceContext: TraceContext): Promise<void>;
+  requestMcpReconnect(input: McpReconnectRequest & { config: McpServerConfig }): Promise<void>;
+  connectMcpServer(
+    serverName: string,
+    config: McpServerConfig,
+    options?: { signal?: AbortSignal; traceContext?: TraceContext },
+  ): Promise<McpServerStatus>;
   discoverSkillsForContext(traceContext: TraceContext): Promise<SkillLoadOutcome | undefined>;
   createConfigOnlyContextSnapshot(workingDirectory: string): ContextSourceSnapshot;
   initializeMessageHistoryFromContext(

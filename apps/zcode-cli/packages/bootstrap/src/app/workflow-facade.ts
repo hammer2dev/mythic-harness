@@ -16,6 +16,8 @@ import {
   type ContextSourcePort,
   type ExecutionPort,
   type FileSystemPort,
+  type WorkspaceLanguageServicePort,
+  type JavaRuntimePort,
   type HttpClientPort,
   type ImageProcessorPort,
   type Logger,
@@ -53,6 +55,8 @@ interface CreateWorkflowFacadeDeps {
   eventSink?: SessionEventSink;
   executionPort?: ExecutionPort;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
@@ -311,7 +315,10 @@ function createWorkflowChildRuntime(
           outputRootDir: join(deps.storageRoot, "cli", "exec"),
           processEnv: deps.appOptions.env ?? process.env,
         }),
-      fileSystemPort: deps.appOptions.fileSystemPort ?? createNodeFileSystemAdapter(),
+      fileSystemPort:
+        deps.fileSystemPort ?? deps.appOptions.fileSystemPort ?? createNodeFileSystemAdapter(),
+      languageServicePort: deps.languageServicePort,
+      javaRuntimePort: deps.javaRuntimePort,
       httpClientPort:
         deps.appOptions.httpClientPort ??
         createNodeWebFetchHttpClientAdapter({

@@ -8,8 +8,8 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   COMMANDS_REQUIRING_BASE_REVISION,
+  COMMANDS_REQUIRING_LOG_EPOCH,
   PROTOCOL_V4_LIMITS,
-  ROW_TARGETING_COMMANDS,
   parseCommandEnvelope,
 } from "@zcode/shared/zcode-protocol-v4";
 
@@ -322,6 +322,24 @@ export class CommandInbox {
       };
     }
 
+    // 会话恢复只绑定分支，不用高频流式 revision 做 CAS；行目标命令仍同时检查两者。
+    if (
+      envelope.sessionId !== null &&
+      COMMANDS_REQUIRING_LOG_EPOCH.has(envelope.type) &&
+      envelope.baseLogEpoch !== this.host.getLogEpoch(envelope.sessionId)
+    ) {
+      return {
+        kind: "ack",
+        remember: false,
+        ack: {
+          commandId: envelope.commandId,
+          status: "stale",
+          reasonCode: "proto.staleLogEpoch",
+          revisionAtDecision: revision,
+        },
+      };
+    }
+
     if (COMMANDS_REQUIRING_BASE_REVISION.has(envelope.type)) {
       if (envelope.baseRevision === undefined) {
         return {
@@ -331,20 +349,6 @@ export class CommandInbox {
             commandId: envelope.commandId,
             status: "rejected",
             reasonCode: "proto.missingBaseRevision",
-            revisionAtDecision: revision,
-          },
-        };
-      }
-      const logEpoch =
-        envelope.sessionId === null ? null : this.host.getLogEpoch(envelope.sessionId);
-      if (ROW_TARGETING_COMMANDS.has(envelope.type) && envelope.baseLogEpoch !== logEpoch) {
-        return {
-          kind: "ack",
-          remember: false,
-          ack: {
-            commandId: envelope.commandId,
-            status: "stale",
-            reasonCode: "proto.staleLogEpoch",
             revisionAtDecision: revision,
           },
         };

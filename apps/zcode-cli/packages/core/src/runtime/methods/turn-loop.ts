@@ -23,6 +23,8 @@ import {
 import type { AgentRuntimeInternal } from "../internal.js";
 import { runModelBackedTurnStep } from "./turn-model-step.js";
 import { getExposedTools, runtimeToolExposure } from "../helpers/tool-exposure.js";
+import { drainPendingMcpReconnects } from "./mcp-reconnect.js";
+import { collectLanguageDiagnosticSummary } from "../helpers/language-diagnostics.js";
 import {
   AUTOMATION_MUTATION_TOOL_NAMES,
   evaluateRapidRefill,
@@ -104,9 +106,19 @@ export async function runRegularTurnLoop(
 
     const finishMcp = beginLocalTurnPreparation(state.turnTraceContext, "mcp");
     await this.initializeMcp(state.turnTraceContext);
+    // 首请求与 continuation 都要处理原 turn 的恢复命令，不沿用仅后续步消费的通知门槛。
+    await drainPendingMcpReconnects(this, state.turnId, state.turnAbortSignal);
     finishMcp();
     throwIfTurnAborted(state.turnAbortSignal);
     const finishTools = beginLocalTurnPreparation(state.turnTraceContext, "tools");
+    try {
+      await this.languageServicePort?.refresh();
+    } catch (error) {
+      // 插件策略读取失败时 owner 已关闭资格；普通 Agent 请求仍应继续使用基础工具。
+      this.logger?.warn("Code Development policy unavailable", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     const turnDisallowedTools = buildTurnDisallowedTools(state);
     // automation 派发到已 active 会话或重试恢复时，入口 metadata 可能没有带到
     // loop state；但 queryId 仍是 automation-*。provider 请求边界必须按 queryId 再硬过滤
@@ -119,6 +131,24 @@ export async function runRegularTurnLoop(
           disallowed: turnDisallowedTools ?? undefined,
         });
     finishTools();
+    const languageSummary = await collectLanguageDiagnosticSummary(
+      this,
+      state.turnId,
+      state.turnAbortSignal,
+    );
+    if (languageSummary) {
+      commitTurnRequestEntries(this, state.turnRequestState, [
+        systemReminderAttachmentEntry("code_diagnostics", languageSummary),
+      ]);
+      await this.persistSyntheticUserNoticeForSession({
+        messageID: createMessageId(),
+        metadata: { runtimeMessage: { source: "code_diagnostics" } },
+        sessionId: this.sessionId,
+        source: "code_diagnostics",
+        text: languageSummary,
+        traceContext: state.turnTraceContext,
+      });
+    }
     if (!outputTokenRecoveryActive && this.needsPlanModeExitReminder) {
       this.needsPlanModeExitReminder = false;
       commitTurnRequestEntries(this, state.turnRequestState, [

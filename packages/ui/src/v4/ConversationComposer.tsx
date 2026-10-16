@@ -69,6 +69,8 @@ import {
   AttachmentPreview,
 } from "@/components/ai-elements/attachments.js";
 import { Button } from "@/components/ui/button.js";
+import { toast } from "@/components/ui/toast.js";
+import { parseMcpSlashCommand } from "@/v4/mcpReconnectCommand.js";
 import {
   Dialog,
   DialogClose,
@@ -1109,13 +1111,14 @@ function ConversationComposerImpl({
   // guide 是 CLI 已授权的 busy 输入路由，是否最终 steer 或回退 queue 由命令层裁决。
   const routingAllowsSend = draftMode || (snapshot !== null && mode !== "reject");
   const attachmentsReady = !attachmentsApi.hasUnreadyAttachments;
+  const hasMcpCommand = parseMcpSlashCommand(text) !== null;
   const canSend =
     !disabled &&
     !pending &&
     hasDraftToSubmit &&
     routingAllowsSend &&
-    attachmentsReady &&
-    submissionReady;
+    (attachmentsReady || hasMcpCommand) &&
+    (submissionReady || hasMcpCommand);
   // 旧 UI 状态机：streaming + 空草稿 → Stop；有草稿 → 发送键（入队）。
   const showStopControl = canStop && !hasDraftToSubmit;
 
@@ -1142,6 +1145,19 @@ function ConversationComposerImpl({
       const hasPendingPptxElementReferences = currentPptxElementReferences.length > 0;
       const currentConversationSelections = conversationSelectionReferences;
       const hasPendingConversationSelections = currentConversationSelections.length > 0;
+      const mcpCommand = parseMcpSlashCommand(
+        trimmed,
+        hasPendingAttachments ||
+          hasPendingCodeCommentContexts ||
+          hasPendingWebElementContexts ||
+          hasPendingPptxElementReferences ||
+          hasPendingConversationSelections,
+      );
+      // MCP 控制命令带附件或语法错误时直接保留草稿，不能退回模型发送或等待附件上传。
+      if (mcpCommand?.kind === "mcpUsage") {
+        toast(intl.formatMessage({ id: "chat.mcpReconnect.usage" }));
+        return;
+      }
       // 草稿首发 accepted 后同一 composer 会原地从 __draft__ promotion 到
       // session scope；若成功清理时再读可变 ref，会误清新 scope，并把首条输入残留在
       // __draft__，下次新建任务又恢复。发送开始时冻结真正提交的 scope。
@@ -1157,8 +1173,9 @@ function ConversationComposerImpl({
           !hasPendingPptxElementReferences &&
           !hasPendingConversationSelections) ||
         pendingRef.current ||
-        !submissionReady ||
-        (createSubmissionFromComposer !== undefined && submission === null) ||
+        (!mcpCommand &&
+          (!submissionReady ||
+            (createSubmissionFromComposer !== undefined && submission === null))) ||
         attachmentsApi.hasUnreadyAttachments
       ) {
         return;
@@ -1410,6 +1427,7 @@ function ConversationComposerImpl({
       createSubmissionFromComposer,
       submissionReady,
       getCodeCommentContexts,
+      intl,
       telemetryDraftConfig,
       modelSelectionView,
       onSendText,
@@ -2205,7 +2223,11 @@ function ConversationComposerImpl({
           placeholder={placeholder}
           disabled={disabled || mode === "reject"}
           submitting={pending}
-          submitDisabled={pending || !routingAllowsSend || !attachmentsReady || !submissionReady}
+          submitDisabled={
+            pending ||
+            !routingAllowsSend ||
+            (!hasMcpCommand && (!attachmentsReady || !submissionReady))
+          }
           allowSubmitWhenEmpty={
             // 发送按钮已把代码评论视为可发送上下文，但这里曾漏掉同一状态，
             // 导致空文本仅附代码评论时 Enter 被编辑器判为空，必须改点发送按钮。

@@ -18,6 +18,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runCommand } from "../../../scripts/spawn-command.mjs";
 import { stageAgentBundle } from "./stage-agent-bundle.mjs";
+import {
+  prepareCodeDevelopmentRuntime,
+  stageCodeDevelopmentPlugin,
+} from "../../../apps/zcode-cli/packages/code-development-plugin/scripts/prepare-runtime.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, "..");
@@ -83,6 +87,13 @@ const browserUseRequiredRuntimePaths = [
 ];
 const officialPluginPackages = [
   {
+    packageName: "@zcode/code-development-plugin",
+    relativePath: "apps/zcode-cli/packages/code-development-plugin",
+    requiresRuntime: true,
+    requiredRuntimePaths: ["runtime/manifest.json"],
+    stagedPath: "packages/code-development-plugin",
+  },
+  {
     // browser-use 只携带自己的 client script 与 skill/docs；node_repl MCP runtime 归
     // @zcode/node-repl-host（见上方常量注释）。
     packageName: "@zcode/browser-use-plugin",
@@ -130,6 +141,8 @@ const includedOfficialPluginTopLevelPaths = new Set([
   "hooks",
   "output-styles",
   "package.json",
+  "runtime",
+  "resources.json",
   "scripts",
   "skills",
   "templates",
@@ -161,8 +174,12 @@ function buildCliBundle() {
   }
 }
 
-function buildOfficialPluginRuntimes() {
+async function buildOfficialPluginRuntimes() {
   for (const plugin of officialPluginPackages) {
+    if (plugin.packageName === "@zcode/code-development-plugin") {
+      await prepareCodeDevelopmentRuntime({ target: platformKey });
+      continue;
+    }
     if (!plugin.requiresRuntime) continue;
     console.log(`[prepare:agent-bundle] building ${plugin.packageName} runtime ...`);
     if (isBootstrapWithRemote) {
@@ -226,8 +243,12 @@ function stageBundle() {
   stageAgentBundle({ repoRoot, platformKey });
 }
 
-function stageOfficialPlugins() {
+async function stageOfficialPlugins() {
   for (const plugin of officialPluginPackages) {
+    if (plugin.packageName === "@zcode/code-development-plugin") {
+      await stageCodeDevelopmentPlugin(resolve(glmDir, plugin.stagedPath), platformKey);
+      continue;
+    }
     const sourceRoot = resolve(repoRoot, plugin.relativePath);
     const manifestPath = resolve(sourceRoot, ".zcode-plugin", "plugin.json");
     if (!existsSync(manifestPath)) {
@@ -281,7 +302,7 @@ async function stageBundledSkillPack() {
 // browser-use runtime 的声明生成依赖 @zcode/core/dist。CI 干净检出没有该产物，
 // 必须先构建 CLI 依赖，再构建官方插件；开发机残留的 dist 曾掩盖这个顺序问题。
 buildCliBundle();
-buildOfficialPluginRuntimes();
+await buildOfficialPluginRuntimes();
 stageBundle();
-stageOfficialPlugins();
+await stageOfficialPlugins();
 await stageBundledSkillPack();

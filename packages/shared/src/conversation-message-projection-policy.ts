@@ -64,6 +64,7 @@ const PROVIDER_CONTEXT_SYNTHETIC_SOURCES = new Set([
   "task_notification",
   "task_status",
   "todo_reminder",
+  "code_diagnostics",
 ]);
 
 const MODEL_ONLY_TURN_TRIGGER_SOURCES = new Set([

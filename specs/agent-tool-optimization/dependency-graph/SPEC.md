@@ -1,8 +1,8 @@
 # Java 优先的 Dependency Graph 设计
 
-当前排期：保留设计待定，待 ToolSearch 与 ApplyPatch 实现完成后再讨论软件开发插件方案及本能力实施；本轮不实现。
+当前排期：作为 [通用代码开发插件](../code-development-plugin/SPEC.md) 的后续能力模块保留设计待定；该插件首版仅交付 Java LSP，本轮不实现依赖图。下文“首版”均指未来 Dependency Graph 模块自己的首版提案，不属于插件当前首版交付范围。
 
-状态：`proposed`，仅设计，未实现、未验证。更新：2026-10-11。
+状态：`proposed`，仅设计，未实现、未验证。更新：2026-10-16。
 
 本规范属于 [基础工具优化](../SPEC.md)，承接 [Java LSP](../java-lsp/SPEC.md) 的项目模型、JDK 分工与工作区隔离规则，并与 [AST](../ast/SPEC.md) 的语法/语义边界一致。用户已授权设计 AST、Dependency Graph、ApplyPatch；下文首版切分与字段均为明确提案，不代表新增运行能力或已确认全部取舍。
 

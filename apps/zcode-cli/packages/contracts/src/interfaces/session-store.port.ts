@@ -1,6 +1,7 @@
 // Session Store Port：为会话输入、消息和投影提供稳定的存储边界。
 // ============================================================
 
+import type { ZCodeMcpReconnectState } from "@zcode/shared";
 import type {
   MessageId,
   PartId,
@@ -59,6 +60,7 @@ export const SYNTHETIC_USER_MESSAGE_SOURCES = [
   "subagent",
   "subagent_message",
   "todo_reminder",
+  "code_diagnostics",
   // 中枢直接启动已保存工作流时落的那条 user 消息的来源。
   // 它虽是 synthetic（GUI 用元数据画启动卡而非显示文本），语义上却是用户真实动作：
   // origin=real_user、kind=user_prompt，与其余「运行时注入的提醒」类来源不同档。
@@ -628,7 +630,13 @@ export interface ModelChangeTimelinePart extends TimelinePartBase {
   toModel?: TimelineModelSelection & { label: string };
 }
 
+export interface McpReconnectTimelinePart extends TimelinePartBase, ZCodeMcpReconnectState {
+  timelineType: "mcp_reconnect";
+  sourceCommandId: string;
+}
+
 export type TimelinePart =
+  | McpReconnectTimelinePart
   | ContextCompactionTimelinePart
   | GoalVerificationTimelinePart
   | SessionForkTimelinePart

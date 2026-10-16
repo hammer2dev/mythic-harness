@@ -104,6 +104,7 @@ export function runtimeMetadataForSyntheticUserMessageSource(
   if (source === "todo_reminder") {
     return todoReminderRuntimeMetadata();
   }
+  if (source === "code_diagnostics") return systemReminderRuntimeMetadata("code_diagnostics");
   if (source === "goal_state_change") {
     return systemReminderRuntimeMetadata("goal_state_change");
   }

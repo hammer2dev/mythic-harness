@@ -12,6 +12,7 @@ import { createTurnCancelledError } from "../helpers/index.js";
 import { executeTargetContinuationCommand } from "./target.js";
 import { runActiveTargetContinuationLoop } from "./target-continuation-loop.js";
 import { isStaleBranchRuntimeCommand } from "./runtime-command-generation.js";
+import { runMcpReconnectCommand } from "./mcp-reconnect.js";
 import type {
   AcquireForegroundPromotionLeaseResult,
   ActiveForegroundExecutionState,
@@ -195,6 +196,10 @@ async function runRuntimeCommand(
   if (isStaleBranchRuntimeCommand(this, command)) return;
   const foregroundExecution = beginForegroundExecution.call(this, command);
   try {
+    if (command.mode === "mcp-reconnect") {
+      await runMcpReconnectCommand(this, command, foregroundExecution.controller.signal);
+      return;
+    }
     if (command.mode === "prompt") {
       if (this.runtimeCommandQueue.consumeCancelPending(command.id)) {
         if (command.startReservation) this.releaseTurnStart(command.startReservation.turnId);

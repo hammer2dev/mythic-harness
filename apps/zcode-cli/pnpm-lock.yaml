@@ -166,6 +166,8 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
 
+  packages/code-development-plugin: {}
+
   packages/contracts:
     dependencies:
       zod:

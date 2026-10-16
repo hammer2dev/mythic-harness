@@ -54,6 +54,8 @@ export * from "./resolve-workflow-question.js";
 export * from "./workflow-observation-display.js";
 export * from "./tool-result-metadata.js";
 export * from "./performance.js";
+export * from "./lsp.js";
+export * from "./java-runtime.js";
 
 // Shared types (only once to avoid duplicates)
 export type { DiffHunk, GitDiff } from "./write.js";

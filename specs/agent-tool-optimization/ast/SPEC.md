@@ -1,8 +1,8 @@
 # Agent AST 结构查询规范
 
-当前排期：保留设计待定，待 ToolSearch 与 ApplyPatch 实现完成后再讨论软件开发插件方案及本能力实施；本轮不实现。
+当前排期：作为 [通用代码开发插件](../code-development-plugin/SPEC.md) 的后续能力模块保留设计待定；该插件首版仅交付 Java LSP，本轮不实现 AST。下文“首版”均指未来 AST 模块自己的首版，不属于插件当前首版交付范围。
 
-状态：`proposed`，产品范围已确认，接口与实现方案待验证，尚未实现。更新：2026-10-11。
+状态：`proposed`，产品范围已确认，接口与实现方案待验证，尚未实现。更新：2026-10-16。
 
 本轮只编写设计文档，不注册工具、不修改业务源码或 schema。所属专题见 [Agent 工具优化](../SPEC.md)，语义服务边界见 [Java LSP](../java-lsp/SPEC.md)，工具发现见 [ToolSearch](../tool-search/SPEC.md)。
 

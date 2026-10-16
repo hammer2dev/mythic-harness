@@ -4,6 +4,7 @@ import { resolveLocale } from "@zcode/i18n";
 import { normalizeModelSelection, type ModelSelection } from "@zcode/provider";
 import {
   SESSION_ENTRY_MODEL_SELECTION,
+  McpReconnectRejectedError,
   traceContextToLogContext,
   type CollaborationMode,
   type ExecutionPort,
@@ -49,6 +50,7 @@ type SessionFacade = Pick<
   | "clearTarget"
   | "close"
   | "connectMcpServer"
+  | "requestMcpReconnect"
   | "disconnectMcpServer"
   | "generateWorkspaceText"
   | "testModelConnectivity"
@@ -366,9 +368,27 @@ export function createSessionFacade(deps: CreateSessionFacadeDeps): SessionFacad
       if (!deps.mcpPort) {
         throw new Error("MCP is disabled");
       }
-      return deps.mcpPort.connectServer(name, config, {
-        trace: deps.traceContext,
-        workingDirectory: deps.workingDirectory,
+      return deps.runtime.connectMcpServer(name, config, { traceContext: deps.traceContext });
+    },
+    requestMcpReconnect: async (input) => {
+      const config = deps.configuredMcpServers[input.serverName];
+      if (!config) {
+        throw new McpReconnectRejectedError(
+          "fault.mcp.serverNotConfigured",
+          "MCP server is not configured in this session",
+        );
+      }
+      if (deps.untrustedProjectMcpServers.has(input.serverName)) {
+        throw new McpReconnectRejectedError(
+          "fault.mcp.serverUntrusted",
+          "MCP server is not trusted in this session",
+        );
+      }
+      await deps.prepareResume(input.traceContext);
+      await deps.runtime.requestMcpReconnect({
+        ...input,
+        config,
+        traceContext: input.traceContext ?? deps.traceContext,
       });
     },
     readBackgroundBashOutput: (workId, sessionId) =>

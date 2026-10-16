@@ -9,6 +9,7 @@ import type {
   WorkflowLaunchMeta,
 } from "@zcode/contracts";
 import { SessionEventType } from "@zcode/contracts";
+import { normalizeMcpReconnectEvent } from "./mcp-reconnect-projection.js";
 
 type CanonicalConversationVisibility = "visible" | "modelOnly" | "stateOnly";
 type CanonicalConversationOrigin =
@@ -22,7 +23,7 @@ type CanonicalConversationOrigin =
   | "system";
 
 interface CanonicalConversationPlacement {
-  lane: "trigger" | "assistantWork" | "stateOnly";
+  lane: "trigger" | "assistantWork" | "lightBoundary" | "stateOnly";
   relation: "withinProductTurn" | "none";
 }
 
@@ -155,6 +156,9 @@ export function normalizeConversationEvent(
 ): CanonicalConversationFact {
   const runtimeTurnId = runtimeTurnIdOf(event);
   const productTurnId = context.productTurnId ?? runtimeTurnId;
+  if (event.type === SessionEventType.McpReconnectUpdated) {
+    return normalizeMcpReconnectEvent(event, context.productTurnId);
+  }
   if (event.type === SessionEventType.TurnStarted) {
     return normalizeTurnStarted(event, event.payload as TurnStartedPayload, {
       runtimeTurnId,

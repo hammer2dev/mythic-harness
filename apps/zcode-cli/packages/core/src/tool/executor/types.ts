@@ -13,6 +13,9 @@ import type {
   ExecutionShellSelection,
   AutomationPort,
   FileSystemPort,
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
+  UserIntentEvidencePort,
   HttpClientPort,
   ImageProcessorPort,
   PdfDocumentPort,
@@ -28,6 +31,7 @@ import type {
   SubagentPort,
   ToolArtifactStorePort,
   TraceContext,
+  TrustedUserAnswer,
   TurnId,
   WorkflowPort,
   WorkflowEscalatePort,
@@ -73,6 +77,7 @@ export type ShouldEnqueueBackgroundTaskNotification = (
 ) => boolean;
 
 export interface ToolExecutorOptions {
+  recordTrustedUserAnswers?: (turnId: TurnId, answers: readonly TrustedUserAnswer[]) => void;
   onToolExecutionStart?: (toolName: string) => void;
   searchTools?: ToolExecutionContext["searchTools"];
   agentTelemetry?: AgentExecutionTelemetryPort;
@@ -93,6 +98,9 @@ export interface ToolExecutorOptions {
   browserControlPort?: BrowserControlPort;
   browserDocumentationRoot?: string;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
+  userIntentEvidence?: UserIntentEvidencePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
@@ -179,6 +187,7 @@ export interface ToolBatchExecuteOptions extends ToolExecuteOptions {
 }
 
 export interface ToolExecutorDeps {
+  recordTrustedUserAnswers?: ToolExecutorOptions["recordTrustedUserAnswers"];
   onToolExecutionStart?: (toolName: string) => void;
   searchTools?: ToolExecutionContext["searchTools"];
   agentTelemetry?: AgentExecutionTelemetryPort;
@@ -199,6 +208,9 @@ export interface ToolExecutorDeps {
   browserControlPort?: BrowserControlPort;
   browserDocumentationRoot?: string;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
+  userIntentEvidence?: UserIntentEvidencePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;

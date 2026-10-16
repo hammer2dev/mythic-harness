@@ -6,6 +6,7 @@ import type { PermissionDecision } from "../events/session.events.js";
 import type { ModelToolSideEffectScope } from "../model/index.js";
 import type { CollaborationMode, RiskLevel } from "./session.port.js";
 import type { InteractionRequestOrigin, SessionId, ToolCallId, TraceId, TurnId } from "./shared.js";
+import type { TrustedUserAnswer } from "./user-intent-evidence.port.js";
 
 export type PermissionRuleBehavior = "allow" | "deny" | "ask";
 
@@ -75,6 +76,8 @@ export interface PermissionBrokerResult {
   preserveReasonFormatting?: boolean;
   reasonSource?: PermissionBrokerReasonSource;
   modifiedInput?: unknown;
+  /** 仅 broker 的实际非空用户应答；permission race 为 hook 时不可采用。 */
+  trustedUserAnswers?: TrustedUserAnswer[];
   permissionUpdates?: PermissionUpdate[];
   /**
    * Session-scoped grants ("Always allow in this session"). Applied to the runtime's

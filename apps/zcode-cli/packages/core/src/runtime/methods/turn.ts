@@ -12,6 +12,7 @@ import type {
   SessionGoal,
   TurnState,
 } from "../deps.js";
+import { cancelQueuedMcpReconnects } from "./mcp-reconnect.js";
 import {
   CoreErrorType,
   HookEventName,
@@ -111,6 +112,16 @@ export async function executeTurnCommand(
   const turnId = startReservation?.turnId ?? createTurnId();
   const queryId = options?.queryId ?? (options?.inputId as QueryId | undefined) ?? createQueryId();
   const displayInput = options?.displayInput ?? input;
+  this.userIntentEvidence.beginTurn(
+    turnId,
+    options?.inputSource === undefined &&
+      !options?.originMeta &&
+      this.config.taskType !== "subagent_child" &&
+      this.config.taskType !== "workflow_child" &&
+      !String(queryId).startsWith("automation-")
+      ? displayInput
+      : undefined,
+  );
   const turnTraceContext =
     startReservation?.traceContext ??
     createChildTraceContext(options?.traceContext ?? this.rootTraceContext, {
@@ -777,6 +788,14 @@ export async function executeTurnCommand(
     );
 
   return turnTelemetry.run(execute).finally(async () => {
+    try {
+      await cancelQueuedMcpReconnects(this, turnId);
+    } catch (error) {
+      this.logger?.warn("Failed to persist MCP recovery cancellation", {
+        event: "mcp.reconnect.cancellation_persist_failed",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
     if (targetRunHeartbeat) {
       clearInterval(targetRunHeartbeat);
     }

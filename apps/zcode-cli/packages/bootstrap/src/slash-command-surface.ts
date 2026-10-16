@@ -12,12 +12,18 @@ export const APP_PROTOCOL_VISIBLE_BUILTIN_SLASH_COMMAND_NAMES = [
   "init",
 ] as const;
 
-/** 仅供 App Composer 使用的命令，不扩展 CLI TUI/help surface。 */
+/** App Composer 专用展示定义，不扩展 CLI TUI/help surface。 */
 export const APP_PROTOCOL_APP_ONLY_BUILTIN_SLASH_COMMANDS = [
   {
     description: "Switch to Plan mode and optionally send a task.",
     inputHint: "/plan [task]",
     name: "plan",
+    source: "builtin",
+  },
+  {
+    description: "Reconnect a configured MCP server in the current conversation.",
+    inputHint: "/mcp connect <server>",
+    name: "mcp",
     source: "builtin",
   },
 ] as const satisfies readonly ZCodeSlashCommand[];

@@ -89,6 +89,10 @@
     "./tools": {
       "types": "./dist/tools/index.d.ts",
       "import": "./dist/tools/index.js"
+    },
+    "./language-service": {
+      "types": "./dist/language-service/index.d.ts",
+      "import": "./dist/language-service/index.js"
     }
   },
   "scripts": {

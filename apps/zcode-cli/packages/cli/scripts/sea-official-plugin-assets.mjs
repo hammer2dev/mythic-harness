@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  assertCodeDevelopmentTarget,
+  prepareCodeDevelopmentRuntime,
+} from "../../code-development-plugin/scripts/prepare-runtime.mjs";
 
 export const seaOfficialPluginAssetPrefix = "zcode-official-plugins/";
 export const seaOfficialPluginManifestAssetKey = `${seaOfficialPluginAssetPrefix}manifest.json`;
@@ -18,6 +22,15 @@ const browserUseRequiredRuntimePaths = [
 ];
 
 export const officialSeaPlugins = [
+  {
+    marketplace: "zcode-plugins-official",
+    name: "code-development",
+    packageName: "@zcode/code-development-plugin",
+    requiresRuntime: true,
+    requiredRuntimePaths: ["runtime/manifest.json"],
+    rootPath: join("packages", "code-development-plugin"),
+    version: "0.1.0",
+  },
   {
     // node_repl 宿主：Browser Use 的运行时产物，自己不是面向用户的插件
     // （无 skill、无市场 listing）。它必须随发布物嵌入，否则浏览器能力启用时没有宿主可跑。
@@ -48,6 +61,7 @@ export const collectSeaOfficialPluginAssets = async ({
   requireRuntime = false,
   root,
   stagingDirectory,
+  target = `${process.platform}-${process.arch}`,
 } = {}) => {
   const files = [];
   const assets = {};
@@ -60,6 +74,10 @@ export const collectSeaOfficialPluginAssets = async ({
 
   for (const plugin of officialSeaPlugins) {
     const pluginRoot = resolve(root, plugin.rootPath);
+    if (plugin.name === "code-development" && requireRuntime) {
+      await prepareCodeDevelopmentRuntime({ target });
+      await assertCodeDevelopmentTarget(pluginRoot, target);
+    }
     assertPluginRoot(pluginRoot, plugin);
     assertPluginRequiredSeedAssets(pluginRoot, plugin);
     // 只提供 skills 的内容型插件没有 MCP server，用 requiresRuntime:false 跳过校验；
@@ -70,6 +88,12 @@ export const collectSeaOfficialPluginAssets = async ({
     for await (const sourcePath of walkFiles(pluginRoot)) {
       const relativePath = relative(pluginRoot, sourcePath);
       if (!shouldIncludePluginFile(relativePath)) continue;
+      if (
+        plugin.name === "code-development" &&
+        target === "win32-arm64" &&
+        relativePath.startsWith(`dist${sep}`)
+      )
+        continue;
 
       const bytes = await readFile(sourcePath);
       const sourceStats = await stat(sourcePath);
@@ -157,7 +181,7 @@ function assertPluginRuntime(pluginRoot, plugin) {
   }
 }
 
-async function* walkFiles(directory) {
+async function* walkFiles(directory, pluginRoot = directory) {
   const entries = await readdir(directory, {
     withFileTypes: true,
   });
@@ -166,10 +190,20 @@ async function* walkFiles(directory) {
     if (shouldSkipDirectory(entry.name)) continue;
     const fullPath = resolve(directory, entry.name);
     if (entry.isDirectory()) {
-      yield* walkFiles(fullPath);
+      yield* walkFiles(fullPath, pluginRoot);
       continue;
     }
-    if (entry.isFile()) {
+    if (entry.isSymbolicLink()) {
+      const resolved = await realpath(fullPath);
+      const outside = relative(pluginRoot, resolved);
+      // 资源内相对文件链接必须进入 SEA；沿实际文件读取，不把链接当成遗漏项。
+      if (outside === ".." || outside.startsWith(`..${sep}`) || isAbsolute(outside)) {
+        throw new Error(`Plugin symlink escapes its root: ${fullPath}`);
+      }
+      if (!(await stat(fullPath)).isFile())
+        throw new Error(`Unsupported plugin directory symlink: ${fullPath}`);
+      yield fullPath;
+    } else if (entry.isFile()) {
       yield fullPath;
     }
   }
@@ -194,6 +228,8 @@ const includedTopLevelPaths = new Set([
   "hooks",
   "output-styles",
   "package.json",
+  "runtime",
+  "resources.json",
   "scripts",
   "skills",
   "templates",
@@ -214,6 +250,8 @@ const modeForSeedFile = (filePath, sourceMode) => {
   if (sourceMode !== undefined && (sourceMode & 0o111) !== 0) return 0o755;
 
   const normalizedPath = toPosixPath(filePath);
+  // Windows 交叉打包不会保留归档 Unix 执行位；Java 入口及进程 helper 必须显式进入可执行清单。
+  if (/^runtime\/java\/(?:bin\/[^/]+|lib\/jspawnhelper)$/u.test(normalizedPath)) return 0o755;
   if (/(?:^|\/)dist\/mcp\/server\.js$/i.test(normalizedPath)) return 0o755;
   if (/^hooks\//u.test(normalizedPath) && !/\.(json|md|txt)$/iu.test(normalizedPath)) {
     return 0o755;

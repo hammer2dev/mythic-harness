@@ -1,3 +1,12 @@
+import { mcpServerFailureKindSchema } from "../mcp-status.js";
+export {
+  MCP_SERVER_FAILURE_KINDS,
+  MCP_RECONNECT_REASON_MAX_CHARS,
+  mcpServerFailureKindSchema,
+  zcodeMcpReconnectStateSchema,
+  type McpServerFailureKind,
+  type ZCodeMcpReconnectState,
+} from "../mcp-status.js";
 import { zcodeProjectWorkspaceSchema } from "../project-workspace.js";
 import {
   databaseStartupErrorCodeSchema,
@@ -660,26 +669,6 @@ export const zcodeMcpServerStatusKindSchema = z.enum([
   "failed",
   "untrusted",
 ]);
-export const MCP_SERVER_FAILURE_KINDS = [
-  "config_invalid",
-  "runtime_unavailable",
-  "process_start_failed",
-  "network_unreachable",
-  "connection_timeout",
-  "protocol_negotiation_failed",
-  "tool_list_failed",
-  "unexpected_disconnect",
-  "oauth_authorization_failed",
-  "server_not_found",
-  "server_unavailable",
-  "rate_limited",
-  "server_internal_error",
-  "protocol_error",
-  "status_unavailable",
-  "connection_failed",
-] as const;
-export const mcpServerFailureKindSchema = z.enum(MCP_SERVER_FAILURE_KINDS);
-export type McpServerFailureKind = z.infer<typeof mcpServerFailureKindSchema>;
 export const zcodeMcpServerStatusSnapshotSchema = z
   .object({
     status: zcodeMcpServerStatusKindSchema,

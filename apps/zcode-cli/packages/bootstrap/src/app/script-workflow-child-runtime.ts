@@ -8,6 +8,8 @@ import {
   type AgentExecutionTelemetryPort,
   type ContextSourcePort,
   type FileSystemPort,
+  type WorkspaceLanguageServicePort,
+  type JavaRuntimePort,
   type HttpClientPort,
   type ImageProcessorPort,
   type JsonSchema,
@@ -43,6 +45,8 @@ export interface ScriptWorkflowAgentRuntimeDeps {
   configResult: ConfigResult;
   contextSourcePort?: ContextSourcePort;
   fileSystemPort: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
@@ -199,7 +203,10 @@ function createRuntimeDeps(
         outputRootDir: join(deps.storageRoot, "cli", "exec"),
         processEnv: deps.appOptions.env ?? process.env,
       }),
-    fileSystemPort: deps.appOptions.fileSystemPort ?? createNodeFileSystemAdapter(),
+    fileSystemPort:
+      deps.fileSystemPort ?? deps.appOptions.fileSystemPort ?? createNodeFileSystemAdapter(),
+    languageServicePort: deps.languageServicePort,
+    javaRuntimePort: deps.javaRuntimePort,
     httpClientPort:
       deps.httpClientPort ??
       deps.appOptions.httpClientPort ??

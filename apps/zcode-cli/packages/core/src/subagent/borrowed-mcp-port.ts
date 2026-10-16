@@ -44,6 +44,7 @@ export function createBorrowedSubagentMcpAccess(
   return {
     snapshot,
     port: {
+      supportsConnectionLifecycle: false,
       getToolCatalog,
       async callTool(request, options) {
         if (!connectedServerNames.has(request.serverName)) {

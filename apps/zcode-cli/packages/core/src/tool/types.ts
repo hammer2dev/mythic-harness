@@ -9,6 +9,9 @@ import type {
   ExecutionPort,
   BrowserControlPort,
   FileSystemPort,
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
+  UserIntentEvidencePort,
   HttpClientPort,
   ImageProcessorPort,
   PdfDocumentPort,
@@ -150,6 +153,9 @@ export interface ToolExecutionContext {
   /** 官方 browser-use plugin docs 资产目录；只在 browser-use 启用时用于 agent.browsers.documentation()。 */
   browserDocumentationRoot?: string;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
+  userIntentEvidence?: UserIntentEvidencePort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;

@@ -1,5 +1,6 @@
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
+import type { TurnUserIntentEvidence } from "./user-intent-evidence.js";
 import type { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { RuntimeCommandQueue } from "./command-queue.js";
 import type { ToolExposureState } from "./tool-exposure.js";
@@ -12,6 +13,8 @@ import type {
   EventReducer,
   ExecutionPort,
   FileSystemPort,
+  WorkspaceLanguageServicePort,
+  JavaRuntimePort,
   HookRunner,
   ImageProcessorPort,
   Logger,
@@ -97,6 +100,7 @@ export interface AgentRuntimeInternal
   contextSourcePort?: ContextSourcePort;
   skillPort?: SkillPort;
   mcpPort?: McpPort;
+  mcpReconnectInFlight?: Promise<void>;
   mcpStartupPromise?: Promise<McpConnectionSnapshot>;
   mcpToolCatalog?: McpToolCatalogSnapshot;
   residencyBlockingWorkCount: number;
@@ -110,6 +114,9 @@ export interface AgentRuntimeInternal
   artifactStore?: ToolArtifactStorePort;
   executionPort?: ExecutionPort;
   fileSystemPort?: FileSystemPort;
+  languageServicePort?: WorkspaceLanguageServicePort;
+  javaRuntimePort?: JavaRuntimePort;
+  userIntentEvidence: TurnUserIntentEvidence;
   imageProcessorPort?: ImageProcessorPort;
   pdfDocumentPort?: PdfDocumentPort;
   skillLoadOutcome?: SkillLoadOutcome;

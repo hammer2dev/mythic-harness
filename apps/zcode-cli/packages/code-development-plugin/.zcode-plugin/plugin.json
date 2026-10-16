@@ -1,0 +1,7 @@
+{
+  "name": "code-development",
+  "version": "0.1.0",
+  "description": "Code navigation, symbols and diagnostics through native language services. The initial release supports Java.",
+  "author": { "name": "Z.ai" },
+  "license": "MIT"
+}

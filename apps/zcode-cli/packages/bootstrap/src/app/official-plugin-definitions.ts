@@ -75,6 +75,26 @@ const OFFICIAL_ZCODE_GUIDE_REQUIRED_SEED_PATHS = [
 
 export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = [
   {
+    defaultEnabled: true,
+    name: "code-development",
+    version: "0.1.0",
+    listing: {
+      displayName: "Code Development",
+      displayName_i18n: { "zh-CN": "通用代码开发插件" },
+      description_i18n: { "zh-CN": "提供语言导航、符号、诊断和文档同步；首版支持 Java。" },
+      category: "developer-tools",
+      author: ZAI_AUTHOR,
+    },
+    rootCandidates: [
+      "packages/code-development-plugin",
+      "../code-development-plugin",
+      "../../code-development-plugin",
+      "../../../code-development-plugin",
+    ],
+    requiredSeedPaths: ["runtime/manifest.json"],
+    runtimeTopLevelPaths: ["runtime"],
+  },
+  {
     // 无 listing：宿主不进市场、不对用户露出。Browser Use 启用时才注册 node_repl 工具。
     defaultEnabled: true,
     name: OFFICIAL_NODE_REPL_HOST_PLUGIN_NAME,

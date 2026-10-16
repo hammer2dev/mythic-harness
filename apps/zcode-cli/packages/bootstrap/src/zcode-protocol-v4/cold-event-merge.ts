@@ -2,6 +2,7 @@ import {
   SessionEventType,
   selectActiveConversationBranch,
   type MessageWithParts,
+  type McpReconnectUpdatedPayload,
   type SessionEntryInfo,
   type SessionEvent,
   type SessionGoal,
@@ -723,6 +724,31 @@ export function mergeColdConversationEvents(input: MergeInput): ColdEventMergeRe
         ...transcriptEvents.slice(1),
       ]
     : transcriptEvents;
+  const durableMcpReconnects = new Map(
+    durableEvents
+      .filter((event) => event.type === SessionEventType.McpReconnectUpdated)
+      .map((event) => [(event.payload as McpReconnectUpdatedPayload).state.sourceCommandId, event]),
+  );
+  const activeMcpCommandIds = new Set(
+    input.messages.flatMap((message) =>
+      message.parts.flatMap((part) =>
+        part.type === "timeline" && part.timelineType === "mcp_reconnect"
+          ? [part.sourceCommandId]
+          : [],
+      ),
+    ),
+  );
+  const liveMcpReconnects = new Map<string, SessionEvent>();
+  for (const event of input.memoryEvents) {
+    // 真正 Runtime resume 之前的在途连接不能被热恢复规则重新标成运行中。
+    if (event.type === SessionEventType.SessionResumed) liveMcpReconnects.clear();
+    if (event.type === SessionEventType.McpReconnectUpdated) {
+      liveMcpReconnects.set(
+        (event.payload as McpReconnectUpdatedPayload).state.sourceCommandId,
+        event,
+      );
+    }
+  }
   const durableTurnIds = new Set(
     durableEvents.flatMap((event) => (event.turnId ? [String(event.turnId)] : [])),
   );
@@ -746,6 +772,38 @@ export function mergeColdConversationEvents(input: MergeInput): ColdEventMergeRe
   );
 
   input.memoryEvents.forEach((event, index) => {
+    if (event.type === SessionEventType.McpReconnectUpdated) {
+      const payload = event.payload as McpReconnectUpdatedPayload;
+      const durable = durableMcpReconnects.get(payload.state.sourceCommandId);
+      if (!durable) {
+        // 当前分支的 part 是权威；被 rewind/fork 裁掉的旧操作不能靠内存事件复活。
+        // 未完成 turn 的 part 不参与 durable synthesis，但仍在 active transcript 中。
+        if (
+          activeMcpCommandIds.has(payload.state.sourceCommandId) ||
+          (input.messages.length === 0 && !hasPersistedTargetAuthority)
+        ) {
+          supplements.push(event);
+        } else {
+          recordDiagnostic(diagnostics, "cold_merge.durable_event_suppressed", event);
+        }
+        return;
+      }
+      const durablePayload = durable.payload as McpReconnectUpdatedPayload;
+      if (
+        durablePayload.state.phase === "interrupted" &&
+        liveMcpReconnects.get(payload.state.sourceCommandId) === event
+      ) {
+        // 手机热重连仍有原 Runtime 的实时事实；保留最新状态，并复用持久 marker 的锚点。
+        supplements.push({
+          ...event,
+          turnId: durable.turnId,
+          payload: { ...payload, anchorTurnId: durablePayload.anchorTurnId },
+        });
+      } else {
+        recordDiagnostic(diagnostics, "cold_merge.durable_event_suppressed", event);
+      }
+      return;
+    }
     if (HOOK_LIFECYCLE_EVENT_TYPES.has(event.type)) {
       const invocationId = stringField(event.payload, "hookInvocationId");
       // invocation 扫描会把 startup/resume SessionStart 的临时 runtime turn 修正为
