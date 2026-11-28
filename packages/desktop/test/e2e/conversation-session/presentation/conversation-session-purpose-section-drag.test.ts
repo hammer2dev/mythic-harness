@@ -15,9 +15,6 @@ const preferenceKey = "zcode-sidebar-purpose-section-preferences";
 describe("CWP02 分区标题拖拽", () => {
   before(async () => {
     await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30_000);
-    await browser.execute((key) => localStorage.removeItem(key), preferenceKey);
-    await browser.refresh();
-    await $(project).waitForDisplayed();
   });
 
   afterEach(async () => {
@@ -26,6 +23,7 @@ describe("CWP02 分区标题拖拽", () => {
   });
 
   it("标题直接向上拖动，蓝线、纵轴、折叠独立与重载持久化", async () => {
+    await loadSections(["projects", "conversations"]);
     expect(await $("[data-purpose-section-drag-handle]").isExisting()).toBe(false);
     await $(project).$(trigger).click();
     await expect($(project).$(trigger)).toHaveAttribute("aria-expanded", "false");
@@ -75,6 +73,7 @@ describe("CWP02 分区标题拖拽", () => {
   });
 
   it("键盘从标题向下移动，Escape 不提交，Space 提交且不误折叠", async () => {
+    await loadSections(["conversations", "projects"]);
     const focusTasks = () =>
       browser.execute(
         (selector) => document.querySelector<HTMLButtonElement>(selector)!.focus(),
@@ -99,13 +98,15 @@ describe("CWP02 分区标题拖拽", () => {
   });
 
   it("新建按钮保持独立，点击仍能打开向导而不折叠或拖拽", async () => {
+    const expanded = await $(project).$(trigger).getAttribute("aria-expanded");
     await $('[data-testid="virtual-project-add"]').click();
     await $('[role="dialog"]').waitForDisplayed();
-    await expect($(project).$(trigger)).toHaveAttribute("aria-expanded", "false");
+    expect(await $(project).$(trigger).getAttribute("aria-expanded")).toBe(expanded);
     expect(await $(indicator).isExisting()).toBe(false);
   });
 
   it("明暗主题与 390px 下向右拖动仍不横向溢出，取消清除蓝线", async () => {
+    await loadSections(["projects", "conversations"]);
     const originalTheme = await browser.execute(() =>
       (window as Window & { __testActions?: { getTheme(): string } }).__testActions!.getTheme(),
     );
@@ -157,6 +158,17 @@ describe("CWP02 分区标题拖拽", () => {
     }
   });
 });
+
+async function loadSections(sectionOrder: ("projects" | "conversations")[]) {
+  await browser.execute(
+    (key, value) => localStorage.setItem(key, JSON.stringify({ sectionOrder: value })),
+    preferenceKey,
+    sectionOrder,
+  );
+  await browser.refresh();
+  await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30_000);
+  await $(project).$(trigger).waitForClickable();
+}
 
 async function order() {
   return browser.execute(() =>

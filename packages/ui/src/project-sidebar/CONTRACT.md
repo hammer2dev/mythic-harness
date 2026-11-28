@@ -32,7 +32,7 @@ UI 纠偏：分区复用 WorkspacePurposeSection 和原折叠/顺序偏好；项
 
 桌面本地项目添加目录通过 IPlatformService.selectDirectories 调起系统多选；结果仅合并去重到编辑器草稿，保存才提交。远端与 Web/手机目录浏览通过 projectService.readDirectory(hostId)，不从当前 tab 推导文件服务；DirectoryBrowser 的迟到响应沿用请求序号判定。选择在途与保存/关闭互斥，取消不修改草稿。见 docs/ui/project-local-directory-picker.md。
 
-有源文件夹的新建（含恢复）在 Host 成员登记和 saveProject 前显示本次目录信任确认，展示所选设备及完整 roots。ProjectEditor 是唯一草稿和确认请求 owner；取消保留表单，隐藏/卸载令旧查询与确认失效，单次保存以在途引用去重。确认只授权本次创建，不持久化、不改变 Hook Trust；重复使用目录仍确认，本地零 roots 直接创建。编辑和添加已有远程项目保持原行为；已保存项目的入口登记重试复用 created，不再次创建或确认。见 docs/specs/project-creation-folder-confirmation.md。
+有源文件夹的新建（含恢复）在 Host 成员登记和 saveProject 前显示本次目录信任确认，展示所选设备及完整 roots。ProjectEditor 是唯一草稿和确认请求 owner；取消保留表单，隐藏/卸载令旧查询与确认失效，单次保存以在途引用去重。确认授权本次创建或编辑新增的目录，Hook Trust 沿用原入口。创建表单要求主目录，编辑保留既有已确认目录。添加已有远程项目和入口登记重试复用既有项目。见 docs/specs/project-creation-folder-confirmation.md。
 
 本地项目行根据 roots 数量和展开态显示文件夹：0/1 root 使用 Folder/FolderOpen，多个 root 使用 Folders/FoldersOpen。composer 当前项目和菜单候选复用同一数量规则，保持收起图标。图标直接派生自当前项目，不维护副本。远程项目行复用连接展示模型的五态图标，已连接为中性云，展开/收起不改变设备图标。不显示独立箭头；连接进度与错误诊断沿用原有入口。hover/focus/touch 保留更多、查看文件、新建任务三个入口，右键复用相同操作定义；按钮不触发行折叠。查看文件沿用现有 WorkspaceFileTree，多 root 先选择，空 root 禁用；远端经现有连接/身份绑定，手机经 shared-host 切换，迟到结果不能覆盖新目标。
 
@@ -54,8 +54,6 @@ UI 纠偏：分区复用 WorkspacePurposeSection 和原折叠/顺序偏好；项
 
 归档管理经 index 公开，属于 project-sidebar/ui。RootWorkspaceContent 提供单一项目目录 owner，嵌套 Provider 复用；设置、侧栏、composer 共用树。归档按 Host+projectId 分组，删除容器和未归类不按目录重绑；操作复用模块内 mutation adapter 与现有 Controller/TaskService。页面只保存筛选/分页/确认候选和在途状态，批量部分失败不伪造全部成功。见 `docs/superpowers/specs/2026-09-11-archive-management.md`。
 
-项目管理（设置 › 项目）同样经 index 公开、复用同一目录 owner。行、疑似原因、筛选与排序是 `project-management-view.ts` 的纯派生；`useProjectManagement` 只持有在途批次锁与最近一次失败，本地走 `deleteProject` / `restoreProject`，远程只增删本机入口（`removeEntry` / `addEntry`），每批结束只刷新一次树。选择是页面草稿，生效集合取草稿与当前可见可移除行的交集。侧栏更多菜单末尾的「管理项目…」仅桌面端。见 `docs/superpowers/specs/2026-10-24-project-management.md`。
-
 侧栏分区标题与置顶行保留旧字号/缩进，空态由 ProjectTaskRows 统一展示。SortableProjects 持有 dnd-kit 暂态位移，排序只在同 Host/置顶分区内经原 reorderProjects 提交，任务原生拖入仍发 moveTask。
 
 ProjectNode 从同一 dnd-kit active/over 派生项目插入蓝线的位置；只标记同置顶分区的其它可排序节点，允许跨 Host，释放/取消随拖拽暂态清除，不新增排序状态。见 `docs/project-drag-insertion-indicator.md`。
@@ -74,7 +72,7 @@ ProjectNode 从同一 dnd-kit active/over 派生项目插入蓝线的位置；�
 
 ## 2026-10-10 平铺项目与控制端排序
 
-项目区不按 Host 分组，本地/远程按复合 projectKey 在同一区排序。显示顺序由现有侧栏偏好唯一持有，远端组织态不接收 UI 排序写入；离线可排序，跨置顶边界不改变 pinned。远程项目显示设备状态，只有先选定并保存唯一固定目录才能新建会话；任务区只显示本地未归类任务。远程项目编辑器不允许更换/追加目录。
+项目区不按 Host 分组，本地/远程按复合 projectKey 在同一区排序。显示顺序由现有侧栏偏好唯一持有，远端组织态不接收 UI 排序写入；离线可排序，跨置顶边界不改变 pinned。远程项目显示设备状态，保存主目录后可新建会话。任务区显示本地未归类任务。远程项目编辑器可在同一 Host 中追加目录和更换主目录。
 
 目录首次带来未记录的完整 projectKey 时，共享偏好合并按目录顺序将新项目前插，桌面与手机相同；其余已记录项目保留本端手动相对顺序。重复刷新、改名、暂时缺席后恢复和升级身份替换不重新置前，不按创建时间重排历史项目。创建端的显式 prepend 不代替接收端合并。
 
@@ -112,12 +110,12 @@ Root 的原项目完成 guard 从成员目录异步复验 entryId、membershipId
 
 连接完成前的成员资格读取失败不等同于取消或成员失效。Root 保留同一返回意图的重试资格，将错误交回等待完成的连接 flow；前台继续禁发，沿用该 flow 的实际错误、显式重试和取消。取消撤销在途资格结果，后台可见性仍只影响原聊天门禁，不对其他聊天加锁。
 
-## 分组视图
+## 历史任务分组
 
 按项目、按分组、最近更新、按未读共享同一 ProjectDirectory 任务树与任务命令。按未读与系统角标共用可见未读集合及完整身份去重，复用时间线排序、行与分页；偏好沿用现有 owner，空态显示暂无未读任务。已读提交后移除行，不改变当前导航或原 CAS 合同，详见 `docs/ui/task-unread-state.md`。分组呈现复用删除前的组件，保持原整行拖拽、右键菜单和空组新建语义。
 `useTaskGroups` 只订阅控制端 Host 的结构，成员身份为 canonical workspace key + taskId；
 视图不创建连接或 Agent，不以缺席清理成员，不修改项目或会话事实。
-旧 grouped 偏好在没有有效新版选择时映射到按分组。
+侧栏现在按自定义项目分区展示，旧 grouped 偏好回到普通项目视图。任务分组的存量数据仍可读取。
 草稿 placement 独立于项目选择；普通项目选择与聊天远程目录确认均沿用原草稿分组，既有会话不读取残留草稿分组。创建 ACK 后，权威目录确认同时触发 UI 提升与独立幂等入组；组织请求不占用共享目录读取，辅助分组重读不进入首发屏障。导航取消立即结束 UI 等待，尚未确认的组织回调继续由原目录 owner 保留，确认后只执行一次；迟到结果不得重新打开详情。
 分组手工移动提交节点/来源/锚点，Host 事务处理并广播刷新。`grouped/` 的嵌套 view 只做展示和当前手势预览，不恢复旧任务事实缓存或整表 applyOrder。吸顶浮层位于统一渐隐容器之外，Hash/收起全部操作挂在既有列表工具栏。关闭草稿行只从 Composer 草稿 owner 清除分组意图。
 
@@ -131,3 +129,9 @@ Composer 头部通过 `ProjectComposerMenu.showEditProject` 启用当前项目 P
 新建补全 tab 分类不能重建项目操作；远端同步菜单只订阅 identity 到本地目录的映射，映射变更仍刷新目标。
 单行读取同一 session store 中自身的选中布尔值，保持 workspace 身份隔离，不增加选中态副本。
 导航状态变化不能传播到全部项目内容，真实文件回调和连接身份变化仍需生效。见 `docs/performance/ui-render-stability.md` 的 SPT08。
+
+工作区和设置页共用一级导航栏。侧栏提供入口展示、选中态和导航意图，当前模块由工作区或设置页各自的路由状态决定。自定义分区的归属、顺序和折叠偏好由侧栏状态统一保存。
+
+## Mythic Harness 4.0 项目表单和分区
+
+项目编辑弹窗要求选定主目录，保存前可增删同一 Host 的附加目录和更换主目录。旧任务分组视图偏好回落到普通项目视图，自定义分区仅影响项目列表。分区归属按 Host 和项目 ID 保存，取消置顶时恢复原归属。

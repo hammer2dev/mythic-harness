@@ -411,6 +411,10 @@ export async function executeTurnCommand(
       // 并提前消费一次性 SessionStart。失败轮跳过它们，只复用后续输入持久化与终态主链。
       if (!creationFailure) {
         phaseStartedAt = startTurnPhase("context_initialization");
+        const projectWorkspace = options?.intent?.projectWorkspace;
+        if (projectWorkspace) {
+          this.config.additionalDirectories = projectWorkspace.directories.filter((path) => path !== this.workspaceRoot);
+        }
         if (this.contextInitialized) {
           // 每个后续 model step 都按该步骤实际持有的 Model 重新投影 Context；
           // Session Selection 只决定未来创建哪个 Model，不能充当执行事实。

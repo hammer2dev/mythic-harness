@@ -70,11 +70,7 @@ import {
   resolveEntitledAccountProviderAccessFingerprint,
 } from "@/lib/accountProviderAccess.js";
 import { buildUsageEntitlementCacheKey } from "@/lib/usageEntitlementCache.js";
-import {
-  ArchiveManagement,
-  ProjectManagement,
-  useOptionalProjectDirectory,
-} from "@/project-sidebar/index.js";
+import { ArchiveManagement, useOptionalProjectDirectory } from "@/project-sidebar/index.js";
 import { resolveRecentRemoteProjectPreference } from "@/project-sidebar/remote-project-connection.js";
 import {
   SettingsShareManagement,
@@ -1819,11 +1815,6 @@ export function SettingsPage({
                                 ) : null}
                               </div>
                             </div>
-                            {activeSection === "projects" ? (
-                              <p className="mt-2 max-w-2xl text-ui-base text-foreground-subtle">
-                                {intl.formatMessage({ id: "projectManagement.intro" })}
-                              </p>
-                            ) : null}
                           </div>
                         ) : null}
                         <div className="space-y-8">
@@ -2184,8 +2175,6 @@ export function SettingsPage({
                               workspaceIdentity={activeWorkspaceIdentity}
                               isDesktop={isDesktop}
                             />
-                          ) : activeSection === "projects" ? (
-                            <ProjectManagement />
                           ) : activeSection === "archives" ? (
                             <div className="min-w-0 space-y-6">
                               <TaskAutoArchiveSettings

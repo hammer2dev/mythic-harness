@@ -1,5 +1,5 @@
-import { memo, type Ref } from "react";
-import { Bell, Clock, Folder, Hash, ListFilter, Search } from "lucide-react";
+import { memo } from "react";
+import { Bell, Clock, Folder, ListFilter, Search } from "lucide-react";
 import type { ProjectSidebarProps, ProjectSidebarView } from "@/project-sidebar/contract.js";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -19,12 +19,10 @@ export const ProjectSidebarListHeader = memo(function ProjectSidebarListHeader({
   onOpenCommandCenter,
   view,
   onViewChange,
-  groupedActionsRef,
 }: {
   onOpenCommandCenter: ProjectSidebarProps["onOpenCommandCenter"];
   view: ProjectSidebarView;
   onViewChange(view: ProjectSidebarView): void;
-  groupedActionsRef?: Ref<HTMLDivElement>;
 }) {
   const { intl } = useZCodeIntl();
   return (
@@ -38,10 +36,6 @@ export const ProjectSidebarListHeader = memo(function ProjectSidebarListHeader({
       >
         {intl.formatMessage({ id: "taskList.title" })}
       </span>
-      <div
-        ref={groupedActionsRef}
-        className={view === "grouped" ? "flex items-center gap-1" : "hidden"}
-      />
       <ControlHintTooltip
         // 原因：快捷键拼入标题会继承标题样式；用独立 shortcut 复用标准键帽。
         title={intl.formatMessage({ id: "commandCenter.open" })}
@@ -76,22 +70,13 @@ export const ProjectSidebarListHeader = memo(function ProjectSidebarListHeader({
           <DropdownMenuRadioGroup
             value={view}
             onValueChange={(value) => {
-              if (
-                value === "projects" ||
-                value === "grouped" ||
-                value === "timeline" ||
-                value === "unread"
-              )
+              if (value === "projects" || value === "timeline" || value === "unread")
                 onViewChange(value);
             }}
           >
             <DropdownMenuRadioItem data-testid="sidebar-view-projects" value="projects">
               <Folder className="size-4 text-foreground-subtle" aria-hidden="true" />
               {intl.formatMessage({ id: "project.viewByProject" })}
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem data-testid="sidebar-view-grouped" value="grouped">
-              <Hash className="size-4 text-foreground-subtle" aria-hidden="true" />
-              {intl.formatMessage({ id: "taskGroup.view" })}
             </DropdownMenuRadioItem>
             <DropdownMenuRadioItem data-testid="sidebar-view-timeline" value="timeline">
               <Clock className="size-4 text-foreground-subtle" aria-hidden="true" />

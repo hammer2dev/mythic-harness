@@ -1,3 +1,4 @@
+import type { ProjectWorkspaceSnapshot } from "@zcode/shared/zcode-protocol-v4";
 export interface ProjectRoot {
   rootPath: string;
   position: number;
@@ -88,6 +89,7 @@ export interface ProjectRepositoryContract {
   moveTask(input: { task: ProjectTaskRef; projectId: string; addMissingRoot?: boolean }): void;
   reorderProjects(ids: string[]): void;
   resolveSessionDirectories(task: ProjectTaskRef): ProjectDirectories;
+  readTurnProjectWorkspace(task: ProjectTaskRef): ProjectWorkspaceSnapshot | undefined;
   /**
    * 只读按创建命令查回执，不带 workspace：重试时项目主目录可能已变，回执及其任务行是重试的唯一事实源。
    * 返回每条回执对应任务的目录（cwd 创建后不变）；无回执返回空数组；回执指向的任务已不存在时报错。

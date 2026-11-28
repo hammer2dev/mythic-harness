@@ -718,19 +718,6 @@ export class SqliteSessionStore
     sessionRepository.softDeleteSession(this.db, sessionID, timeDeleted);
   }
 
-  async listOwnedSessionTrees(sessionIDs: SessionId[]): Promise<Map<SessionId, SessionId[]>> {
-    return sessionRepository.listOwnedSessionTrees(this.db, sessionIDs);
-  }
-
-  async listArtifactReferrers(sessionIDs: SessionId[]): Promise<Map<SessionId, SessionId[]>> {
-    return sessionRepository.listArtifactReferrers(this.db, sessionIDs);
-  }
-
-  async purgeSessions(sessionIDs: SessionId[]): Promise<void> {
-    this.throwBeforeWrite();
-    sessionRepository.purgeSessions(this.db, sessionIDs);
-  }
-
   async getSession(sessionID: SessionId): Promise<SessionInfo | null> {
     if (this.db.prepare("select 1 from session_purge where session_id=?").get(sessionID))
       return null;

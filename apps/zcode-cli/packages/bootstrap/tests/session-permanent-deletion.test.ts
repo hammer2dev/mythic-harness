@@ -15,8 +15,8 @@ import {
   previewSessionDeletionWith,
   previewSessionDeletionsWith,
   executeSessionDeletionWith,
-  type SessionDeletionHost,
 } from "../src/zcode-protocol/session-data/permanent-deletion.js";
+import type { SessionDeletionHost } from "../src/zcode-protocol/session-data/contract.js";
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -59,7 +59,6 @@ async function setup() {
   await writeFile(join(dir, "private.txt"), "private");
   const files = createNodeSessionDataFiles({
     cliStorageRoot: root,
-    memoryRoot: () => join(root, "memories", "projects", "unused", "memory"),
   });
   const busy = new Set<string>();
   const host: SessionDeletionHost = {

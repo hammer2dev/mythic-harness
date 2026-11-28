@@ -618,17 +618,9 @@ V4 `forkAssistant` 可带 `targetCwd: { cwd, childSessionId, worktreeCreation }`
 | 远程 | 父会话在远程 workspace 时返回 `guard.worktreeCwdLocalOnly`，不写入任何数据 |
 | 幂等 | 沿用 `(父 session, sourceCommandId)` 的 command fact |
 
-### 彻底删除（项目数据删除）
+### 会话删除
 
-普通删除只写 `time_deleted`。用户在设置 → 项目里勾选「同时删除 ZCode 数据」时，Host 经 `v4/storage/sessionData/purge` 交来会话 ID 与目录（产品规格：`docs/superpowers/specs/2026-10-24-project-management.md`「彻底删除数据」）：
-
-- 后代只沿附属会话展开：`parent_id` 且 `task_type ∈ {selection_side_chat, workflow_child, subagent_child, nested_workflow_child}`，加 `session_task_link` 子会话。fork 的 `parent_id` 也指向源会话，但它是独立任务，不展开。
-- 本进程已加载且忙（在途 turn、待交互、排队命令、residency blocking work）的会话整棵保留；空闲的按 `deleteSession` 执行面同序释放，但只释放运行态、不发布 `session.removed`：文件或行删除失败时会话仍是存活事实，Host 不能先把它当作已删除。
-- 附件仍被本次不删除的未删除会话引用时整棵保留（`kept.reason = "referenced"`）。fork、回退、工作流转录按值复制 part，`zcode-artifact://<源会话>/<id>` 仍指向源会话的 `artifacts/<sid>`；引用按 part 内容中的 URI 判定（不依赖 fork 谱系，任何复制路径都覆盖），已软删除会话的引用不计。保留一棵后，被它引用的树也变成「本次不删除」的引用方，迭代到不动点。
-- 先删 `cli/{artifacts,exec,agents,sessions}/<sid>` 与 `cli/{debug,rollout}/model-io-<sid>.jsonl`，成功后一个事务删行：`input_history`、`dwf_run`、`workflow_run` 没有级联外键，显式删除；其余经外键级联。文件失败则不删行。
-- 目录的记忆整个删除 `memories/projects/<slug>-<hash>`（与运行时同一解析函数）。
-- 文件与行都删除成功后，才从所有 sessions-index 投影移除，防止下次快照把会话带回。
-- 库 `auto_vacuum = none`，删除行不收缩文件；返回的字节数只统计删除的文件。
+普通会话删除写入 `time_deleted`。归档管理的永久删除通过下文的 V4 预检和执行命令处理。
 
 ### 崩溃恢复
 
@@ -702,7 +694,7 @@ interface SessionStore {
 
 ## 归档会话永久删除
 
-归档管理使用独立的 V4 `storage/sessionData/deletionPreview` 与 `deletionExecute`，不改变旧软删除与项目数据清理语义。产品范围见 [归档规格](../../../../../docs/superpowers/specs/2026-09-11-archive-management.md)。
+归档管理使用 V4 `storage/sessionData/deletionPreview` 与 `deletionExecute`。产品范围见 [归档规格](../../../../../docs/superpowers/specs/2026-09-11-archive-management.md)。
 
 - CLI 是正文与文件的唯一写者；Host 只校验归档状态并清除自己的索引。预检 revision 固定 owned tree、引用与文件清单，执行前复查。
 - 批量预检 `storage/sessionData/deletionPreviewBatch` 入参 `{ items }`，结果按顺序返回 `{ preview }` 或 `{ error: { code } }`。存储层 `inspectSessionDeletions` 每次调用对一批根只做一次 fork 扫描、一次 runtime presence 读取和至多一轮引用 SQL；预检至多调用两轮（首轮按无产物检查拿 owned tree，有产物的根再查一轮引用），命中按被引用会话归属到各自根；结果与逐个调用一致。owned tree 没有 artifact 文件、删除凭据也没有保留附件的根跳过引用扫描；预检、执行和写锁内复检用同一判定。整批存储调用抛错时逐根重查，只把仍失败的根记为单项错误。

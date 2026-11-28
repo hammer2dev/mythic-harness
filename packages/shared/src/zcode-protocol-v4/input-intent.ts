@@ -1,3 +1,4 @@
+import { projectWorkspaceSnapshotSchema } from "./core.js";
 import { genUiModelContextSchema } from "../gen-ui/contract.js";
 import { conversationQuotesSchema } from "../conversationSelection.js";
 import { botGroupInputSourceSchema } from "../bots.js";
@@ -109,6 +110,7 @@ export const conversationInputIntentSchema = z
     planEnabled: z.boolean().optional(),
     genUiContext: genUiModelContextSchema.optional(),
     sharedContextRefs: z.array(sharedContextRefSchema).max(1).optional(),
+    projectWorkspace: projectWorkspaceSnapshotSchema.optional(),
     delivery: conversationInputDeliverySchema,
     order: conversationInputOrderSchema,
     steer: conversationInputSteerSchema,

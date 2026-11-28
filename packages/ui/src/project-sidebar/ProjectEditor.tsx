@@ -155,6 +155,7 @@ export function ProjectEditor({
       initialRoots[0] ??
       "",
   );
+  const hasPrimary = roots.includes(primary);
   const [existing, setExisting] = useState(false);
   const [legacyDeviceId, setLegacyDeviceId] = useState<string | null>(null);
   const existingButton = useRef<HTMLButtonElement>(null);
@@ -206,12 +207,10 @@ export function ProjectEditor({
     setSelectedDeviceId(next);
   };
   const addRoots = (values: string[]) => {
-    if (remote && project) return;
-    const next = remote
-      ? values.filter(Boolean).slice(0, 1)
-      : [...new Set([...roots, ...values.filter(Boolean)])];
+    const next = [...new Set([...roots, ...values.filter(Boolean)])];
     setRoots(next);
-    if (remote || !roots.length) setPrimary(next[0] ?? "");
+    if (!roots.length) setPrimary(next[0] ?? "");
+    if (!name.trim() && next[0]) setName(getPathLeaf(next[0]));
     setBrowsing(false);
   };
   const browse = async () => {
@@ -260,7 +259,7 @@ export function ProjectEditor({
     }
   };
   const save = async () => {
-    if (saveFlight.current || suspendedRef.current || !isCurrent()) return;
+    if (saveFlight.current || suspendedRef.current || !isCurrent() || !hasPrimary) return;
     const flight: { cancelTrust?: () => void } = {};
     saveFlight.current = flight;
     const request = epoch.current;
@@ -272,9 +271,6 @@ export function ProjectEditor({
         await onSaved(created);
         if (canCommit()) onClose();
         return;
-      }
-      if (remote && (roots.length !== 1 || (project && project.roots[0]?.rootPath !== roots[0]))) {
-        throw new Error("project.remote-single-root-required");
       }
       let restoreProject: VirtualProject | undefined;
       if (!project) {
@@ -309,7 +305,9 @@ export function ProjectEditor({
           restoreProject = deleted;
       }
       if (!canCommit()) return;
-      if (!project && roots.length) {
+      const previousRoots = new Set(project?.roots.map((root) => root.rootPath));
+      const rootsToConfirm = roots.filter((root) => !previousRoots.has(root));
+      if (rootsToConfirm.length > 0) {
         const accepted = await new Promise<boolean>((resolve) => {
           const finish = (value: boolean) => {
             if (!flight.cancelTrust) return;
@@ -319,7 +317,7 @@ export function ProjectEditor({
           };
           flight.cancelTrust = () => finish(false);
           setFolderTrust({
-            roots: [...roots],
+            roots: rootsToConfirm,
             deviceLabel: remote
               ? (fixedFolder?.deviceLabel ??
                 selectedDevice?.label ??
@@ -409,7 +407,7 @@ export function ProjectEditor({
       }}
     >
       <DialogContent
-        className="max-w-lg gap-5"
+        className="max-h-[min(90dvh,50rem)] gap-5 overflow-y-auto sm:max-w-lg"
         onKeyDown={fixedFolder ? (event) => event.stopPropagation() : undefined}
       >
         {existing && selectedDevice && remoteService ? (
@@ -432,10 +430,215 @@ export function ProjectEditor({
           />
         ) : (
           <>
-            <DialogTitle>
-              {browsing ? msg("browse") : project ? msg("edit") : msg("create")}
-            </DialogTitle>
+            <DialogTitle>{project ? msg("edit") : msg("create")}</DialogTitle>
             <DialogDescription className="sr-only">{msg("description")}</DialogDescription>
+            <div className="grid min-w-0 gap-1.5">
+              <label htmlFor="project-name" className={FIELD_LABEL}>
+                {msg("name")}
+              </label>
+              <Input
+                id="project-name"
+                aria-label={msg("name")}
+                placeholder={msg("new")}
+                autoFocus
+                disabled={busy || Boolean(created)}
+                data-testid="virtual-project-name"
+                value={name}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNameEdited(true);
+                }}
+                className="h-9 rounded-lg max-md:text-mobile-input-safe"
+              />
+              {fixedFolder ? (
+                <p className="break-all text-ui-sm text-foreground-subtle">
+                  {fixedFolder.deviceLabel}
+                </p>
+              ) : null}
+            </div>
+            {devices ? (
+              <div className="grid min-w-0 gap-1.5">
+                <label htmlFor="project-device" className={FIELD_LABEL}>
+                  {msg("device")}
+                </label>
+                <Select
+                  value={selectedDeviceId}
+                  onValueChange={(value) => {
+                    if (value === "add-device") onAddDevice?.(changeDevice);
+                    else void changeDevice(value);
+                  }}
+                  disabled={busy || Boolean(created)}
+                >
+                  <SelectTrigger
+                    id="project-device"
+                    data-testid="virtual-project-device"
+                    className="h-9 w-full min-w-0 rounded-lg *:data-[slot=select-value]:w-full *:data-[slot=select-value]:min-w-0"
+                  >
+                    <SelectValue>
+                      <DeviceOption
+                        label={
+                          selectedDeviceId === "local"
+                            ? msg("thisComputer")
+                            : (selectedDevice?.label ?? selectedDeviceId)
+                        }
+                        status={
+                          selectedDeviceId === "local"
+                            ? undefined
+                            : (selectedDevice?.status ?? "offline")
+                        }
+                      />
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
+                    <SelectItem value="local" data-device-id="local" className={DEVICE_ITEM}>
+                      <DeviceOption label={msg("thisComputer")} />
+                    </SelectItem>
+                    {devices.map((device) => (
+                      <SelectItem
+                        key={device.id}
+                        value={device.id}
+                        data-device-id={device.id}
+                        className={DEVICE_ITEM}
+                      >
+                        <DeviceOption label={device.label} status={device.status} />
+                      </SelectItem>
+                    ))}
+                    {onAddDevice ? (
+                      <>
+                        <SelectSeparator />
+                        <SelectItem value="add-device">
+                          <Plus className="text-foreground-subtle" />
+                          {msg("addRemoteDevice")}
+                        </SelectItem>
+                      </>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+                {/* 旧入口是一行 ghost 文字，用户看不出可点也不知用途；改为挨着设备的问句 + 下划线链接。 */}
+                {remote && selectedDevice && onBrowseExisting ? (
+                  <p className="flex flex-wrap items-center gap-x-1 text-ui-sm text-foreground-subtle">
+                    {msg("existingOnDeviceHint")}
+                    <button
+                      ref={existingButton}
+                      type="button"
+                      disabled={busy || Boolean(created)}
+                      data-testid="virtual-project-existing"
+                      className="inline-flex items-center gap-0.5 rounded-sm text-brand underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
+                      onClick={() => void browseExisting()}
+                    >
+                      {msg("existingOnDeviceAction")}
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <fieldset disabled={busy || browsing || Boolean(created)} className="min-w-0">
+              <legend className={`mb-1.5 ${FIELD_LABEL}`}>{msg("folders")}</legend>
+              {/* 有目录时使用同一列表的末行添加，只有零目录才展示空态大卡片。 */}
+              <div
+                data-testid={roots.length ? "virtual-project-roots" : undefined}
+                className={
+                  roots.length
+                    ? "min-w-0 overflow-hidden rounded-lg border border-border divide-y divide-border"
+                    : undefined
+                }
+              >
+                {roots.map((root) => (
+                  <div
+                    className="flex min-h-12 min-w-0 items-center gap-2 px-3 py-2"
+                    key={root}
+                    data-testid="virtual-project-root-row"
+                  >
+                    <Folder className="size-4 shrink-0 text-foreground-subtle" />
+                    <span
+                      className={
+                        fixedFolder
+                          ? "min-w-0 flex-1 break-all text-ui-base"
+                          : "min-w-0 flex-1 truncate text-ui-base"
+                      }
+                      title={root}
+                      data-testid="virtual-project-root-name"
+                    >
+                      {fixedFolder ? root : getPathLeaf(root)}
+                    </span>
+                    {root === primary ? (
+                      <span
+                        data-testid="virtual-project-primary"
+                        className="inline-flex h-7 shrink-0 items-center rounded-md border border-border px-2 text-ui-base text-foreground-subtle"
+                      >
+                        {msg("primaryBadge")}
+                      </span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-foreground-subtle"
+                        data-testid="virtual-project-set-primary"
+                        onClick={() => setPrimary(root)}
+                      >
+                        {msg("setPrimary")}
+                      </Button>
+                    )}
+                    {!fixedFolder ? (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="text-foreground-subtle"
+                        data-testid="virtual-project-remove-folder"
+                        aria-label={msg("removeFolder")}
+                        onClick={() => {
+                          const next = roots.filter((item) => item !== root);
+                          setRoots(next);
+                          if (primary === root) setPrimary(next[0] ?? "");
+                        }}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+                {!fixedFolder ? (
+                  <button
+                    type="button"
+                    data-testid="virtual-project-browse"
+                    aria-label={msg(needsConnection ? "connectAndBrowse" : "browse")}
+                    className={`group flex w-full items-center gap-2 text-ui-base transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 ${roots.length ? "min-h-12 px-3 py-2 text-left" : "min-h-32 flex-col justify-center rounded-lg border border-dashed border-border px-4 py-5 text-center hover:border-border-hover"}`}
+                    onClick={() => {
+                      void browse();
+                    }}
+                  >
+                    {roots.length ? (
+                      <>
+                        <FolderPlus className="size-4 shrink-0 text-foreground-subtle" />
+                        <span>{msg(needsConnection ? "connectAndBrowse" : "addSourceFolder")}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex size-9 items-center justify-center rounded-full bg-surface text-foreground-subtle group-hover:text-foreground">
+                          <FolderPlus className="size-4" />
+                        </span>
+                        <span className="font-medium">
+                          {msg(needsConnection ? "connectAndBrowse" : "browse")}
+                        </span>
+                        <span className="text-ui-sm text-foreground-subtle">
+                          {needsConnection
+                            ? intl.formatMessage(
+                                { id: "project.connectAndBrowseHint" },
+                                {
+                                  status: msg(
+                                    `deviceStatus.${selectedDevice?.status ?? "offline"}`,
+                                  ),
+                                },
+                              )
+                            : msg("browseHint")}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            </fieldset>
             {browsing ? (
               <div
                 className="flex h-96 min-h-0 flex-col gap-2"
@@ -455,257 +658,43 @@ export function ProjectEditor({
                   }}
                 />
               </div>
-            ) : (
-              <>
-                <div className="grid min-w-0 gap-1.5">
-                  <label htmlFor="project-name" className={FIELD_LABEL}>
-                    {msg("name")}
-                  </label>
-                  <Input
-                    id="project-name"
-                    aria-label={msg("name")}
-                    placeholder={msg("new")}
-                    autoFocus
-                    disabled={busy || Boolean(created)}
-                    data-testid="virtual-project-name"
-                    value={name}
-                    onChange={(event) => {
-                      setName(event.target.value);
-                      setNameEdited(true);
-                    }}
-                    className="h-9 rounded-lg max-md:text-mobile-input-safe"
-                  />
-                  {fixedFolder ? (
-                    <p className="break-all text-ui-sm text-foreground-subtle">
-                      {fixedFolder.deviceLabel}
-                    </p>
-                  ) : null}
-                </div>
-                {devices ? (
-                  <div className="grid min-w-0 gap-1.5">
-                    <label htmlFor="project-device" className={FIELD_LABEL}>
-                      {msg("device")}
-                    </label>
-                    <Select
-                      value={selectedDeviceId}
-                      onValueChange={(value) => {
-                        if (value === "add-device") onAddDevice?.(changeDevice);
-                        else void changeDevice(value);
-                      }}
-                      disabled={busy || Boolean(created)}
-                    >
-                      <SelectTrigger
-                        id="project-device"
-                        data-testid="virtual-project-device"
-                        className="h-9 w-full min-w-0 rounded-lg *:data-[slot=select-value]:w-full *:data-[slot=select-value]:min-w-0"
-                      >
-                        <SelectValue>
-                          <DeviceOption
-                            label={
-                              selectedDeviceId === "local"
-                                ? msg("thisComputer")
-                                : (selectedDevice?.label ?? selectedDeviceId)
-                            }
-                            status={
-                              selectedDeviceId === "local"
-                                ? undefined
-                                : (selectedDevice?.status ?? "offline")
-                            }
-                          />
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
-                        <SelectItem value="local" data-device-id="local" className={DEVICE_ITEM}>
-                          <DeviceOption label={msg("thisComputer")} />
-                        </SelectItem>
-                        {devices.map((device) => (
-                          <SelectItem
-                            key={device.id}
-                            value={device.id}
-                            data-device-id={device.id}
-                            className={DEVICE_ITEM}
-                          >
-                            <DeviceOption label={device.label} status={device.status} />
-                          </SelectItem>
-                        ))}
-                        {onAddDevice ? (
-                          <>
-                            <SelectSeparator />
-                            <SelectItem value="add-device">
-                              <Plus className="text-foreground-subtle" />
-                              {msg("addRemoteDevice")}
-                            </SelectItem>
-                          </>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
-                    {/* 旧入口是一行 ghost 文字，用户看不出可点也不知用途；改为挨着设备的问句 + 下划线链接。 */}
-                    {remote && selectedDevice && onBrowseExisting ? (
-                      <p className="flex flex-wrap items-center gap-x-1 text-ui-sm text-foreground-subtle">
-                        {msg("existingOnDeviceHint")}
-                        <button
-                          ref={existingButton}
-                          type="button"
-                          disabled={busy || Boolean(created)}
-                          data-testid="virtual-project-existing"
-                          className="inline-flex items-center gap-0.5 rounded-sm text-brand underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
-                          onClick={() => void browseExisting()}
-                        >
-                          {msg("existingOnDeviceAction")}
-                          <ChevronRight className="size-3.5" />
-                        </button>
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <fieldset disabled={busy || Boolean(created)} className="min-w-0">
-                  <legend className={`mb-1.5 ${FIELD_LABEL}`}>{msg("folders")}</legend>
-                  {/* 有目录时使用同一列表的末行添加，只有零目录才展示空态大卡片。 */}
-                  <div
-                    data-testid={roots.length ? "virtual-project-roots" : undefined}
-                    className={
-                      roots.length
-                        ? "min-w-0 overflow-hidden rounded-lg border border-border divide-y divide-border"
-                        : undefined
-                    }
-                  >
-                    {roots.map((root) => (
-                      <div
-                        className="flex min-h-12 min-w-0 items-center gap-2 px-3 py-2"
-                        key={root}
-                        data-testid="virtual-project-root-row"
-                      >
-                        <Folder className="size-4 shrink-0 text-foreground-subtle" />
-                        <span
-                          className={
-                            fixedFolder
-                              ? "min-w-0 flex-1 break-all text-ui-base"
-                              : "min-w-0 flex-1 truncate text-ui-base"
-                          }
-                          title={root}
-                          data-testid="virtual-project-root-name"
-                        >
-                          {fixedFolder ? root : getPathLeaf(root)}
-                        </span>
-                        {root === primary ? (
-                          <span
-                            data-testid="virtual-project-primary"
-                            className="inline-flex h-7 shrink-0 items-center rounded-md border border-border px-2 text-ui-base text-foreground-subtle"
-                          >
-                            {msg("primaryBadge")}
-                          </span>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-foreground-subtle"
-                            data-testid="virtual-project-set-primary"
-                            onClick={() => setPrimary(root)}
-                          >
-                            {msg("setPrimary")}
-                          </Button>
-                        )}
-                        {!fixedFolder && (!remote || !project) ? (
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            className="text-foreground-subtle"
-                            data-testid="virtual-project-remove-folder"
-                            aria-label={msg("removeFolder")}
-                            onClick={() => {
-                              const next = roots.filter((item) => item !== root);
-                              setRoots(next);
-                              if (primary === root) setPrimary(next[0] ?? "");
-                            }}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        ) : null}
-                      </div>
-                    ))}
-                    {!fixedFolder && (!remote || !project) ? (
-                      <button
-                        type="button"
-                        data-testid="virtual-project-browse"
-                        aria-label={msg(needsConnection ? "connectAndBrowse" : "browse")}
-                        className={`group flex w-full items-center gap-2 text-ui-base transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 ${roots.length ? "min-h-12 px-3 py-2 text-left" : "min-h-32 flex-col justify-center rounded-lg border border-dashed border-border px-4 py-5 text-center hover:border-border-hover"}`}
-                        onClick={() => {
-                          void browse();
-                        }}
-                      >
-                        {roots.length ? (
-                          <>
-                            <FolderPlus className="size-4 shrink-0 text-foreground-subtle" />
-                            <span>
-                              {msg(needsConnection ? "connectAndBrowse" : "addSourceFolder")}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="flex size-9 items-center justify-center rounded-full bg-surface text-foreground-subtle group-hover:text-foreground">
-                              <FolderPlus className="size-4" />
-                            </span>
-                            <span className="font-medium">
-                              {msg(needsConnection ? "connectAndBrowse" : "browse")}
-                            </span>
-                            <span className="text-ui-sm text-foreground-subtle">
-                              {needsConnection
-                                ? intl.formatMessage(
-                                    { id: "project.connectAndBrowseHint" },
-                                    {
-                                      status: msg(
-                                        `deviceStatus.${selectedDevice?.status ?? "offline"}`,
-                                      ),
-                                    },
-                                  )
-                                : msg("browseHint")}
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    ) : null}
-                  </div>
-                </fieldset>
-                {legacyDeviceId === hostId ? (
-                  <p className="text-ui-sm text-foreground-subtle">
-                    {msg("legacyUpgradeRequired")}
-                  </p>
-                ) : null}
-                {error ? (
-                  <p role="alert" className="text-ui-sm text-destructive">
-                    {error}
-                  </p>
-                ) : null}
-                <DialogFooter className="flex-row flex-wrap items-center justify-end">
-                  {project ? (
-                    <Button
-                      variant="ghost"
-                      data-testid="virtual-project-editor-delete"
-                      disabled={busy || Boolean(created)}
-                      onClick={() => {
-                        void remove();
-                      }}
-                      className="mr-auto bg-destructive-surface text-destructive-surface-foreground hover:bg-destructive-surface hover:text-destructive-surface-foreground"
-                    >
-                      {msg("delete")}
-                    </Button>
-                  ) : null}
-                  <Button variant="ghost" onClick={onClose} disabled={busy && !fixedFolder}>
-                    {msg("cancel")}
-                  </Button>
-                  <Button
-                    ref={saveButton}
-                    data-testid="virtual-project-save"
-                    onClick={() => {
-                      void save();
-                    }}
-                    disabled={busy || (remote && (roots.length !== 1 || legacyDeviceId === hostId))}
-                  >
-                    {project ? msg("save") : msg("create")}
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
+            ) : null}
+            {legacyDeviceId === hostId ? (
+              <p className="text-ui-sm text-foreground-subtle">{msg("legacyUpgradeRequired")}</p>
+            ) : null}
+            {error ? (
+              <p role="alert" className="text-ui-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <DialogFooter className="flex-row flex-wrap items-center justify-end">
+              {project ? (
+                <Button
+                  variant="ghost"
+                  data-testid="virtual-project-editor-delete"
+                  disabled={busy || Boolean(created)}
+                  onClick={() => {
+                    void remove();
+                  }}
+                  className="mr-auto bg-destructive-surface text-destructive-surface-foreground hover:bg-destructive-surface hover:text-destructive-surface-foreground"
+                >
+                  {msg("delete")}
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={onClose} disabled={busy && !fixedFolder}>
+                {msg("cancel")}
+              </Button>
+              <Button
+                ref={saveButton}
+                data-testid="virtual-project-save"
+                onClick={() => {
+                  void save();
+                }}
+                disabled={busy || browsing || !hasPrimary || (remote && legacyDeviceId === hostId)}
+              >
+                {project ? msg("save") : msg("create")}
+              </Button>
+            </DialogFooter>
           </>
         )}
         {/* 确认框须留在父弹层的 React 树内；兄弟节点的触摸取消会被延迟判为外部点击，连带关闭草稿。 */}

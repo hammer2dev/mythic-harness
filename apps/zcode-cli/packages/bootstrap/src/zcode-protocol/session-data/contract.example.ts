@@ -1,20 +1,15 @@
-/**
- * cli-session-data 标准调用示例：一个不加载任何会话的最小宿主（管理面进程的情形）。
- */
-import type { SessionDataFilesPort } from "@zcode/adapters/storage";
-import type { SessionDataHost } from "./contract.js";
+import type { SessionDeletionHost } from "./contract.js";
 
-export function createExampleSessionDataHost(files: SessionDataFilesPort): SessionDataHost {
+/** 无驻留会话的 CLI 进程可用既有存储端口处理归档删除。 */
+export function createExampleSessionDeletionHost(
+  store: SessionDeletionHost["store"],
+  files: SessionDeletionHost["files"],
+): SessionDeletionHost {
   return {
-    store: {
-      // 每个会话没有后代；库里不存在的根按自身 ID 处理。
-      listOwnedSessionTrees: async (ids) => new Map(ids.map((id) => [id, [id]])),
-      listArtifactReferrers: async () => new Map(),
-      purgeSessions: async () => {},
-    },
+    store,
     files,
-    residency: () => null,
+    busy: () => false,
     release: async () => {},
-    forgetIndexed: () => {},
+    forget: () => {},
   };
 }

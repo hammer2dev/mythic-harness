@@ -253,7 +253,7 @@ async function ensureV4ShellReady(options: PrepareV4ConversationE2EOptions) {
 }
 
 async function ensureV4PreparationDraft(options: PrepareV4ConversationE2EOptions) {
-  // Bug 根因：全局新建会创建独立 cwd；反复点击会让固定目录夹具与 Agent 工作区分离。
+  // 全局新建会参考当前项目上下文，固定目录夹具要按实际 cwd 匹配工作区。
   // 只按实际 cwd 复用空草稿；为补项目标签而新建会打断冷启动预热，导致首发失败。
   // 其他 cwd 或已有内容才走项目级新建；显式全局新建 helper 保持原语义。
   const ready = await browser.execute(

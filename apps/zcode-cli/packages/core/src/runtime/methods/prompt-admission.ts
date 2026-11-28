@@ -61,7 +61,11 @@ export async function admitPrompt(
     }
 
     const activeTurn = this.activeTurn;
+    const directorySnapshot = options?.intent?.projectWorkspace?.directories.filter((path) => path !== this.workspaceRoot);
+    const fileScopeChanged = directorySnapshot !== undefined &&
+      JSON.stringify(directorySnapshot) !== JSON.stringify(this.config.additionalDirectories ?? []);
     const canSteer =
+      !fileScopeChanged &&
       attachments === undefined &&
       activeTurn?.steerable === true &&
       (options?.queueDelivery === "guide" ||
@@ -87,7 +91,7 @@ export async function admitPrompt(
     }
 
     const delivery =
-      options?.queueDelivery === "guide" && attachments === undefined ? "guide" : "queue";
+      !fileScopeChanged && options?.queueDelivery === "guide" && attachments === undefined ? "guide" : "queue";
     return await this.enqueueDeferredInput({
       attachments,
       automationId: options?.automationId,

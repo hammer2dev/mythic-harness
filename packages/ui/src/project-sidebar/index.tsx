@@ -3,7 +3,6 @@ export { readProjectSidebarView } from "@/project-sidebar/view-preference.js";
 import { SortableProjects } from "@/project-sidebar/SortableProjects.js";
 export { ArchiveManagement } from "@/project-sidebar/ArchiveManagement.js";
 export { useWebRemoteControlRendererActions } from "@/project-sidebar/useWebRemoteControlRendererActions.js";
-export { ProjectManagement } from "@/project-sidebar/ProjectManagement.js";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { ScrollFadeViewport } from "@/components/ui/scroll-fade-viewport.js";
 import { TID_SIDEBAR } from "@zcode/shared/test-ids";

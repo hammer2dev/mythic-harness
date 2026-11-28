@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SessionDeletionSnapshot, SessionId, SessionStorePort } from "@zcode/contracts";
+import type { SessionDeletionSnapshot, SessionId } from "@zcode/contracts";
 import type { SessionDataFilesPort } from "@zcode/adapters/storage";
 import {
   v4SessionDeletionParamsSchema,
@@ -14,20 +14,7 @@ import {
 } from "@zcode/shared/zcode-protocol-v4";
 import { createSessionResidentPoolHost, deactivateSessionRecord } from "../session-residency.js";
 import { parseParams, type ZCodeProtocolAgentServerContext } from "../server-types.js";
-
-export interface SessionDeletionHost {
-  store: Required<
-    Pick<
-      SessionStorePort,
-      "inspectSessionDeletions" | "beginSessionDeletion" | "completeSessionDeletion"
-    >
-  >;
-  files: SessionDataFilesPort;
-  busy(id: string): boolean;
-  loaded?(id: string): boolean;
-  release(id: string): Promise<void>;
-  forget(id: string): void;
-}
+import type { SessionDeletionHost } from "./contract.js";
 
 type SessionDataFile = Awaited<
   ReturnType<NonNullable<SessionDataFilesPort["listSessionFiles"]>>

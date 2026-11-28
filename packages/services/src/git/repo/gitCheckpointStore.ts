@@ -21,7 +21,7 @@ function isGitCheckpointMeta(value: unknown): value is GitCheckpointMeta {
 }
 
 /** 一个 workspace 的检查点目录；项目数据删除按同一规则定位，不能另算 hash。 */
-export function getWorkspaceCheckpointDirectory(workspacePath: string, rootDir?: string): string {
+function getWorkspaceCheckpointDirectory(workspacePath: string, rootDir?: string): string {
   return join(rootDir ?? join(getAppConfigDir(), "checkpoints"), getWorkspaceHash(workspacePath));
 }
 

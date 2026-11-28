@@ -161,7 +161,7 @@ function chunked<T>(items: readonly T[]): T[][] {
 }
 
 /** 每个根会话 → 根自身与全部附属后代；根不存在时返回空数组。 */
-export function listOwnedSessionTrees(
+function listOwnedSessionTrees(
   db: DatabaseSync,
   sessionIDs: readonly SessionId[],
 ): Map<SessionId, SessionId[]> {
@@ -193,43 +193,12 @@ export function listOwnedSessionTrees(
   return trees;
 }
 
-const ARTIFACT_URI_SCHEME = "zcode-artifact://";
-const ARTIFACT_URI_SESSION = /zcode-artifact:\/\/([^/"\\\s]+)\//g;
-
-/**
- * 每个目标会话 → 仍引用其附件（`zcode-artifact://<目标>/…`）的其他未删除会话。
- * fork、回退与工作流转录按值复制 part，URI 仍指向源会话的附件目录；按 part 内容判定，
- * 不依赖 fork 谱系，任何复制路径都能覆盖。只在彻底删除时调用，一次全表扫描可接受。
- */
-export function listArtifactReferrers(
-  db: DatabaseSync,
-  sessionIDs: readonly SessionId[],
-): Map<SessionId, SessionId[]> {
-  const targets = new Set<string>(sessionIDs);
-  const referrers = new Map<SessionId, Set<SessionId>>();
-  if (!targets.size) return new Map();
-  const rows = db
-    .prepare(
-      `select p.session_id, p.data from part p join session s on s.id = p.session_id
-       where s.time_deleted is null and instr(p.data, ?) > 0`,
-    )
-    .iterate(ARTIFACT_URI_SCHEME) as Iterable<{ session_id: SessionId; data: string }>;
-  for (const row of rows) {
-    for (const match of row.data.matchAll(ARTIFACT_URI_SESSION)) {
-      const target = decodeURIComponent(match[1]!) as SessionId;
-      if (target === row.session_id || !targets.has(target)) continue;
-      referrers.set(target, (referrers.get(target) ?? new Set()).add(row.session_id));
-    }
-  }
-  return new Map([...referrers].map(([target, ids]) => [target, [...ids]]));
-}
-
 /**
  * 彻底删除会话及其附属后代的全部行。message/part/todo/usage 等经外键级联；
  * input_history、dwf_run、workflow_run 对 session 没有级联外键，必须显式删除，否则留下孤儿行。
  * 调用方负责先删除会话文件：文件失败时不调用本函数，下次重试仍能按会话找到它们。
  */
-export function purgeSessions(db: DatabaseSync, sessionIDs: readonly SessionId[]): void {
+function purgeSessions(db: DatabaseSync, sessionIDs: readonly SessionId[]): void {
   const ids = [...new Set([...listOwnedSessionTrees(db, sessionIDs).values()].flat())];
   if (!ids.length) return;
   // foreign_keys 不能在事务内切换；启动时已打开，这里再保证一次级联生效。

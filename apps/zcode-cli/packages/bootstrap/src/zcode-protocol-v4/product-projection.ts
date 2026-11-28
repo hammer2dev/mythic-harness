@@ -360,6 +360,7 @@ export interface ConversationEditTarget {
     genUiContext?: import("@zcode/contracts").TurnInputIntentMetadata["genUiContext"];
     conversationQuotes?: import("@zcode/contracts").TurnInputIntentMetadata["conversationQuotes"];
     botGroupSource?: CanonicalUserIntentFact["botGroupSource"];
+    projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
     kind: "sendText" | "sendGoalCommand";
     text: string;
     sourceCommandId?: string;
@@ -2778,6 +2779,7 @@ export class ProductProjection {
                 kind: fact.intentKind,
                 text: fact.intentText,
                 genUiContext: fact.genUiContext,
+                projectWorkspace: fact.projectWorkspace,
                 ...(fact.sourceCommandId ? { sourceCommandId: fact.sourceCommandId } : {}),
                 ...(fact.inputOrigin ? { inputOrigin: fact.inputOrigin } : {}),
                 ...(fact.conversationQuotes ? { conversationQuotes: fact.conversationQuotes } : {}),
@@ -4370,6 +4372,7 @@ export class ProductProjection {
       mode: payload.intent?.mode ?? existing?.mode,
       planEnabled: payload.intent?.planEnabled ?? existing?.planEnabled,
       sharedContextRefs: payload.intent?.sharedContextRefs ?? existing?.sharedContextRefs,
+      projectWorkspace: payload.intent?.projectWorkspace ?? existing?.projectWorkspace,
       provenance: payload.intent?.provenance ?? existing?.provenance,
       // 排队事件和原地编辑都必须保留可信接入来源，不能在 UI 投影时丢掉发送者。
       ...((payload.intent?.inputOrigin ?? existing?.inputOrigin)
@@ -4545,6 +4548,7 @@ export class ProductProjection {
             : {}),
           attachmentRefs: queueItem.attachments,
           genUiContext: queueItem.genUiContext,
+          projectWorkspace: queueItem.projectWorkspace,
         };
         return [
           {
@@ -4622,6 +4626,7 @@ export class ProductProjection {
                 text: normalizeGenUiInput(item.intent?.text ?? item.text, item.intent?.genUiContext)
                   .text,
                 genUiContext: normalizedInput.genUiContext,
+                projectWorkspace: item.intent?.projectWorkspace,
                 ...(item.intent?.sourceCommandId
                   ? { sourceCommandId: item.intent.sourceCommandId }
                   : {}),

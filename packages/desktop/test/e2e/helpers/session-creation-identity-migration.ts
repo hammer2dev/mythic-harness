@@ -3,10 +3,7 @@ import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { dirname } from "node:path";
 import { buildRemoteWorkspaceIdentity, buildServerRemoteWorkspaceIdentity } from "@zcode/shared";
-import {
-  projectStorage,
-  createProjectDataRepository,
-} from "../../../../services/src/project-storage/index.js";
+import { projectStorage } from "../../../../services/src/project-storage/index.js";
 import { runTasksDatabaseMigrations } from "../../../../services/src/session/tasksDatabase/migrations.js";
 import { migrateControllerRemoteWorkspaceIdentity } from "../../../../services/src/session/controllerRemoteIdentityMigration.js";
 
@@ -39,9 +36,8 @@ export async function verifySessionCreationIdentityMigration(dbPath: string) {
     const tombstone = { ...command, commandId: randomUUID() };
     const tombstoneId = reserve(oldKey, tombstone, `sess_${randomUUID()}`);
     assert.equal(reserve(oldKey, tombstone, tombstoneId), tombstoneId);
-    createProjectDataRepository(db, "local").purgeTasks([
-      { workspacePath, workspaceIdentity: oldKey, taskId: tombstoneId },
-    ]);
+    // 构造旧库的已删除会话：保留创建命令回执，移除其任务行。
+    db.prepare("DELETE FROM tasks WHERE workspace_key=? AND task_id=?").run(oldKey, tombstoneId);
     const migrate = () =>
       migrateControllerRemoteWorkspaceIdentity({
         dbPath,

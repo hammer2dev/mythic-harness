@@ -1,8 +1,6 @@
-import type { DatabaseSync } from "node:sqlite";
 import { ProjectRepository } from "#src/project-storage/project-repository.js";
 import { sqliteMigrations } from "@zcode/shared/sqlite-migrations";
 import type { ProjectStorageContract } from "#src/project-storage/contract.js";
-import type { ProjectDataRepositoryContract } from "#src/project-storage/purge/contract.js";
 import {
   reconcileLegacy,
   admitTaskIdentity,
@@ -31,15 +29,6 @@ export type {
   ProjectMigrationContext,
   ProjectStorageContract,
 } from "#src/project-storage/contract.js";
-export type { ProjectDataRepositoryContract } from "#src/project-storage/purge/contract.js";
-
-/** 彻底删除项目数据的行操作；与 repository() 同一 Host 范围（规格见 purge/contract.ts）。 */
-export function createProjectDataRepository(
-  db: DatabaseSync,
-  hostId?: string,
-): ProjectDataRepositoryContract {
-  return new ProjectRepository(db, hostId);
-}
 export const projectStorage: ProjectStorageContract = {
   migrate: async (db, context) => {
     let firstProjectMigration = false;

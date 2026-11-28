@@ -107,3 +107,11 @@ export const PROTOCOL_V4_LIMITS = {
  * 之后的反向请求被 Host 以"不属于本 CLI"拒绝，任务无法打开或发送。
  */
 export const v4ColdResumeWorkspaceSchema = zcodeWorkspaceRefSchema.optional();
+
+/** Project directories accepted with one command by the owning Host. */
+export const projectWorkspaceSnapshotSchema = z.object({
+  projectId: z.string().min(1),
+  primaryDirectory: z.string().min(1),
+  directories: z.array(z.string().min(1)).min(1),
+});
+export type ProjectWorkspaceSnapshot = z.infer<typeof projectWorkspaceSnapshotSchema>;

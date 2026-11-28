@@ -6,7 +6,8 @@ import type {
   RemoteProjectDirectory,
   VirtualProject,
 } from "@/project-sidebar/contract.js";
-import { selectProjectRows } from "@/project-sidebar/view.js";
+import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
+import { projectKey, selectProjectRows } from "@/project-sidebar/view.js";
 import { ProjectTaskRows } from "@/project-sidebar/ProjectTaskRows.js";
 import { PurposeSections } from "@/project-sidebar/PurposeSections.js";
 export function ProjectSections({
@@ -38,6 +39,7 @@ export function ProjectSections({
   onReorder(active: string, over: string): void;
   loading: boolean;
 }) {
+  const projectSectionByKey = useSidebarSectionsStore((state) => state.projectSectionByKey);
   const foreignHosts = new Set(directory.hosts.map((host) => host.id));
   const localTasks = selectProjectRows(tree, { kind: "project", projectId: null }).filter(
     (task) => task.hostId === "local" && !foreignHosts.has(task.hostId),
@@ -49,13 +51,17 @@ export function ProjectSections({
       canToggleProjects={canToggleProjects}
       onToggleProjects={onToggleProjects}
       onCreate={onCreate}
-      projects={
+      projects={(sectionId) => (
         <SortableProjects
-          projects={projects.filter((project) => !project.pinned)}
+          projects={projects.filter(
+            (project) =>
+              !project.pinned &&
+              (projectSectionByKey[projectKey(project)] ?? "projects") === sectionId,
+          )}
           renderProject={renderProject}
           onReorder={onReorder}
         />
-      }
+      )}
       tasks={
         // 原因：任务分区遗漏项目内列表的左侧留白，导致整行背景和文字贴左；统一内缩 8px。
         <div className="pl-2">

@@ -146,8 +146,6 @@ import {
   shutdownSessionRuntime,
 } from "./session-residency.js";
 import {
-  measureSessionData,
-  purgeSessionData,
   previewSessionDeletion,
   previewSessionDeletions,
   executeSessionDeletion,
@@ -774,17 +772,13 @@ export class ZCodeProtocolAgentServer {
         return await getTaskTokenUsage(this.context, request.params);
       case V4_METHODS.conversationContextComposition:
         return await getConversationContextComposition(this.context, request.params);
-      // 项目数据彻底删除：不经 v4Gateway 会话投影，直接操作本进程的 store 与会话注册表。
+      // 归档永久删除使用 CLI 本进程的会话存储与运行态。
       case V4_METHODS.sessionDeletionPreview:
         return previewSessionDeletion(this.context, request.params);
       case V4_METHODS.sessionDeletionPreviewBatch:
         return previewSessionDeletions(this.context, request.params);
       case V4_METHODS.sessionDeletionExecute:
         return executeSessionDeletion(this.context, request.params);
-      case V4_METHODS.sessionDataMeasure:
-        return await measureSessionData(this.context, request.params);
-      case V4_METHODS.sessionDataPurge:
-        return await purgeSessionData(this.context, request.params);
       case V4_METHODS.command:
         return this.requireV4Gateway().handleCommand(request.params);
       case V4_METHODS.commandsQuery:

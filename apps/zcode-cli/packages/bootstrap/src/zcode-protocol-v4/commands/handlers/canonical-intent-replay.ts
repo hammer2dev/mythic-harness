@@ -57,6 +57,7 @@ function buildCanonicalIntent(
           : editTarget.intent.conversationQuotes,
       text: editTarget.intent.text,
       genUiContext: editTarget.intent.genUiContext,
+      projectWorkspace: editTarget.intent.projectWorkspace,
       sourceCommandId: editTarget.intent.sourceCommandId,
       clientId: editTarget.intent.clientId,
       queueItemId: editTarget.intent.queueItemId,

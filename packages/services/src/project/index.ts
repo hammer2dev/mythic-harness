@@ -5,18 +5,7 @@ import type { Stats } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import { isAbsolute, join, normalize } from "node:path";
 import type { ProjectRepositoryContract } from "#src/project-storage/contract.js";
-import type { ProjectDataRepositoryContract } from "#src/project-storage/index.js";
-import type {
-  IProjectService,
-  ProjectDataPort,
-  ProjectDirectories,
-  VirtualProject,
-} from "#src/project/contract.js";
-import { createProjectDataCommands } from "#src/project/data/project-data.js";
-export {
-  createProjectDataPort,
-  type ProjectSessionDataAgent,
-} from "#src/project/data/project-data-port.js";
+import type { IProjectService, ProjectDirectories, VirtualProject } from "#src/project/contract.js";
 export { IProjectService } from "#src/project/contract.js";
 export { createLegacySingleRootProjectService } from "#src/project/legacy-single-root.js";
 export {
@@ -31,10 +20,6 @@ export type {
   ProjectRoot,
   SaveProjectInput,
   ProjectDirectories,
-  ProjectDataPort,
-  ProjectDataSession,
-  ProjectDataMeasure,
-  ProjectDataDeleteResult,
 } from "#src/project/contract.js";
 
 interface ProjectDirectoryPort {
@@ -130,8 +115,6 @@ export function createProjectService(options: {
   /** 只解析现有连接；连接缺失拒绝，不创建替代 Host。 */
   resolveHost?: (hostId: string) => Promise<IProjectService>;
   afterChange?: () => Promise<void>;
-  /** 彻底删除数据：副作用端口与同一 Host 的行操作；缺省时两条命令报 project.data-unavailable。 */
-  data?: { port: ProjectDataPort; repository(): Promise<ProjectDataRepositoryContract> };
 }): IProjectService {
   const route = async (hostId?: string) => {
     if (!hostId || hostId === (options.ownerHostId ?? "local")) return null;
@@ -143,7 +126,6 @@ export function createProjectService(options: {
     await options.afterChange?.();
   };
   const service: IProjectService = {
-    ...createProjectDataCommands({ ...options, changed }),
     async readDirectory(params = {}) {
       const input = z
         .object({
@@ -228,25 +210,6 @@ export function createProjectService(options: {
       (await options.repository()).deleteProject(id);
       await changed();
     },
-    async restoreProject(id, hostId) {
-      z.string().min(1).parse(id);
-      const remote = await route(hostId);
-      if (remote) return remote.restoreProject(id);
-      const repository = await options.repository();
-      const project = repository
-        .readTree({ includeDeleted: true, includeTasks: false })
-        .projects.find((item) => item.id === id);
-      if (!project) throw new Error("project.not-found");
-      if (!project.deleted) return project;
-      // 复用新建时的「恢复」写路径：原样传回 roots，仓库保留主要目录、置顶与顺序并处理重名；
-      // 不经 saveProject 的目录校验，否则「文件夹不存在」的项目无法撤销删除。
-      const result = repository.saveProject({
-        restoreProjectId: id,
-        roots: project.roots.map((root) => root.rootPath),
-      });
-      await changed();
-      return result;
-    },
     async moveTask(input) {
       const remote = await route(input.hostId);
       if (remote)
@@ -304,8 +267,8 @@ export function createProjectService(options: {
           .readTree({ includeTasks: false })
           .projects.find((item) => item.id === id);
         if (!project) throw new Error("project.not-found");
-        if (remoteOwner && project.roots.length !== 1)
-          throw new Error("project.remote-single-root-required");
+        if (remoteOwner && project.roots.length === 0)
+          throw new Error("project.primary-root-missing");
         if (!project.roots.length) {
           // 多窗口为同一空项目生成同一个目录，不依赖进程间定时锁。
           const path = join(options.workspaceDirectory, id);
@@ -382,11 +345,8 @@ export function bindRemoteProjectIdentities(
     readDirectory: (params) => service.readDirectory(params),
     saveProject: (input) => service.saveProject(input),
     deleteProject: (id, hostId) => service.deleteProject(id, hostId),
-    restoreProject: (id, hostId) => service.restoreProject(id, hostId),
     moveTask: (input) => service.moveTask(input),
     reorderProjects: (ids, hostId) => service.reorderProjects(ids, hostId),
-    measureProjectData: (ids, hostId) => service.measureProjectData(ids, hostId),
-    deleteProjectData: (id, hostId) => service.deleteProjectData(id, hostId),
     async prepareSession(params) {
       const directories = await service.prepareSession(params);
       return {

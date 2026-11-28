@@ -24,11 +24,7 @@ import type {
 
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { getTasksIndexDatabasePath, getZCodeDataRootDir } from "#src/paths.js";
-import {
-  createProjectDataRepository,
-  projectStorage,
-  type ProjectMigrationContext,
-} from "#src/project-storage/index.js";
+import { projectStorage, type ProjectMigrationContext } from "#src/project-storage/index.js";
 import { runTasksDatabaseMigrations } from "#src/session/tasksDatabase/migrations.js";
 
 const require = createRequire(import.meta.url);
@@ -371,11 +367,6 @@ export class TaskIndexRepo {
   async getProjectRepository() {
     await this.ensureReady();
     return projectStorage.repository(this.getDatabase(), this.storageHostId);
-  }
-
-  async getProjectDataRepository() {
-    await this.ensureReady();
-    return createProjectDataRepository(this.getDatabase(), this.storageHostId);
   }
 
   async ensureReady(): Promise<void> {

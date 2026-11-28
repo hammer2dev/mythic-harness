@@ -14,7 +14,6 @@ export {
   prepareRemoteServerConnection,
 } from "#src/remote-projects/index.js";
 import {
-  createProjectDataPort,
   createProjectService,
   createTaskAutoArchiveScheduler,
   IProjectService,
@@ -463,7 +462,6 @@ import type { WorkspaceFileSearchFilter } from "./file/workspaceFileMentionFilte
 import { createGitService } from "./git/gitService.js";
 import { GitCommitMessageGenerator } from "./git/gitCommitMessageGenerator.js";
 import { createGitCheckpointService } from "./git/gitCheckpointService.js";
-import { getWorkspaceCheckpointDirectory } from "./git/repo/gitCheckpointStore.js";
 import { createSystemService } from "./system/systemService.js";
 import { createTerminalService } from "./terminal/terminalService.js";
 import {
@@ -2276,23 +2274,6 @@ export function createLocalServices(options: {
     repository: () => taskIndexRepo.getProjectRepository(),
     workspaceDirectory: join(projectDataRoot(), "workspace"),
     afterChange: publishProjectChange,
-    // zcodeAgentService 在下方创建；端口只在命令执行时取用它。
-    data: {
-      repository: () => taskIndexRepo.getProjectDataRepository(),
-      port: createProjectDataPort({
-        agent: {
-          measure: (params) => {
-            if (!zcodeAgentService.measureSessionData) throw new Error("project.data-unavailable");
-            return zcodeAgentService.measureSessionData(params);
-          },
-          purge: (params) => {
-            if (!zcodeAgentService.purgeSessionData) throw new Error("project.data-unavailable");
-            return zcodeAgentService.purgeSessionData(params);
-          },
-        },
-        checkpointDirectory: (workspacePath) => getWorkspaceCheckpointDirectory(workspacePath),
-      }),
-    },
   });
   const taskGroupService = createTaskGroupService({
     database: () => taskIndexRepo.getOrganizationDatabase(),
@@ -2372,6 +2353,11 @@ export function createLocalServices(options: {
       });
       return { sessionId: prepared.taskId, additionalDirectories: prepared.additionalDirectories };
     },
+    readTurnProjectWorkspace: async (target) =>
+      (await taskIndexRepo.getProjectRepository()).readTurnProjectWorkspace({
+        ...target,
+        taskId: target.sessionId,
+      }),
     resolveSessionDirectories: async (target) =>
       (await projectService.resolveSessionDirectories({ ...target, taskId: target.sessionId }))
         .additionalDirectories,

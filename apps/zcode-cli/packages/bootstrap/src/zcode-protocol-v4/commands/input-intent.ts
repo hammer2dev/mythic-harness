@@ -10,6 +10,7 @@ import type {
 import { commandAdmissionOf } from "./executor.js";
 
 export interface CanonicalCommandIntent {
+  projectWorkspace?: TurnInputIntentMetadata["projectWorkspace"];
   inputOrigin?: "desktop" | "mobile";
   conversationQuotes?: import("@zcode/contracts").TurnInputIntentMetadata["conversationQuotes"];
   botGroupSource?: TurnInputIntentMetadata["botGroupSource"];
@@ -62,6 +63,7 @@ export function inputIntentMetadata(
       : {}),
     ...(options.conversationQuotes ? { conversationQuotes: options.conversationQuotes } : {}),
     ...(options.botGroupSource ? { botGroupSource: options.botGroupSource } : {}),
+    ...(envelope.projectWorkspace ? { projectWorkspace: structuredClone(envelope.projectWorkspace) } : {}),
     sourceCommandId: envelope.commandId,
     queueItemId: admission.queueItemId,
     clientId: envelope.clientId || "cli",
@@ -117,6 +119,7 @@ export function inputIntentMetadataFromCanonical(
     clientId: envelope.clientId || canonical.clientId || "cli",
     kind: canonical.kind,
     text,
+    ...(canonical.projectWorkspace ? { projectWorkspace: structuredClone(canonical.projectWorkspace) } : {}),
     ...(canonical.modelSelection ? { modelSelection: canonical.modelSelection } : {}),
     ...(canonical.mode ? { mode: canonical.mode } : {}),
     ...(canonical.planEnabled !== undefined ? { planEnabled: canonical.planEnabled } : {}),
@@ -155,6 +158,7 @@ export function inputIntentMetadataFromQueueItem(
     clientId: item.clientId,
     kind: item.kind,
     text: canonicalText,
+    ...(item.projectWorkspace ? { projectWorkspace: structuredClone(item.projectWorkspace) } : {}),
     ...(item.modelSelection ? { modelSelection: item.modelSelection } : {}),
     ...(item.mode ? { mode: item.mode } : {}),
     ...(item.planEnabled !== undefined ? { planEnabled: item.planEnabled } : {}),

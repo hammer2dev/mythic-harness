@@ -56,6 +56,11 @@ describe("persisted conversation input intent", () => {
       admittedAt: 1000,
       requestedDelivery: "guide",
       admittedDelivery: "queue",
+      projectWorkspace: {
+        projectId: "test-project",
+        primaryDirectory: "/project",
+        directories: ["/project", "/supporting-root"],
+      },
       provenance: {
         sourceCommandId: "command-original",
         queueItemId: "queue-original",
@@ -67,6 +72,7 @@ describe("persisted conversation input intent", () => {
       {
         sourceCommandId: "command-retry",
         source: intent.source,
+        projectWorkspace: intent.projectWorkspace,
         provenance: {
           sourceCommandId: "command-original",
           queueItemId: "queue-original",

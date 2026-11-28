@@ -10,6 +10,7 @@ import {
   conversationRowTargetSchema,
   timestampSchema,
   v4ColdResumeWorkspaceSchema,
+  projectWorkspaceSnapshotSchema,
 } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
 import { turnHeaderRowSchema } from "./rows.js";
@@ -438,6 +439,7 @@ export const commandEnvelopeSchema = z.object({
   pluginDiscoveryUi: z.literal(true).optional(),
   /** Host 可信 attachment 注入；CLI 保留到原 input intent。 */
   inputOrigin: z.enum(["desktop", "mobile"]).optional(),
+  projectWorkspace: projectWorkspaceSnapshotSchema.optional(),
   ttft: localTtftContextSchema.optional(),
   // uuid v7，客户端生成，重试不变。
   commandId: z.string(),

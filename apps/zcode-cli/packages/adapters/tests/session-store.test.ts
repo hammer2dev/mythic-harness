@@ -358,13 +358,22 @@ describe("virtual project CLI session facts", () => {
     });
     await store.createSession({ ...base, id: unrelated, slug: "u" });
 
-    const trees = await store.listOwnedSessionTrees?.([parent.session.id, unrelated]);
-    expect(trees?.get(parent.session.id)?.sort()).toEqual(
+    const [parentDeletion, unrelatedDeletion] = await store.inspectSessionDeletions([
+      { sessionId: parent.session.id },
+      { sessionId: unrelated },
+    ]);
+    expect([...parentDeletion!.sessionIds].sort()).toEqual(
       [child, parent.session.id, grandchild].sort(),
     );
-    expect(trees?.get(unrelated)).toEqual([unrelated]);
+    expect(unrelatedDeletion?.sessionIds).toEqual([unrelated]);
 
-    await store.purgeSessions?.([parent.session.id]);
+    await store.beginSessionDeletion(
+      parent.session.id,
+      parentDeletion!.revision,
+      "purge-parent",
+      [],
+    );
+    await store.completeSessionDeletion(parent.session.id);
     expect(await store.getSession(parent.session.id)).toBeNull();
     expect(await store.getSession(child)).toBeNull();
     expect(await store.getSession(grandchild)).toBeNull();
@@ -374,10 +383,8 @@ describe("virtual project CLI session facts", () => {
     expect(await store.getSession(fork)).not.toBeNull();
     expect(await store.getSession(unrelated)).not.toBeNull();
     // 已不存在的会话再次删除是空操作。
-    await store.purgeSessions?.([parent.session.id]);
-    expect(
-      (await store.listOwnedSessionTrees?.([parent.session.id]))?.get(parent.session.id),
-    ).toEqual([]);
+    await store.completeSessionDeletion(parent.session.id);
+    expect((await store.inspectSessionDeletion(parent.session.id)).completed).toBe(true);
     store.close();
   });
 
@@ -426,9 +433,18 @@ describe("virtual project CLI session facts", () => {
     // 引用自身附件不算外部引用；没有引用的会话不出现在结果里。
     await refer(other, `zcode-artifact://${other}/own`);
 
-    const referrers = await store.listArtifactReferrers?.([source.session.id, other]);
-    expect(referrers?.get(source.session.id)).toEqual([fork]);
-    expect(referrers?.has(other)).toBe(false);
+    const [sourceDeletion, otherDeletion] = await store.inspectSessionDeletions([
+      { sessionId: source.session.id },
+      { sessionId: other },
+    ]);
+    expect(sourceDeletion?.references).toEqual([
+      {
+        sessionId: source.session.id,
+        artifactId: "art_1",
+        referrers: [expect.objectContaining({ sessionId: fork })],
+      },
+    ]);
+    expect(otherDeletion?.references).toEqual([]);
     store.close();
   });
 

@@ -1,3 +1,4 @@
+import type { ProjectWorkspaceSnapshot } from "@zcode/shared/zcode-protocol-v4";
 import {
   V4_SESSION_DELETION_PREVIEW_BATCH_MAX,
   v4SessionDeletionPreviewSchema,
@@ -410,8 +411,6 @@ import {
   v4ConversationUsageResultSchema,
   v4SessionsIndexSubscribeResultSchema,
   v4UsageStatsResultSchema,
-  v4SessionDataMeasureResultSchema,
-  v4SessionDataPurgeResultSchema,
   v4WorkspaceConfigSubscribeResultSchema,
   workspaceConfigTopic,
   workspaceConfigTopicWireCandidateSchema,
@@ -1186,6 +1185,9 @@ interface CreateZCodeAgentServiceBaseOptions extends Omit<
     target: ZCodeAgentSessionTarget & { parentSessionId: string },
   ) => Promise<void>;
   resolveSessionDirectories?: (target: ZCodeAgentSessionTarget) => Promise<string[]>;
+  readTurnProjectWorkspace?: (
+    target: ZCodeAgentSessionTarget,
+  ) => Promise<ProjectWorkspaceSnapshot | undefined>;
   /**
    * 会话操作闸门（受管 worktree 删除租约，docs/git/worktree.md §8.3）：会话命令与冷订阅经它执行，
    * 会话 cwd 位于删除中的 worktree 时被拒绝。由受管 worktree 服务提供。
@@ -4005,10 +4007,10 @@ export function createZCodeAgentService(
     return options?.resolveSessionDirectories?.({ ...target, sessionId: directorySessionId });
   }
 
-  async function readSessionDirectories(
+  async function readDirectorySessionId(
     client: ZCodeProtocolClient,
     params: ZCodeAgentSessionTarget,
-  ): Promise<string[] | undefined> {
+  ): Promise<string> {
     let directorySessionId = params.sessionId;
     if (options?.resolveSessionDirectories) {
       // 子会话按设计不进主任务索引；直接查 child 的项目会被远端必选项目校验拒绝。
@@ -4043,7 +4045,14 @@ export function createZCodeAgentService(
         directorySessionId = session.parentSessionId;
       }
     }
-    return resolveSessionDirectories(params, directorySessionId);
+    return directorySessionId;
+  }
+
+  async function readSessionDirectories(
+    client: ZCodeProtocolClient,
+    params: ZCodeAgentSessionTarget,
+  ): Promise<string[] | undefined> {
+    return resolveSessionDirectories(params, await readDirectorySessionId(client, params));
   }
 
   async function getOrStartReadOnlyClient(
@@ -5090,26 +5099,6 @@ export function createZCodeAgentService(
         params,
         v4SessionDeletionResultSchema,
       );
-    },
-
-    async measureSessionData(params) {
-      // 只读测量：和全局工作流同一载体选择（本机已活跃 runtime，否则管理面进程）。
-      const { client } = await resolveGlobalSavedWorkflowCarrier();
-      return client.request(
-        V4_METHODS.sessionDataMeasure,
-        { sessionIds: params.sessionIds, directories: params.directories },
-        v4SessionDataMeasureResultSchema,
-      );
-    },
-
-    async purgeSessionData({ workspace, ...params }) {
-      if (!isLocalActiveWorkspaceClient(workspace)) throw new Error("project.data-local-only");
-      // 会话可能已加载在该 cwd 的 Agent 进程里：必须由那个进程删除，它才能判断运行中并释放会话；
-      // 绝不为删除拉起该项目的 Agent（文件夹可能已不存在），没有进程时交给管理面进程。
-      const client = await getReadOnlyClient(workspace, "existing-only").catch(() =>
-        getPluginManagementClient(),
-      );
-      return client.request(V4_METHODS.sessionDataPurge, params, v4SessionDataPurgeResultSchema);
     },
 
     async getTaskTokenUsage(params: ZCodeAgentTaskTokenUsageParams) {
@@ -7178,6 +7167,31 @@ export function createZCodeAgentService(
             : ("desktop" as const),
       };
       // 来自 UI 的同名字段永远不是授权；relay 透传的是下游握手。旧 CLI 严格校验，缺席比发送 false 安全。
+      delete envelope.projectWorkspace;
+      if (
+        (envelope.type === "sendText" ||
+          envelope.type === "sendGoalCommand" ||
+          envelope.type === "createSession") &&
+        options?.readTurnProjectWorkspace
+      ) {
+        const sessionId =
+          envelope.sessionId ??
+          (envelope.type === "createSession"
+            ? commandPayloadSchemas.createSession.parse(envelope.payload).sessionId
+            : undefined);
+        if (sessionId) {
+          const target = { ...params, sessionId };
+          const directorySessionId =
+            envelope.type === "createSession"
+              ? sessionId
+              : await readDirectorySessionId(client, target);
+          const snapshot = await options.readTurnProjectWorkspace({
+            ...target,
+            sessionId: directorySessionId,
+          });
+          if (snapshot) envelope.projectWorkspace = snapshot;
+        }
+      }
       delete envelope.pluginDiscoveryUi;
       if (
         envelope.type === "createSession" &&

@@ -98,14 +98,6 @@ export const ProjectSidebarNode = memo(
               }
             : undefined
         }
-        onManageProjects={
-          isDesktop
-            ? () => {
-                setPendingSettingsSectionIntent("projects");
-                tabStore.getState().openSettingsTab();
-              }
-            : undefined
-        }
         additionalActions={[
           ...remoteActions(project),
           // worktree 只由本机 Host 管理；远程项目与手机远控不显示入口。
@@ -128,12 +120,10 @@ export const ProjectSidebarNode = memo(
                   run: () =>
                     runProjectAction(async () => {
                       // 远端连接仍经现有意图分派，保留缺凭据、安装和升级流程。
-                      if (isDesktop && project.roots[0]) {
+                      const primary = project.roots.find((root) => root.isPrimary);
+                      if (isDesktop && primary) {
                         await onReconnectRemoteWorkspace(
-                          buildRemoteHostWorkspaceIdentity(
-                            project.hostId,
-                            project.roots[0].rootPath,
-                          ),
+                          buildRemoteHostWorkspaceIdentity(project.hostId, primary.rootPath),
                         );
                       } else {
                         await remoteService!.connectHost(project.hostId);

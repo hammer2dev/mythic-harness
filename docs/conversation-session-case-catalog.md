@@ -4237,7 +4237,7 @@ Todo139 补充 accepted 用例：SHARE30 在 Root／Recent／公共默认三种�
 | Case | 状态                                                | Setup → Action → Assertion                                                           | 入口                                                                                                   |
 | ---- | --------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | VP01 | partial：首窗两库 ledger E2E 通过（仍 pending）     | 首个窗口可用 → 只读隔离 HOME 两库 ledger → app v3 与 CLI 0020 均已完成；无须创建会话 | `packages/desktop/test/e2e/conversation-session/projects/conversation-session-virtual-project.test.ts` |
-| VP04 | partial：空 roots CRUD/恢复 E2E 已通过              | 空项目 → 新建/编辑多 roots/软删/同集恢复 → 名称、主要目录、roots 与恢复 ID 一致      | `packages/desktop/test/e2e/conversation-session/projects/conversation-session-virtual-project.test.ts` |
+| VP04 | 主目录必选、项目恢复 E2E | 选择主目录 → 创建、改名、软删除、同目录恢复，核对项目 ID | `packages/desktop/test/e2e/conversation-session/projects/conversation-session-virtual-project.test.ts` |
 | VP05 | pending：未发送草稿复用 cwd，按当前生命周期重新验证 | 同 cwd 双项目与未归类任务 → 创建/移动/重启 → cwd 不变，明确归属保留，NULL 不重新归类 | 同上 + storage contract                                                                                |
 | VP06 | planned                                             | 双 root 项目 → create/resume/cold subscribe → 附加目录可用且配置仍按 cwd             | CLI/Host focused + 待补 GUI                                                                            |
 | VP08 | partial：桌面离线移除/重载 E2E 已通过               | 删除本机远端入口 → 迟到刷新/重连 → 不复活、不改远端事实                              | storage + pending virtual-project E2E；真重连/手机待补                                                 |
@@ -4378,11 +4378,7 @@ ARM 回放准备：停止 Electron/Host 后播种 CLI 历史与 Host 组织态�
 
 ARM 验证：验证：相关单测 12 文件 / 67 项通过；最终 Electron `desktop-e2e-20260911073549408-p8673-2d528e9e7a8486a5` 3/3 通过，包含真实创建/更新时间反向排序、虚拟项目筛选、取消归档回写、删除确认取消、CLI time_deleted 与 Host cli_deleted、重新打开后的持久化结果、搜索范围批量删除、分组取消归档，以及 1200/390px 明暗截图和溢出检查。root typecheck、E2E typecheck、fixture check、lint（48 个既有 warnings / 0 errors）与架构门禁（baseline 0 / new 0）通过。真实手机配对/远端 Host/Windows/Linux 未运行，不能以窄屏截图替代。 保持 pending，未晋升 formal。
 
-PJM01–PJM06（accepted/pending，2026-10-24）：设置 › 数据与统计新增「项目管理」页（归档管理之前），侧栏项目更多菜单末尾「管理项目…」（桌面端）直达。PJM01 两个入口与页头说明；PJM02 建议卡片「复核」预选全部疑似不再使用的候选（文件夹不存在 / 没有会话 / 超过 90 天），置顶与活跃项目不入选，取消一项；PJM03 确认对话框按设备拆分，确认后本机项目软删除、会话归属不变、侧栏同步；PJM04 toast 撤销只恢复本批；PJM05「已移除的项目」默认收起，恢复目录缺失的项目；PJM06 中英文、明暗、1200/390px 不横向溢出。spec `docs/superpowers/specs/2026-10-24-project-management.md`；pending `manual-review/pending/conversation-session-project-management.test.ts`，停止 Host 后播种 tasks-index 与 CLI 库，不请求模型。远程项目「只从本机移除」与撤销重新登记入口的原 UI 单测（`retired:packages/ui/test/projectManagement.test.ts`）已退役，独立断言待补；真实 SSH/WSL 待验；手机共享 Host 链路见 PJM09。2026-11-02 macOS 回放通过，证据 `packages/desktop/.e2e-artifacts/desktop-e2e-20261102072543389-p405-86d835c273376265`；保留 pending，未转正或加入 CI。
-
-PJM08（accepted/pending，2026-11-02）：项目管理行菜单复用首页编辑器；取消不保存，保存名称与主目录后列表/侧栏同步，同 cwd 的其他项目与已有会话 cwd/归属不变；PJM06 扩充中英文、深浅主题、1200/390px 菜单与编辑器可达/布局。沿用同一 pending spec，PJM09 验证 Chrome 触屏视口经真实 WebSocket/RPC 编辑同一 Host 项目并同步桌面；外部账号/relay 使用 loopback fixture。2026-11-02 PJM01–PJM09 共 9 项通过（covered，仍在 pending 路径），证据 `packages/desktop/.e2e-artifacts/desktop-e2e-20261102072543389-p405-86d835c273376265`；桌面 1200/390px 中英文深浅主题及 Chrome 390px 触屏共享 Host 验证通过。真实远程 Host、Windows/Linux 桌面和实体手机未验证。
-
-PJM07（pending，2026-10-24）：确认对话框勾选「同时删除它们的 ZCode 数据」，打开即测量、默认不勾选，输入「删除」后才可确认；确认后会话行、`cli/artifacts/<sid>` 与任务索引行删除，项目行因无引用而删除、不进入「已移除的项目」，结果 toast 不带撤销。运行中会话保留的 CLI 边界由 `apps/zcode-cli/packages/bootstrap/tests/session-data.test.ts` 保留；services 共享目录扣除与 UI 测量失败隐藏选项的独立断言随 App 单测退役，仍待补。2026-11-02 macOS 回放通过，证据 `packages/desktop/.e2e-artifacts/desktop-e2e-20261102072543389-p405-86d835c273376265`；保留 pending，未转正或加入 CI。
+PJR01–PJR02：设置项目管理下线。用旧设置位置验证回到常规，检查中英文设置搜索和项目行菜单，确认归档管理与单项目编辑可用。覆盖深浅主题和窄桌面。用例为 `packages/desktop/test/e2e/conversation-session/projects/conversation-session-project-management.test.ts`。
 
 ### 当前任务标题与自动归档收尾（AMT，2026-09-11）
 

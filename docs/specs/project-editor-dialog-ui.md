@@ -1,5 +1,7 @@
 # 创建项目弹窗布局
 
+> Mythic Harness 4.0 延续本页的字段顺序。目录浏览和多目录编辑留在原弹窗，具体行为见[定制功能规格](../../specs/dev-old-experience/SPEC.md)。
+
 状态：已实现，2026-10-15。布局经原型确认（选用变体 B，原型保存在 `prototype/project-editor-dialog` 分支，不合入）。
 
 ## 1. 范围

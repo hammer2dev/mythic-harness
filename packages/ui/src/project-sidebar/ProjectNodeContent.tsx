@@ -1,3 +1,8 @@
+import { useState } from "react";
+import { ProjectSectionMenu } from "@/project-sidebar/ProjectSectionMenu.js";
+import { SidebarSectionDialog } from "@/project-sidebar/SidebarSectionDialog.js";
+import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
+import { projectKey } from "@/project-sidebar/view.js";
 import { SidebarNativeTooltip, ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { ProjectIdentityHoverCard } from "@/project-sidebar/ProjectIdentityHoverCard.js";
 import { remoteHostLabel } from "@/project-sidebar/RemoteHostSection.js";
@@ -6,7 +11,6 @@ import type { useSortable } from "@dnd-kit/sortable";
 import {
   Ellipsis,
   FolderMinus,
-  Folders,
   ListTree,
   Pin,
   PinOff,
@@ -33,14 +37,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu.js";
 import { ProjectTaskRows } from "@/project-sidebar/ProjectTaskRows.js";
@@ -76,8 +78,6 @@ export type ProjectNodeProps = {
   onRemoveEntry?(): void;
   /** 仅桌面端远程项目提供：从菜单或待处理详情跳到“设置 › 远程设备”。 */
   onOpenDeviceSettings?(): void;
-  /** 仅桌面端提供：跳到“设置 › 项目”批量管理。 */
-  onManageProjects?(): void;
 };
 
 // 原因：useSortable 的激活/测量/落点更新曾让 41 个项目的菜单和 Tooltip 连续重渲染。
@@ -100,7 +100,6 @@ export const ProjectNodeContent = memo(function ProjectNodeContent({
   availability = DEFAULT_AVAILABILITY,
   onRemoveEntry,
   onOpenDeviceSettings,
-  onManageProjects,
   additionalActions = EMPTY_ADDITIONAL_ACTIONS,
   editable,
   isOpen,
@@ -116,6 +115,8 @@ export const ProjectNodeContent = memo(function ProjectNodeContent({
     isOpen: boolean;
   }) {
   const { intl } = useZCodeIntl();
+  const [creatingSection, setCreatingSection] = useState(false);
+  const createSection = useSidebarSectionsStore((state) => state.createSection);
   const msg = (id: string) => intl.formatMessage({ id: `project.${id}` });
   // 修复原因：新项目行曾无条件显示本地文件夹；远程图标只读 Host 现有投影，复用统一五态。
   const remotePresentation = remoteHost
@@ -164,17 +165,6 @@ export const ProjectNodeContent = memo(function ProjectNodeContent({
     // 可编辑的远程项目菜单与本地项目一致；从本机移除只在不能删除项目时（离线、legacy 单 root）兜底。
     ...(!editable && availability.entryId && onRemoveEntry
       ? [{ id: "remove-entry", label: msg("removeEntry"), icon: FolderMinus, run: onRemoveEntry }]
-      : []),
-    ...(onManageProjects
-      ? [
-          {
-            id: "manage-projects",
-            label: intl.formatMessage({ id: "projectManagement.manage" }),
-            icon: Folders,
-            run: onManageProjects,
-            separatorBefore: true,
-          },
-        ]
       : []),
   ];
   // 单目录分支曾省略路径；统一展示完整 rootPath，让右键菜单始终明确文件目标。
@@ -339,7 +329,7 @@ export const ProjectNodeContent = memo(function ProjectNodeContent({
                         data-testid="virtual-project-menu"
                         variant="ghost"
                         size="icon-sm"
-                        disabled={!management.length}
+                        disabled={!management.length && !availability.online}
                         aria-label={more}
                         className="text-foreground-subtle hover:text-foreground"
                       >
@@ -349,6 +339,11 @@ export const ProjectNodeContent = memo(function ProjectNodeContent({
                   </ControlHintTooltip>
                   <DropdownMenuContent align="end">
                     <ProjectMenuItems actions={management} />
+                    <ProjectSectionMenu
+                      kind="dropdown"
+                      projectKey={projectKey(project)}
+                      onCreate={() => setCreatingSection(true)}
+                    />
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {availability.online ? (
@@ -411,7 +406,19 @@ export const ProjectNodeContent = memo(function ProjectNodeContent({
         {/* 完整路径可能比窄屏更宽；按浮层可用宽度收口，再由文件项换行，避免裁掉目标目录。 */}
         <ContextMenuContent className="max-w-(--radix-context-menu-content-available-width)">
           <ProjectMenuItems actions={contextActions} context />
+          <ProjectSectionMenu
+            kind="context"
+            projectKey={projectKey(project)}
+            onCreate={() => setCreatingSection(true)}
+          />
         </ContextMenuContent>
+        {creatingSection ? (
+          <SidebarSectionDialog
+            title={intl.formatMessage({ id: "sidebarSection.new" })}
+            onClose={() => setCreatingSection(false)}
+            onSubmit={(name) => createSection(name, projectKey(project))}
+          />
+        ) : null}
       </ContextMenu>
       {/* 直接条件卸载曾跳过收起动画；复用旧侧栏的受控高度/透明度生命周期。 */}
       <CollapsibleContent data-testid="virtual-project-tasks">
@@ -434,9 +441,7 @@ function ProjectMenuItems({
   context?: boolean;
 }) {
   const Item = context ? ContextMenuItem : DropdownMenuItem;
-  const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
-  return actions.map((action, index) => [
-    action.separatorBefore && index > 0 ? <Separator key={`${action.id}-separator`} /> : null,
+  return actions.map((action) => (
     <Item
       key={action.id}
       disabled={action.disabled}
@@ -449,6 +454,6 @@ function ProjectMenuItems({
     >
       {action.icon ? <action.icon className="size-4 shrink-0" aria-hidden="true" /> : null}
       {action.label}
-    </Item>,
-  ]);
+    </Item>
+  ));
 }

@@ -390,8 +390,6 @@ export const V4_METHODS = {
   conversationContextComposition: "v4/conversation/contextComposition",
   // 项目数据彻底删除（schema 在 session-data.ts）：measure 只读；purge 幂等，已不存在的会话按 0 字节成功。
   // 新方法偏斜安全：旧 CLI 返回 method-not-found，Host 据此不显示「删除数据」选项。
-  sessionDataMeasure: "v4/storage/sessionData/measure",
-  sessionDataPurge: "v4/storage/sessionData/purge",
   sessionDeletionPreview: "v4/storage/sessionData/deletionPreview",
   // 归档永久删除批量预检：整批共用一次引用扫描，结果按顺序逐项返回。旧 CLI 返回 method-not-found，
   // Host 据此回退逐项调用 deletionPreview。

@@ -1,6 +1,5 @@
 import {
   Archive,
-  Folders,
   Monitor,
   Moon,
   Settings,
@@ -190,13 +189,6 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "usage",
     icon: BarChart3,
     titleId: "settings.usageTitle",
-    groupId: "dataAndStats",
-  },
-  // 项目管理排在归档管理之前（docs/superpowers/specs/2026-10-24-project-management.md）。
-  {
-    id: "projects",
-    icon: Folders,
-    titleId: "projectManagement.nav",
     groupId: "dataAndStats",
   },
   {

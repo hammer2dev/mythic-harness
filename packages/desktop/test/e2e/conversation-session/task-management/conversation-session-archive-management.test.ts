@@ -475,6 +475,8 @@ describe("归档管理", () => {
     await setArchiveGroupsOpen(true);
   });
   it("ARM02：取消归档、取消删除与确认删除后刷新不复活", async () => {
+    await $('[data-testid="archive-group"][data-project-id="arm-project-0"]').waitForDisplayed();
+    await setArchiveGroupsOpen(true);
     await row("arm-alpha").$('[data-testid="archive-unarchive"]').click();
     await row("arm-alpha").waitForExist({ reverse: true });
     expect(readRow("arm-alpha").archived).toBe(0);
@@ -653,7 +655,7 @@ describe("归档管理", () => {
         'button[aria-label="移动端远程控制"],button[aria-label="Mobile remote control"]';
       // 窄屏验收会折起工作区侧栏；恢复真实用户可点击入口，不能点击仍挂载但被主区遮住的按钮。
       if (!(await $(triggerSelector).isClickable()))
-        await $('[data-testid="desktop-top-logo-sidebar-toggle"]').click();
+        await $('[data-testid="desktop-top-sidebar-toggle"]').click();
       await browser.waitUntil(
         async () => {
           for (const trigger of await $$(triggerSelector)) {

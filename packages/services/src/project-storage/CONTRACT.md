@@ -28,13 +28,13 @@ App 控制创建与普通创建共用 `reserveCreatedTask` 的创建回执：会
 
 带显式附加目录的新建将执行快照同事务写入 tasks.execution_directories，后续任何恢复从此不可变值读取；普通 session 为 NULL，继续读取项目当前 roots。重试不得覆盖快照，定义删除不改变生成会话的初始化配置。
 
-旧 Group、成员与顺序保持独立，不按成员目录新增项目。用户手建空项目合法；不修改已发布的 SQL/checksum。
+旧 Group、成员与顺序保持独立。兼容旧版空项目和已发布的 SQL/checksum。新版项目表单要求主目录。
 
 0006_default_workspace_tasks 一次性纠正系统 default 目录误迁移：只处理旧迁移时已创建且未编辑、未改名、单 root 的自动项目，任务 project_id 清空且容器软删；CLI 事实、执行目录、归档/置顶/未读及定时定义不变。只触及 tasks/projects，旧 checksum 不变；后续手建/恢复不会重复纠正。
 
 ## 2026-10-10 远程单目录合同
 
-本地仍允许 0..n roots；可信 ownerHostId 非 local 的持库宿主只允许恰好一个固定 root。远程创建必须有项目，prepareSession、reserveCreatedTask 与 moveTask 不得产生无归属或附加目录；根路径更新和缺 root 拖动在写事务中拒绝。客户端 hostId 不能改变持库身份。历史迁移数据不被裁剪，失败不得部分写入。
+本地持久化兼容 0..n roots。远程 Host 项目包含至少一个目录，同一项目的目录均由所属 Host 保存。普通任务创建校验 cwd 和附加目录属于该项目，已有任务保留创建时的 cwd。客户端 hostId 不能改变持库身份。目录和项目归属在同一写事务中更新。
 
 启动入口复用 session 模块公开的旧 Repo 与迁移适配器：先 SQL 迁移并提交，再逐一 ensureReady/close，最后标记 prepared。Worker 必须注入旧 settings 以完成首次项目导入；进度复制迁移事实，失败不撤回已提交计数。storage-startup 子路径保持不变。
 
@@ -51,3 +51,7 @@ App 控制创建与普通创建共用 `reserveCreatedTask` 的创建回执：会
 `0010_remote_task_ownership` 与 `0010_task_worktree_root` 是两个独立迁移 ID，合并后按现有顺序保留两者及各自 SQL/checksum；前者修复历史归属，后者增加 worktree 列和索引，不改名或重复执行已有账本记录。
 
 组织库 migration runner（`session/tasksDatabase`）也归本模块，统一维护 tasks-index 迁移账本。归档永久删除增加最小 `task_purge` 准入/完成身份屏障；不保存标题或正文。Host 在事务内复检归档后准入，CLI 确认删除成功后物理清除索引及分组引用，迟到 upsert 被拒绝。
+
+## Mythic Harness 4.0 工作区目录
+
+直连项目接受同一 Host 的多个目录。新任务只能选该 Host 项目的已保存目录。会话的 cwd 由创建时记录，当前轮次接收时读取项目目录并固化到输入，重试和恢复沿用该次输入的目录。

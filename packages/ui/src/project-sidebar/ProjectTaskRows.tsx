@@ -1,6 +1,5 @@
-import { Fragment, memo, useCallback, useContext, useMemo, useState } from "react";
+import { Fragment, memo, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { ProjectTask, ProjectSidebarProps } from "@/project-sidebar/contract.js";
-import { TaskGroupTaskMenu } from "@/project-sidebar/TaskGroupTaskMenu.js";
 import { TaskList } from "@/TaskList.js";
 import { Button } from "@/components/ui/button.js";
 import { useProjectTaskActions } from "@/project-sidebar/useProjectTaskActions.js";
@@ -43,14 +42,11 @@ export const ProjectTaskRow = memo(function Row({
     () => presentation.onOpenTaskFiles?.(task, remoteSessionId ?? undefined),
     [presentation.onOpenTaskFiles, task, remoteSessionId],
   );
-  // 原因：内联 JSX 每次都会创建新引用，导致 TaskList 的 memo 比较失效。
-  const organizationActions = useMemo(() => <TaskGroupTaskMenu task={task} />, [task]);
   // 项目身份详情只由项目入口承载；会话行使用任务卡，不复用项目详情。
   return (
     // 每行独立渲染 TaskList，外层留白避免选中和悬停背景粘连。
     <div className="py-px">
       <TaskList
-        organizationActions={organizationActions}
         workspacePath={task.workspacePath}
         workspaceIdentity={task.workspaceIdentity}
         remoteSessionId={remoteSessionId ?? undefined}
@@ -92,8 +88,10 @@ export function ProjectTaskRows({
   refresh,
   kind = "project",
   showEmptyState = true,
+  beforeTasks,
 }: {
   showEmptyState?: boolean;
+  beforeTasks?: ReactNode;
   kind?: "project" | "pinned" | "timeline" | "unread";
   tasks: ProjectTask[];
   onSelect: ProjectSidebarProps["onSelectTask"];
@@ -119,7 +117,7 @@ export function ProjectTaskRows({
       )
     : [];
   // 原因：逐行复用 TaskList 后，空数组不再挂载旧空态；列表 owner 统一展示一次。
-  if (!tasks.length)
+  if (!tasks.length && !beforeTasks)
     return kind === "pinned" || !showEmptyState ? null : (
       <div
         className="px-8.5 py-2 text-ui-base text-foreground-subtlest"
@@ -147,6 +145,7 @@ export function ProjectTaskRows({
           {intl.formatMessage({ id: "taskList.pinnedSection" })}
         </h3>
       ) : null}
+      {beforeTasks}
       {visible.map((task, index) => (
         // 日期标题与行共用完整任务 key；跨日期段更新不能重挂载正在操作的任务行。
         <Fragment

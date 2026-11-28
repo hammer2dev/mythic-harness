@@ -43,7 +43,7 @@ import {
 } from "./zcode-protocol/storage-startup.js";
 import { closeSessionStore, getSessionDbPath } from "./app/session-store.js";
 import { resolveMcpNodeFallbackProvider } from "./app/mcp-node-fallback.js";
-import { getCliStorageRoot, getPluginStorageRoot, getProjectMemoryRoot } from "./app/paths.js";
+import { getCliStorageRoot, getPluginStorageRoot } from "./app/paths.js";
 import { startProcessProviderRegistryRuntime } from "./app/process-provider-registry-runtime.js";
 import { scheduleStartupLogRetentionCleanup } from "./log-retention.js";
 import { resolveProcessProviderEndpointRoutingPort } from "./provider-endpoint-routing.js";
@@ -414,12 +414,7 @@ export async function runZCodeProtocolAgent(
       mcpPort,
       mcpTelemetry: mcpTelemetryTracker,
       sessionStore,
-      sessionDataFiles: createNodeSessionDataFiles({
-        cliStorageRoot: protocolCliStorageRoot,
-        // 与会话运行时的记忆解析同一函数，删除的正是 CLI 读写的那个目录。
-        memoryRoot: ({ workspacePath, workspaceIdentity }) =>
-          getProjectMemoryRoot(protocolCliStorageRoot, workspacePath, workspaceIdentity),
-      }),
+      sessionDataFiles: createNodeSessionDataFiles({ cliStorageRoot: protocolCliStorageRoot }),
       syncAccountProviderConfig: activeProviderRegistryRuntime.syncAccountProviderConfig,
       refreshProviderRegistry: async (reason) => {
         await activeProviderRegistryRuntime.runtime.registryService.refresh(reason);

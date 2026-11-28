@@ -151,7 +151,7 @@ E2E 放 manual-review/pending，fixture 在隔离 HOME/工作区创建；只用�
 ## 2026-11-04：归档会话永久删除
 
 本节替代前文归档管理中单条、分组和当前筛选结果的软删除语义。实现采用预检、二次确认和
-物理清理。取消归档、普通会话删除、项目管理和分享管理保持既有语义。验证范围见文末。
+物理清理。取消归档与普通会话删除各有独立操作。验证范围见文末。
 
 ### 需求与澄清记录
 
@@ -410,7 +410,7 @@ sequenceDiagram
 | should-inspect | fork、工作流、输入队列 → artifact URI | 逐行扫描消息、part、输入/历史、revert 和工作流 journal；只保留被引用的受控文件 |
 | conditional | online remote → 原 source 上的同一能力 | 原 source 的现有客户端执行；离线或不支持显示阻止，不回退本机 |
 | invariant-only | 分享、项目、worktree、目录记忆 | 不产生删除副作用 |
-| evidence-only | ARM02/03、TSL39、PJM07、CLI session-data tests | 现有软删除/项目删除证据不能视为新功能覆盖 |
+| evidence-only | ARM02/03、TSL39 | 这些记录覆盖既有软删除与归档流程 |
 
 源码 seeds：`useArchiveManagement`、`mutateProjectTask`、`createZCodeTaskServiceAdapter`、
 `purgeSessionDataWith`、`listOwnedSessionTrees`、`listArtifactReferrers`、`purgeSessions`、

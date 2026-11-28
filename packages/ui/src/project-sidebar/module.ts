@@ -5,7 +5,6 @@
 export const projectSidebarModule = {
   id: "project-sidebar",
   requires: [
-    "resource-manager",
     "services",
     "shared",
     "ui",

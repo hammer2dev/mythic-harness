@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -15,11 +15,8 @@ import {
 } from "@dnd-kit/sortable";
 import { Plus, MessageCirclePlus, ListChevronsDownUp, ListChevronsUpDown } from "lucide-react";
 import { WorkspacePurposeSection } from "@/WorkspaceSidebar/WorkspacePurposeSection.js";
-import {
-  readSidebarPurposeSectionPreferences,
-  persistSidebarPurposeSectionPreferences,
-  reorderSidebarPurposeSections,
-} from "@/lib/sidebarPurposeSectionPreferences.js";
+import { useSidebarSectionsStore } from "@/store/sidebarSectionsStore.js";
+import { SidebarSectionActions } from "@/project-sidebar/SidebarSectionActions.js";
 import { Button } from "@/components/ui/button.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -37,7 +34,7 @@ export function PurposeSections({
   canToggleProjects,
   onToggleProjects,
 }: {
-  projects: ReactNode;
+  projects(sectionId: string): ReactNode;
   tasks: ReactNode;
   onAdd(): void;
   onCreate(): void;
@@ -47,11 +44,7 @@ export function PurposeSections({
 }) {
   const { intl } = useZCodeIntl();
   const msg = (id: string) => intl.formatMessage({ id: `project.${id}` });
-  const [preferences, setPreferences] = useState(readSidebarPurposeSectionPreferences);
-  const update = (next: typeof preferences) => {
-    setPreferences(next);
-    persistSidebarPurposeSectionPreferences(next);
-  };
+  const preferences = useSidebarSectionsStore();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -62,15 +55,7 @@ export function PurposeSections({
       collisionDetection={closestCenter}
       modifiers={sectionDragModifiers}
       onDragEnd={({ active, over }) => {
-        if (over && active.id !== over.id)
-          update({
-            ...preferences,
-            sectionOrder: reorderSidebarPurposeSections(
-              preferences.sectionOrder,
-              String(active.id),
-              String(over.id),
-            ),
-          });
+        if (over) preferences.reorderSections(String(active.id), String(over.id));
       }}
     >
       <SortableContext items={preferences.sectionOrder} strategy={verticalListSortingStrategy}>
@@ -79,7 +64,12 @@ export function PurposeSections({
         <div className="grid grid-cols-1 gap-3" data-purpose-section-list="true">
           {preferences.sectionOrder.map((id) => {
             const isProject = id === "projects";
-            const title = msg(isProject ? "projects" : "tasks");
+            const isConversation = id === "conversations";
+            const title =
+              isProject || isConversation
+                ? msg(isProject ? "projects" : "tasks")
+                : preferences.sections.find((section) => section.id === id)?.name;
+            if (!title) return null;
             const section = (
               <WorkspacePurposeSection
                 sortableId={id}
@@ -88,14 +78,21 @@ export function PurposeSections({
                   { id: "workspaceSidebar.reorderSection" },
                   { section: title },
                 )}
-                testId={isProject ? "project-section" : "conversation-section"}
-                open={isProject ? preferences.projectsExpanded : preferences.conversationsExpanded}
-                onOpenChange={(open) =>
-                  update({
-                    ...preferences,
-                    [isProject ? "projectsExpanded" : "conversationsExpanded"]: open,
-                  })
+                testId={
+                  isProject
+                    ? "project-section"
+                    : isConversation
+                      ? "conversation-section"
+                      : "custom-project-section"
                 }
+                open={
+                  isProject
+                    ? preferences.projectsExpanded
+                    : isConversation
+                      ? preferences.conversationsExpanded
+                      : preferences.expandedBySectionId[id] !== false
+                }
+                onOpenChange={(open) => preferences.setSectionExpanded(id, open)}
                 action={
                   <>
                     {isProject && (
@@ -119,26 +116,31 @@ export function PurposeSections({
                         </Button>
                       </ControlHintTooltip>
                     )}
-                    <ControlHintTooltip title={msg(isProject ? "new" : "createTask")}>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-foreground-subtle hover:text-foreground"
-                        data-testid={isProject ? "virtual-project-add" : "virtual-project-new-task"}
-                        aria-label={msg(isProject ? "new" : "createTask")}
-                        onClick={isProject ? onAdd : onCreate}
-                      >
-                        {isProject ? (
-                          <Plus className="size-3.5" />
-                        ) : (
-                          <MessageCirclePlus className="size-3.5" />
-                        )}
-                      </Button>
-                    </ControlHintTooltip>
+                    {isProject || isConversation ? (
+                      <ControlHintTooltip title={msg(isProject ? "new" : "createTask")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-foreground-subtle hover:text-foreground"
+                          data-testid={
+                            isProject ? "virtual-project-add" : "virtual-project-new-task"
+                          }
+                          aria-label={msg(isProject ? "new" : "createTask")}
+                          onClick={isProject ? onAdd : onCreate}
+                        >
+                          {isProject ? (
+                            <Plus className="size-3.5" />
+                          ) : (
+                            <MessageCirclePlus className="size-3.5" />
+                          )}
+                        </Button>
+                      </ControlHintTooltip>
+                    ) : null}
+                    {isConversation ? null : <SidebarSectionActions sectionId={id} />}
                   </>
                 }
               >
-                {isProject ? projects : tasks}
+                {isConversation ? tasks : projects(id)}
               </WorkspacePurposeSection>
             );
             return <div key={id}>{section}</div>;

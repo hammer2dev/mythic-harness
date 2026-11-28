@@ -9,10 +9,8 @@ describe("cli-session-data-files contract", () => {
   });
 
   it("returns the measured size on removal and 0 when removed again", async () => {
-    const files = createExampleSessionDataFiles({ sess_1: 12 }, { "/w": 3 });
-    expect(await files.measureSession("sess_1")).toBe(12);
+    const files = createExampleSessionDataFiles({ sess_1: 12 });
     expect(await files.removeSession("sess_1")).toBe(12);
     expect(await files.removeSession("sess_1")).toBe(0);
-    expect(await files.removeMemory({ workspacePath: "/w" })).toBe(3);
   });
 });

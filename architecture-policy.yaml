@@ -299,9 +299,10 @@ modules:
   - id: project-sidebar
     roots:
       - packages/ui/src/project-sidebar
+
+      - packages/ui/src/store/sidebarSectionsStore.ts
     managed: true
     requires:
-      - resource-manager
       - services
       - shared
       - ui

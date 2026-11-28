@@ -9,7 +9,10 @@ import {
 import { openWorkspaceDraftFromSidebar } from "#e2e/helpers/workspace-agent-warmup";
 import { setRendererViewport, clearRendererViewport } from "#e2e/helpers/renderer-viewport";
 import type { VirtualProject } from "@zcode/services";
-import { selectNativeProjectDirectories } from "#e2e/helpers/project-sidebar";
+import {
+  selectNativeProjectDirectories,
+  selectRemoteProjectDirectory,
+} from "#e2e/helpers/project-sidebar";
 import { openScopeProjectSubmenu } from "#e2e/helpers/settings-scope-menu";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -19,6 +22,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { ServiceChannels } from "@zcode/shared";
 import {
   TID_TASK_SETTINGS_BUTTON,
+  TID_CONFIRM_DIALOG_CONFIRM,
   TID_TASK_ITEM,
   TID_TASK_ARCHIVE,
   TID_V4_COMPOSER_INPUT,
@@ -587,12 +591,18 @@ describe("虚拟项目", () => {
         expect(await readFile(join(path, "keep.txt"), "utf8")).toBe("preserve project files");
     } finally {
       db.close();
-      await browser.keys("Escape");
-      const original = $('[data-project-name="ZCodeProject"]');
-      await original.moveTo();
-      await original.$('[data-testid="virtual-project-create-task"]').click();
-      await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30_000);
+      const editor = $('[role="dialog"]:has([data-testid="virtual-project-name"])');
+      if (await editor.isDisplayed()) {
+        await editor
+          .$('.//button[normalize-space(.)="取消" or normalize-space(.)="Cancel"]')
+          .click();
+        await editor.waitForDisplayed({ reverse: true });
+      }
     }
+    const original = $('[data-project-name="ZCodeProject"]');
+    await original.moveTo();
+    await original.$('[data-testid="virtual-project-create-task"]').click();
+    await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30_000);
   });
   it("VP12：Bot 访问范围选择项目 ID，同 cwd 的项目分别保存", async function () {
     this.timeout(90_000);
@@ -1004,9 +1014,23 @@ describe("虚拟项目", () => {
       await project.$('[data-testid="virtual-project-row"]').click({ button: "right" });
       await $('[data-testid="virtual-project-edit"]').click();
       await $('[data-testid="virtual-project-name"]').setValue("E2E_VP08_URL_RENAMED");
-      expect(await $('[data-testid="virtual-project-browse"]').isExisting()).toBe(false);
+      const extraRoot = join(serverHome, "work", "extra");
+      await mkdir(extraRoot, { recursive: true });
+      await $('[data-testid="virtual-project-browse"]').click();
+      const boundary = $('[data-testid="source-server-boundary-dialog"]');
+      const directoryBrowser = $('[data-testid="virtual-project-directory-browser"]');
+      await browser.waitUntil(
+        async () => (await boundary.isDisplayed()) || (await directoryBrowser.isDisplayed()),
+        { timeoutMsg: "远端目录浏览器没有出现" },
+      );
+      if (await boundary.isDisplayed()) {
+        await boundary.$(`[data-testid="${TID_CONFIRM_DIALOG_CONFIRM}"]`).click();
+      }
+      await directoryBrowser.waitForDisplayed();
+      await selectRemoteProjectDirectory(extraRoot);
       expect(await readTabs()).toEqual(tabs);
       await $('[data-testid="virtual-project-save"]').click();
+      await $('[data-testid="project-folder-trust-confirm"]').click();
       const renamed = $('[data-project-name="E2E_VP08_URL_RENAMED"]');
       await renamed.waitForDisplayed();
       const remoteDb = new DatabaseSync(join(serverHome, ".zcode/v2/tasks-index.sqlite"), {
@@ -1017,6 +1041,16 @@ describe("虚拟项目", () => {
           remoteDb.prepare("SELECT name FROM projects WHERE project_id=?").get(ready.projectId)
             ?.name,
         ).toBe("E2E_VP08_URL_RENAMED");
+        expect(
+          remoteDb
+            .prepare(
+              "SELECT root_path, is_primary FROM project_roots WHERE project_id=? ORDER BY is_primary DESC",
+            )
+            .all(ready.projectId),
+        ).toEqual([
+          { root_path: join(serverHome, "work", "repo"), is_primary: 1 },
+          { root_path: extraRoot, is_primary: 0 },
+        ]);
       } finally {
         remoteDb.close();
       }
@@ -1367,12 +1401,20 @@ describe("虚拟项目", () => {
     });
     expect((await readDraft()).projectId).toBeNull();
   });
-  it("新建空项目、修改名称、软删除后从同 roots 新建恢复", async function () {
+  it("新建项目、修改名称、软删除后从同 roots 新建恢复", async function () {
     this.timeout(120_000);
     await $('[data-testid="project-section"]').waitForDisplayed();
+    const projectRoot = join(DEFAULT_WORKSPACE, ".zcode-e2e", "vp04-restore");
+    await mkdir(projectRoot, { recursive: true });
     await openLocalProjectEditor();
     await $('[data-testid="virtual-project-name"]').setValue("E2E_VP04_Project");
-    await $('[data-testid="virtual-project-save"]').click();
+    const save = $('[data-testid="virtual-project-save"]');
+    expect(await save.isEnabled()).toBe(false);
+    await chooseProjectRoot(projectRoot);
+    await save.click();
+    const trust = $('[data-testid="project-folder-trust-confirm"]');
+    await trust.waitForClickable();
+    await trust.click();
     const project = $('[data-project-name="E2E_VP04_Project"]');
     await project.waitForDisplayed();
     const projectId = await project.getAttribute("data-project-id");
@@ -1392,7 +1434,7 @@ describe("虚拟项目", () => {
     await $('[data-project-name="E2E_VP04_Renamed"] [data-testid="virtual-project-row"]').click({
       button: "right",
     });
-    // 从草稿新建项目会初始化主目录；恢复必须选回实际 roots，不能再次用空 roots 比较。
+    // 读取改名后实际保存的目录，恢复时选回同一组 roots。
     const db = new DatabaseSync(
       join(process.env.ZCODE_E2E_HOME_DIR!, ".zcode/v2/tasks-index.sqlite"),
       { readOnly: true },
@@ -1642,19 +1684,23 @@ async function captureProjectDialogLayouts(stage: string) {
       await browser.waitUntil(() => browser.execute((expected) => innerWidth === expected, width));
       for (const dark of [false, true]) {
         await setTheme(dark ? "zai-dark" : "zai-light");
-        const fit = await browser.execute(() => {
-          const dialog = document.querySelector('[role="dialog"]')!;
-          const bounds = dialog.getBoundingClientRect();
-          const input = dialog.querySelector("input");
-          return {
-            left: bounds.left,
-            right: bounds.right,
-            width: innerWidth,
-            inputSize: input ? Number.parseFloat(getComputedStyle(input).fontSize) : null,
-          };
-        });
-        expect(fit.left).toBeGreaterThanOrEqual(0);
-        expect(fit.right).toBeLessThanOrEqual(fit.width);
+        // CDP 改变 innerWidth 之后 CSS 留白可能尚未重排。比较同一坐标系的边界，并等窄窗留白生效。
+        const fit = await browser.waitUntil(
+          () =>
+            browser.execute((narrow) => {
+              const dialog = document.querySelector('[role="dialog"]')!;
+              const bounds = dialog.getBoundingClientRect();
+              const viewport = document.documentElement.getBoundingClientRect();
+              const inset = narrow ? 15 : 0;
+              if (bounds.left < viewport.left + inset || bounds.right > viewport.right - inset)
+                return false;
+              const input = dialog.querySelector("input");
+              return {
+                inputSize: input ? Number.parseFloat(getComputedStyle(input).fontSize) : null,
+              };
+            }, width === 390),
+          { timeoutMsg: `项目弹窗未按 ${width}px 视口完成布局` },
+        );
         if (width === 390 && fit.inputSize !== null)
           expect(fit.inputSize).toBeGreaterThanOrEqual(16);
         await browser.saveScreenshot(

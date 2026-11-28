@@ -49,6 +49,7 @@ interface CanonicalConversationFactBase {
 }
 
 export interface CanonicalUserIntentFact extends CanonicalConversationFactBase {
+  projectWorkspace?: import("@zcode/contracts").TurnInputIntentMetadata["projectWorkspace"];
   inputOrigin?: "desktop" | "mobile";
   conversationQuotes?: import("@zcode/contracts").TurnInputIntentMetadata["conversationQuotes"];
   botGroupSource?: import("@zcode/shared").BotGroupInputSource;
@@ -298,6 +299,7 @@ function normalizeTurnStarted(
       ? { planEnabled: payload.intent.planEnabled }
       : {}),
     ...(payload.intent?.inputOrigin ? { inputOrigin: payload.intent.inputOrigin } : {}),
+    ...(payload.intent?.projectWorkspace ? { projectWorkspace: payload.intent.projectWorkspace } : {}),
     ...(payload.intent?.conversationQuotes
       ? { conversationQuotes: payload.intent.conversationQuotes }
       : {}),

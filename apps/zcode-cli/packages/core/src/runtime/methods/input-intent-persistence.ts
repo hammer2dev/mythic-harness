@@ -37,6 +37,7 @@ export function buildPersistedConversationInputIntent(
     ...(intent.mode ? { mode: intent.mode } : {}),
     ...(intent.planEnabled !== undefined ? { planEnabled: intent.planEnabled } : {}),
     ...(intent.genUiContext !== undefined ? { genUiContext: intent.genUiContext } : {}),
+    ...(intent.projectWorkspace ? { projectWorkspace: structuredClone(intent.projectWorkspace) } : {}),
     ...(intent.sharedContextRefs ? { sharedContextRefs: intent.sharedContextRefs } : {}),
     delivery: {
       requested: intent.requestedDelivery,
