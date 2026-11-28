@@ -1,5 +1,7 @@
 # 用户社群入口配置
 
+> Mythic Harness 已下线通用社群和问题反馈入口。下方记录原平台配置规则。
+
 > Todo103：本文保留 staging 的既定行为与历史验收记录；历史通过数不计为本次通过。
 > 本次整合证据另记在 todo103-staging-integration-ledger.md，未改变 Provider/Selection 边界。
 

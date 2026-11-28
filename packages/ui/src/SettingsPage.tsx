@@ -1548,7 +1548,7 @@ export function SettingsPage({
               {/* Bug 原因：Windows/Linux 设置页仍保留旧 caption 下箭头，与主界面和 macOS 的帮助入口不一致。
                   统一复用问号帮助按钮，并让它在普通 flex 流中紧邻自绘窗控。
                   Settings 的独立标题层还需计入 4px 外层留白和 1px 边框，才能与 Workspace 控制组对齐。 */}
-              <WorkspaceHelpMenuButton isDesktop={Boolean(isDesktop)} />
+              {isDesktop ? <WorkspaceHelpMenuButton /> : null}
               <DesktopWindowControls />
             </div>
           ) : null}
@@ -1752,10 +1752,7 @@ export function SettingsPage({
                   )}
                 >
                   <div className="absolute right-2.5 top-2.5 pointer-events-auto [app-region:no-drag]">
-                    <WorkspaceHelpMenuButton
-                      className="relative z-50 [app-region:no-drag]"
-                      isDesktop={Boolean(isDesktop)}
-                    />
+                    {isDesktop ? <WorkspaceHelpMenuButton className="relative z-50 [app-region:no-drag]" /> : null}
                   </div>
                 </div>
               ) : null}

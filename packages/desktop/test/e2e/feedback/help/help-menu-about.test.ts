@@ -76,7 +76,6 @@ async function openMenu() {
     }
   }
   await $('[role="menu"]').waitForDisplayed();
-  await $('[role="menuitem"][aria-busy="true"]').waitForExist({ reverse: true });
 }
 async function closeMenu() {
   await browser.keys("Escape");
@@ -158,7 +157,7 @@ describe(`问号菜单应用入口（${expectedFlavor}）`, () => {
   before(async () => {
     await enterWorkspace();
     originalSettings = await readSettings();
-    // 动态漏洞入口由配置决定；固定本地配置，避免远端配置或加载占位影响菜单顺序断言。
+    // 固定本地端点，避免验收向真实产品服务发起请求。
     helpConfig = await startHelpConfigFixture({});
     await seedSettings({
       locale: "en-US",
@@ -188,17 +187,14 @@ describe(`问号菜单应用入口（${expectedFlavor}）`, () => {
     await openMenu();
     const labels = await menuLabels();
     expect(labels).toEqual([
-      "Product docs",
-      "User community",
-      "Report an issue",
-      "Request a feature",
       "Export logs",
       "Copy device MID",
       "Resource manager",
+      "Preinstalled tools",
       ...(production ? ["Check for updates"] : []),
       "About ZCode",
     ]);
-    expect(await $$('[role="menu"] [role="separator"]')).toHaveLength(1);
+    expect(await $$('[role="menu"] [role="separator"]')).toHaveLength(0);
     await browser.saveScreenshot(join(tmpdir(), "zcode-help-export-en-light.png"));
     await assertLogExport("Export logs", "Exporting logs...");
     await openMenu();
@@ -301,17 +297,14 @@ describe(`问号菜单应用入口（${expectedFlavor}）`, () => {
     await openMenu();
     const labels = await menuLabels();
     expect(labels).toEqual([
-      "产品文档",
-      "用户社群",
-      "问题上报",
-      "给产品提需求",
       "导出日志",
       "复制设备 MID",
       "资源管理器",
+      "预装工具",
       ...(production ? ["检查更新"] : []),
       "关于 ZCode",
     ]);
-    expect(await $$('[role="menu"] [role="separator"]')).toHaveLength(1);
+    expect(await $$('[role="menu"] [role="separator"]')).toHaveLength(0);
     await browser.saveScreenshot(join(tmpdir(), "zcode-help-export-zh-dark.png"));
     await assertLogExport("导出日志", "正在导出日志中");
     await openMenu();

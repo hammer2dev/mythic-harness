@@ -7,7 +7,6 @@
 ## Workspace / Settings 问号菜单
 
 - Workspace header、新建任务 header 和 Settings 页面共享同一个问号菜单组件。
-- 问号菜单统一承载高频帮助动作：问题上报、给产品提需求、用户社群、产品文档、导出日志。
-- 导出日志不在 UI 层直接访问 Electron API，继续走 `IPlatformService.exportLogs()` 和统一 toast 状态，保证 Desktop / Web fallback 边界一致。
+- 桌面问号菜单提供导出日志、复制设备 MID、资源管理器、预装工具、检查更新和关于。Web 隐藏该入口。
+- 桌面问号菜单通过 `IPlatformService.exportLogs()` 导出日志并显示统一状态提示。
 - Settings 页面把问号入口放在右侧内容面板顶部，并复用 new task 的窗口按钮避让偏移，避免和 Windows / Linux 自绘窗口控制按钮发生点击区域冲突。
-- Sidebar footer 账户菜单不再重复展示问题反馈、用户社群、导出日志和设置入口，避免同一组动作同时出现在两个入口里；footer 外侧保留设置齿轮，账户菜单保留用量、主题、语言、缩放和登录态动作。

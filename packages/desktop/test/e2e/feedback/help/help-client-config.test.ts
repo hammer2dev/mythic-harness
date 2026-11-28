@@ -101,10 +101,9 @@ describe("帮助配置 client/configs", () => {
     );
   }
 
-  it("HC-01: 真实帮助菜单、语言与成功缓存", async () => {
+  it("HC-01: 桌面平台动作、语言与成功缓存", async () => {
     expect(await available("en-US")).toBe(true);
-    await $('button[aria-label="Help"]').click();
-    await $('//*[@role="menuitem" and contains(.,"User community")]').click();
+    await command("openCommunity");
     await expectExternal(fixture.remote.community_urls!["en-US"]!);
     expect(await available("zh-CN")).toBe(true);
     await browser.execute(async () => {

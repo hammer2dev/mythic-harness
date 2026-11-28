@@ -46,7 +46,7 @@ export function WorkspaceHeaderActionSection({
       ) : null}
       {!simplifyForNarrowRemote ? (
         <>
-          {!hideHelpMenu ? <WorkspaceHelpMenuButton isDesktop={Boolean(isDesktop)} /> : null}
+          {isDesktop && !hideHelpMenu ? <WorkspaceHelpMenuButton /> : null}
           {/* Bugfix: 远程控制移动端头部空间过窄，终端入口在这里会和核心操作争抢宽度。 */}
           <WorkspaceTerminalToggleButton
             isTerminalOpen={isTerminalOpen}

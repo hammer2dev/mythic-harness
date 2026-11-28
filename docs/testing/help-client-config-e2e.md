@@ -18,6 +18,8 @@ Todo103 复验修正：`setApplicationLocale` 是 Main 原生菜单状态，不�
 
 ## UI Surface Matrix
 
+> 下方记录迁移时的入口。Mythic Harness 已移除通用产品支持的菜单和命令面板入口。HC-01 至 HC-05 通过平台动作或 Web 配置读取验证既有配置规则。当前问号菜单验收见 `help-menu-about.test.ts` 和 `help-report-vulnerability.test.ts`。
+
 | 场景 / 入口                          | 共享实现 / owner                                       | 默认与校验                          | 提交落点                   | 模式差异 / 隔离                      |
 | ------------------------------------ | ------------------------------------------------------ | ----------------------------------- | -------------------------- | ------------------------------------ |
 | 问号菜单社群                         | WorkspaceHelpMenuButton → platform → desktopHelpConfig | 当前语言远端→内置                   | shell.openExternal         | Desktop / Web 平台分别打开；不改会话 |
@@ -51,14 +53,13 @@ HTTP 和内存缓存规则共用 helpAppConfig；反馈 UI 入口并不共用开
 当前工具未提供 codegraph 索引查询；按确定的文件 seeds 用 rg 检查直接调用，深度 2。
 seeds：helpAppConfig、desktopHelpConfig、desktopCommandHandlers、communityUrl、WorkspaceHelpMenuButton。
 图谱尚无帮助配置能力，本次增加已确认的能力 seed，不推断其他业务依赖。
-漂移候选：问号菜单目前始终展示社群项，Windows caption 和命令面板才有可见性 gate；
-测试明确区分平台可用性与问号菜单，避免声称已验证所有入口隐藏。
+历史差异：迁移时问号菜单始终展示社群项，Windows caption 和命令面板根据平台可用性判断。上述社群入口现已下线。
 
 ## Clarification / Boundary Decisions / Dimensions
 
 用户已确认迁移规则并授权完成验证；不重新询问既定语义。
 维度为 zh-CN/en-US、远端全量/部分/失败、同一/不同 endpoint、首次/重复请求、Desktop/Web。
-工作区身份、模型、主题不影响纯配置结果，剪枝全量笛卡尔积；桌面以真实入口点击验证代表路径。
+配置测试聚焦客户端语言、同语言回退和缓存。设备 MID 复制继续通过桌面问号菜单点击验证。
 TTL 精确到期、请求未完成时切换 endpoint 保留在可控时钟单测，不把 E2E 等待 1 小时作为验证。
 本轮仅进行本机验证；浏览器窄屏配置集成不是完整手机远控验收。
 
@@ -66,7 +67,7 @@ TTL 精确到期、请求未完成时切换 endpoint 保留在可控时钟单测
 
 | ID    | Setup                                                        | Action                                           | 必须断言                                                         | 证据层               |
 | ----- | ------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------------------- | -------------------- |
-| HC-01 | 本地 HTTP fixture 完整中英文配置                             | 真实问号菜单点击社群；调用中英文可用性并再次点击 | 正确语言外链、实际请求路径/参数/次数，重复读取命中内存           | UI + network         |
+| HC-01 | 本地 HTTP fixture 完整中英文配置                             | 调用中英文平台社群动作和可用性                   | 正确语言外链、实际请求路径/参数/次数，重复读取命中内存           | runtime + HTTP       |
 | HC-02 | 远端只含中文、fixture 提供英文内置默认值                     | 英文平台社群动作                                 | 使用英文默认值；绝不进入中文远端                                 | runtime + filesystem |
 | HC-03 | 远端 false、本地 true；另一个 endpoint 远端 true             | 平台反馈动作                                     | false 出现真实内置 Dialog，外链未调用；true 打开远端地址         | UI + runtime         |
 | HC-04 | 503 / 业务错误 / 无效 JSON                                   | 平台可用性与社群；恢复同 endpoint 的成功响应     | 默认可用、失败不缓存、恢复后新地址；无值时平台不可用             | HTTP + runtime       |
@@ -83,8 +84,7 @@ TTL 精确到期、请求未完成时切换 endpoint 保留在可控时钟单测
 
 ## Unresolved Questions / Planning Handoff
 
-产品语义无新增待决；问号菜单无配置时的显示问题记录为既有漂移，不在此次纯迁移验证中修改 UI。
-本文件同时承担 impact brief、catalog、matrix、剪枝记录；实际运行证据如下。
+下方保留迁移时的验收记录。当前问号菜单的验收见前文列出的用例。
 
 ## 验证记录（2026-09-04）
 
