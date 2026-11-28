@@ -1,7 +1,6 @@
 import { resolveRequestSecurityErrorMessageId } from "@/request-security-edition/errors.js";
 import { getRemoteConnectionFailureCode } from "@/lib/remoteWorkspaceServiceError.js";
 import { formatRemoteConnectionError } from "@/lib/remoteConnectionPresentation.js";
-import { CodingPlanEntryButton } from "@/settings/CodingPlanEntryButton.js";
 /**
  * ChatErrorBanner — 错误提示组件
  *
@@ -18,7 +17,7 @@ import {
   TID_CHAT_ERROR_BANNER,
   TID_CHAT_ERROR_HOOK_ICON,
 } from "@zcode/shared/test-ids";
-import { AnchorIcon, InfoIcon, RocketIcon, SettingsIcon, X } from "lucide-react";
+import { AnchorIcon, InfoIcon, SettingsIcon, X } from "lucide-react";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
 import type { IntlInstance } from "./i18n/IntlProvider.js";
 import { Button } from "./components/ui/button.js";
@@ -189,7 +188,6 @@ export function ChatErrorBanner({
   retryDisabled,
   onDismiss,
   onOpenModelSettings,
-  onOpenUpgrade,
   modelConfigTarget = "local",
   onReconnect,
   remoteKind,
@@ -202,7 +200,6 @@ export function ChatErrorBanner({
   retryDisabled?: boolean;
   onDismiss?: () => void;
   onOpenModelSettings?: () => void;
-  onOpenUpgrade?: () => void;
   modelConfigTarget?: ChatErrorBannerModelConfigTarget;
 }) {
   const { intl } = useZCodeIntl();
@@ -318,21 +315,6 @@ export function ChatErrorBanner({
 
         {modelConfigMissing ? (
           <>
-            {onOpenUpgrade ? (
-              <CodingPlanEntryButton
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={onOpenUpgrade}
-                className={cn(actionButtonClassName, "gap-1.5")}
-                aria-label={intl.formatMessage({
-                  id: "chat.quota.action.upgrade",
-                })}
-              >
-                <RocketIcon className="size-3.5" />
-                {intl.formatMessage({ id: "chat.quota.action.upgrade" })}
-              </CodingPlanEntryButton>
-            ) : null}
             <Button
               type="button"
               variant="secondary"

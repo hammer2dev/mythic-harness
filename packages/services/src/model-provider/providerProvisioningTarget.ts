@@ -39,6 +39,7 @@ export interface ProviderProvisioningTargetOptions {
   readonly settingService: ISettingService;
   readonly personalConfigFilePath: string;
   readonly stateFilePath: string;
+  readonly syncAccount?: boolean;
   readonly listProvisioningCredentialKeys?: () => Promise<readonly string[]>;
 }
 
@@ -74,9 +75,10 @@ export function createProviderProvisioningTarget(
         validateCredentialEntries(envelope);
         // schema v1 接受旧 Source 的账号 Key 字段，但新 Host 不再读取或应用它。
         // 旧/手工 Key 留在原 Store，避免升级同步误删其它客户端共享的凭据。
-        const oauthCredentials = envelope.credentials.filter(
-          (entry) => entry.scope === "oauth-session",
-        );
+        const oauthCredentials =
+          options.syncAccount === false
+            ? []
+            : envelope.credentials.filter((entry) => entry.scope === "oauth-session");
         await options.providerRuntime.start();
         const before = await captureBeforeState(envelope, options);
         const personalUpdate = parsePersonalConfig(envelope);
@@ -94,43 +96,45 @@ export function createProviderProvisioningTarget(
 
         let errorCode: ProviderProvisioningErrorCode = "target-write-failed";
         try {
-          // 先登记再写入：底层原子写即使在替换完成后才抛错，也必须进入回滚集合。
-          applied.settings = true;
-          await options.settingService.update(
-            {
-              providerFamilyDomainUpdatedAt: applied.settingsVersion,
-              providerFamilyDomain: envelope.accountSettings.providerFamilyDomain ?? undefined,
-              providerFamilyConnectionSelections:
-                envelope.accountSettings.providerFamilyConnectionSelections,
-            },
-            {
-              // 原因：Host 同步也与本地连接选择竞争，提交必须比较捕获的完整快照和版本。
-              providerFamilyDomain: before.settings.providerFamilyDomain,
-              providerFamilyConnectionSelections:
-                before.settings.providerFamilyConnectionSelections,
-              providerFamilyDomainUpdatedAt: before.settings.providerFamilyDomainUpdatedAt ?? 0,
-            },
-          );
+          if (options.syncAccount !== false) {
+            // 先登记再写入：底层原子写即使在替换完成后才抛错，也必须进入回滚集合。
+            applied.settings = true;
+            await options.settingService.update(
+              {
+                providerFamilyDomainUpdatedAt: applied.settingsVersion,
+                providerFamilyDomain: envelope.accountSettings.providerFamilyDomain ?? undefined,
+                providerFamilyConnectionSelections:
+                  envelope.accountSettings.providerFamilyConnectionSelections,
+              },
+              {
+                // 原因：Host 同步也与本地连接选择竞争，提交必须比较捕获的完整快照和版本。
+                providerFamilyDomain: before.settings.providerFamilyDomain,
+                providerFamilyConnectionSelections:
+                  before.settings.providerFamilyConnectionSelections,
+                providerFamilyDomainUpdatedAt: before.settings.providerFamilyDomainUpdatedAt ?? 0,
+              },
+            );
 
-          const incomingCredentials = new Map(
-            oauthCredentials.map((credential) => [credential.key, credential.value]),
-          );
-          const credentials = Object.fromEntries(
-            Object.keys(before.credentials).map((key) => [
-              key,
-              incomingCredentials.get(key) ?? null,
-            ]),
-          );
-          // revision 属于目标进程的会话提交，不能重放 Source 旧代次制造 A→B→A。
-          // 同 syncId 已在前面零写入返回；每次真正应用都生成新的目标代次。
-          credentials[OAUTH_SESSION_REVISION_KEY] = randomUUID();
-          applied.credentials = credentials;
-          if (
-            !(await options.credentialService.updateMany(credentials, {
-              expected: before.credentials,
-            }))
-          ) {
-            throw new Error("OAuth 会话在同步期间被其它操作修改");
+            const incomingCredentials = new Map(
+              oauthCredentials.map((credential) => [credential.key, credential.value]),
+            );
+            const credentials = Object.fromEntries(
+              Object.keys(before.credentials).map((key) => [
+                key,
+                incomingCredentials.get(key) ?? null,
+              ]),
+            );
+            // revision 属于目标进程的会话提交，不能重放 Source 旧代次制造 A→B→A。
+            // 同 syncId 已在前面零写入返回；每次真正应用都生成新的目标代次。
+            credentials[OAUTH_SESSION_REVISION_KEY] = randomUUID();
+            applied.credentials = credentials;
+            if (
+              !(await options.credentialService.updateMany(credentials, {
+                expected: before.credentials,
+              }))
+            ) {
+              throw new Error("OAuth 会话在同步期间被其它操作修改");
+            }
           }
 
           applied.personalConfig = true;
@@ -143,7 +147,8 @@ export function createProviderProvisioningTarget(
           });
 
           errorCode = "target-refresh-failed";
-          await options.accountProviderSource.refresh("provider-provisioning");
+          if (options.syncAccount !== false)
+            await options.accountProviderSource.refresh("provider-provisioning");
           const snapshot =
             await options.providerRuntime.registryService.refresh("provider-provisioning");
           // 失效默认只是新会话偏好；把它当同步硬条件会让正常 SSH 被旧模型/档位阻断。
@@ -218,6 +223,7 @@ async function captureBeforeState(
     readProvisionablePersonalConfig(options.personalRepository, options.personalConfigFilePath),
     options.settingService.get(),
   ]);
+  if (options.syncAccount === false) return { personal, settings, credentials: {} };
   const credentialKeys = new Set<string>([
     ...OAUTH_CREDENTIAL_KEYS,
     ...((await options.listProvisioningCredentialKeys?.()) ?? []),

@@ -1,10 +1,12 @@
 import { fileURLToPath } from "node:url";
+import type { PersistedSettingsLocaleFields } from "@zcode/shared";
 import {
   TID_SETTINGS_BACK_BUTTON,
   TID_SETTINGS_LOCALE_SELECT_ITEM,
   TID_SETTINGS_LOCALE_SELECT_TRIGGER,
   TID_SETTINGS_PAGE,
   TID_SETTINGS_SECTION_NAV,
+  TID_TASK_NEW_BUTTON,
   TID_TASK_SETTINGS_BUTTON,
   testId,
 } from "@zcode/shared/test-ids";
@@ -16,10 +18,9 @@ import {
   quitElectronAppGracefully,
   readSettings,
   seedSettings,
-  waitForDefaultWorkspaceReady,
-  waitForWorkspaceApp,
 } from "#e2e/helpers/desktop-app";
 import { startHelpConfigFixture } from "#e2e/helpers/help-client-config-fixture";
+import { skipOccupationOnboardingIfPresent } from "#e2e/helpers/occupation-onboarding";
 import { openFaultInjectedHostWindow } from "#e2e/helpers/subagent-host-window";
 
 type Locale = "zh-CN" | "en-US" | "ja-JP" | "ru-RU" | "ko-KR";
@@ -103,15 +104,19 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
     return server;
   }
 
-  /** 在当前窗口打开帮助菜单，返回该窗口 Host 新发出的 client/configs 请求。 */
-  async function openHelpMenuForHostRequests(server: HelpServer) {
-    const before = server.requests.filter(isHost).length;
-    await $(HELP_MENU_TRIGGER).click();
+  /** 在当前窗口打开草稿，由草稿模型配置触发 Host 请求。冷启动场景包含已到达的请求。 */
+  async function readDraftHostRequests(
+    server: HelpServer,
+    before = server.requests.filter(isHost).length,
+  ) {
+    await clickTestIdByWebDriver(TID_TASK_NEW_BUTTON, {
+      timeout: 15000,
+      timeoutMsg: "没有找到新建任务按钮",
+    });
     await browser.waitUntil(async () => server.requests.filter(isHost).length > before, {
       timeout: 15000,
-      timeoutMsg: "打开帮助菜单后 Host 没有请求 client/configs",
+      timeoutMsg: "打开草稿后 Host 没有请求 client/configs",
     });
-    await browser.keys("Escape");
     return server.requests.filter(isHost).slice(before);
   }
 
@@ -153,14 +158,17 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
     });
   }
 
-  it("CLH-01: 重启后启动预热、Host 与 Main 的请求都使用持久化界面语言", async function () {
-    this.timeout(120000);
-    await waitForDefaultWorkspaceReady(30000);
+  async function restartWithSeed(
+    seed: Parameters<typeof seedSettings>[0] &
+      Partial<Pick<PersistedSettingsLocaleFields, "uiLocale" | "uiLocalePreference">>,
+  ) {
+    await skipOccupationOnboardingIfPresent();
     const server = await startServer();
+    // 重启测试读取 setting.json，先清除隔离窗口中优先级更高的本地语言偏好。
+    await browser.execute(() => localStorage.removeItem("zcode-locale-preference"));
     await quitElectronAppGracefully();
     await seedSettings({
-      locale: PERSISTED,
-      localePreference: PERSISTED,
+      ...seed,
       zcodeEndpointOrigin: server.origin,
       lastWorkspaceSession: [
         { kind: "local", workspacePath: DEFAULT_WORKSPACE, workspacePurpose: "project" },
@@ -168,18 +176,22 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       lastActiveTabIndex: 0,
     });
     await browser.reloadSession();
-    await waitForDefaultWorkspaceReady(30000);
-    await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
+    await skipOccupationOnboardingIfPresent();
     await mockExternal();
-
-    // 用户操作前到达的 Main 请求只有 client/configs 灰度预热（可能有多个灰度项）；
-    // 结果进入 1 小时缓存，之后 Main 的帮助配置也复用它，所以本例的 Main 链路只看预热。
-    // 注意：把预热挪回读取持久化语言之前，本例仍通过（已实测）——预热读语言前还有两次 await，
-    // 正常时序下启动读取先完成。该顺序只能靠代码保证，E2E 无法稳定复现这个竞态。
     await browser.waitUntil(async () => server.requests.some((request) => !isHost(request)), {
       timeout: 15000,
       timeoutMsg: "启动后 Main 没有发出 client/configs 灰度预热",
     });
+    return server;
+  }
+
+  it("CLH-01: 重启后启动预热、Host 与 Main 的请求都使用持久化界面语言", async function () {
+    this.timeout(120000);
+    const server = await restartWithSeed({ locale: PERSISTED, localePreference: PERSISTED });
+    // 用户操作前到达的 Main 请求只有 client/configs 灰度预热（可能有多个灰度项）；
+    // 结果进入 1 小时缓存，之后 Main 的帮助配置也复用它，所以本例的 Main 链路只看预热。
+    // 注意：把预热挪回读取持久化语言之前，本例仍通过（已实测）——预热读语言前还有两次 await，
+    // 正常时序下启动读取先完成。该顺序只能靠代码保证，E2E 无法稳定复现这个竞态。
     expectLanguage(
       server.requests.filter((request) => !isHost(request)),
       PERSISTED,
@@ -187,7 +199,7 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
 
     // 渲染进程挂载时会同步语言给 Main，Main 再推给 Host，所以这里无法单独证明 InitLocal；
     // InitLocal 下发由 desktopWindowLifecycle 单测覆盖（去掉 InitLocal 本例仍通过，已实测）。
-    expectLanguage(await openHelpMenuForHostRequests(server), PERSISTED);
+    expectLanguage(await readDraftHostRequests(server, 0), PERSISTED);
   });
 
   it("CLH-02: 语言写入失败时，切换仍实时到达 Main 与每个窗口的 Host", async function () {
@@ -208,7 +220,6 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       ]),
     });
     try {
-      await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
       await selectLocaleInSettings(SWITCHED);
       // 写入失败不回滚界面语言；以帮助按钮文案确认 UI 已切到中文。
       await expect($(HELP_MENU_TRIGGER)).toHaveAttribute("aria-label", "帮助");
@@ -217,9 +228,9 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       const server = await startServer();
       await seedSettings({ zcodeEndpointOrigin: server.origin });
 
-      expectLanguage(await openHelpMenuForHostRequests(server), SWITCHED);
+      expectLanguage(await readDraftHostRequests(server), SWITCHED);
       await browser.switchToWindow(firstHandle);
-      expectLanguage(await openHelpMenuForHostRequests(server), SWITCHED);
+      expectLanguage(await readDraftHostRequests(server), SWITCHED);
       expectLanguage(await openCommunityForMainRequests(server), SWITCHED);
       // 磁盘仍是旧语言：上面的请求只可能来自内存中的实时语言。
       expect((await readSettings()).locale).toBe(PERSISTED);
@@ -235,7 +246,6 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
   it("CLH-03: 切到日/俄/韩语后，Host 与 Main 的新请求立即带对应 BCP-47 语言", async function () {
     this.timeout(180000);
     await mockExternal();
-    await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
     for (const locale of ["ja-JP", "ru-RU", "ko-KR"] as const) {
       await selectLocaleInSettings(locale);
       // 降级兼容（docs/i18n/ui-locales.md）：旧字段只存中英，真实选择在 uiLocale 新字段。
@@ -243,7 +253,7 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       // 公共配置按 endpoint 缓存 1 小时；每种语言换一个新 endpoint，确保请求真实发出。
       const server = await startServer();
       await seedSettings({ zcodeEndpointOrigin: server.origin });
-      expectLanguage(await openHelpMenuForHostRequests(server), locale);
+      expectLanguage(await readDraftHostRequests(server), locale);
       expectLanguage(await openCommunityForMainRequests(server), locale);
       // 社群渠道只配中英；非中文界面语言打开英文渠道。
       await browser.waitUntil(
@@ -256,32 +266,6 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       expect(external.mock.calls.at(-1)?.[0]).toBe("https://example.com/E2E_CLIENT_LANGUAGE_EN");
     }
   });
-  async function restartWithSeed(seed: Record<string, unknown>) {
-    await waitForDefaultWorkspaceReady(30000);
-    const server = await startServer();
-    // 渲染进程的 localStorage 偏好优先于 setting.json，且跨重启保留；清掉上一个用例（CLH-03 最后切到
-    // ko-KR）的残留，本例只验证 setting.json 的读取。
-    await browser.execute(() => localStorage.removeItem("zcode-locale-preference"));
-    await quitElectronAppGracefully();
-    await seedSettings({
-      ...seed,
-      zcodeEndpointOrigin: server.origin,
-      lastWorkspaceSession: [
-        { kind: "local", workspacePath: DEFAULT_WORKSPACE, workspacePurpose: "project" },
-      ],
-      lastActiveTabIndex: 0,
-    } as Parameters<typeof seedSettings>[0]);
-    await browser.reloadSession();
-    await waitForDefaultWorkspaceReady(30000);
-    await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
-    await mockExternal();
-    await browser.waitUntil(async () => server.requests.some((request) => !isHost(request)), {
-      timeout: 15000,
-      timeoutMsg: "启动后 Main 没有发出 client/configs 灰度预热",
-    });
-    return server;
-  }
-
   it("CLH-04: 新格式（旧字段降级为 en-US、uiLocale=ja-JP）冷启动后请求仍带 ja-JP", async function () {
     this.timeout(120000);
     // Main 冷启动同步读 setting.json 必须新字段优先；读到旧字段会把首个请求退化成 en-US。
@@ -295,7 +279,7 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       server.requests.filter((request) => !isHost(request)),
       "ja-JP",
     );
-    expectLanguage(await openHelpMenuForHostRequests(server), "ja-JP");
+    expectLanguage(await readDraftHostRequests(server, 0), "ja-JP");
     await expectPersistedLocale("ja-JP");
   });
 
@@ -306,7 +290,7 @@ describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
       server.requests.filter((request) => !isHost(request)),
       "ja-JP",
     );
-    expectLanguage(await openHelpMenuForHostRequests(server), "ja-JP");
+    expectLanguage(await readDraftHostRequests(server, 0), "ja-JP");
     // 读到旧版本不认识的旧字段值会立即迁移落盘，避免之后降级时旧版本重置整份设置。
     await expectPersistedLocale("ja-JP");
   });

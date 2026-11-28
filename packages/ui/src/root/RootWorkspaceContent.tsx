@@ -210,9 +210,6 @@ export function RootWorkspaceContent({
             onOpenWorkspace={handleOpenWorkspace}
             onOpenRemoteWorkspace={handleOpenRemoteWorkspace}
             allowOpenWorkspace={allowOpenWorkspace}
-            onLogin={onLogin}
-            onLogout={handleLogout}
-            user={user}
           />
         </ScopedErrorBoundary>
       ) : null}

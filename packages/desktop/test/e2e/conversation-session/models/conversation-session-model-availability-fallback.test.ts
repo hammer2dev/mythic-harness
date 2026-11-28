@@ -2,7 +2,6 @@ import { countUpstreamRequests } from "#e2e/helpers/conversation-session-network
 import {
   TID_MODEL_PROVIDER_NAV_ITEM,
   TID_V4_COMPOSER_SEND,
-  TID_SETTINGS_BACK_BUTTON,
   TID_SETTINGS_PAGE,
   TID_SETTINGS_SECTION_NAV,
   TID_TASK_SETTINGS_BUTTON,
@@ -143,12 +142,8 @@ async function disableProvider(providerId: string) {
   await clickTestIdByDom(testId(TID_SETTINGS_SECTION_NAV, "modelProvider"), {
     timeout: 15000,
   });
-  await clickTestIdByDom(testId(TID_MODEL_PROVIDER_NAV_ITEM, `custom:${providerId}`), {
-    timeout: 30000,
-    timeoutMsg: `模型供应商导航没有出现 ${providerId}`,
-  });
-  // Provider 启停已改为有状态开关，旧的文字按钮定位不再对应实际设置入口。
-  const toggle = $('[data-testid="model-provider-enabled-switch"]');
+  const edit = sel(testId(TID_MODEL_PROVIDER_NAV_ITEM, `custom:${providerId}`));
+  const toggle = $(`[data-testid="model-provider-row"]:has(${edit}) button[role="switch"]`);
   await toggle.waitForClickable({ timeout: 15000 });
   expect(await toggle.getAttribute("aria-checked")).toBe("true");
   await toggle.click();
@@ -156,7 +151,8 @@ async function disableProvider(providerId: string) {
     timeout: 15000,
     timeoutMsg: `模型供应商未停用: ${providerId}`,
   });
-  await clickTestIdByDom(TID_SETTINGS_BACK_BUTTON, { timeout: 15000 });
+  const rail = $(`[data-testid="workspace-primary-navigation"]:has(+ ${sel(TID_SETTINGS_PAGE)})`);
+  await rail.$(sel("workspace-primary-chat")).click();
   await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
 }
 

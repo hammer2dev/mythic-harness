@@ -54,6 +54,7 @@ UI locale ──立即──> Main.currentApplicationLocale（实时 owner）
 
 E2E：`packages/desktop/test/e2e/settings/general/settings-client-language-header.test.ts`。用 `x-request-id`
 区分 Host（`NodeApiClient`）和 Main（Electron `net`）的 `client/configs` 请求。
+用例通过打开草稿触发 Host 请求，通过启动预热或桌面平台动作验证 Main 请求。
 
 | Case   | 场景                                                                 | 断言                                                           |
 | ------ | -------------------------------------------------------------------- | -------------------------------------------------------------- |

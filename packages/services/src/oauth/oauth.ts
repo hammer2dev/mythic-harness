@@ -10,7 +10,7 @@ import type {
   UserInfo,
 } from "@zcode/shared";
 import { ServiceChannels } from "@zcode/shared";
-import type { Event } from "@zcode/rpc";
+import { Event } from "@zcode/rpc";
 import { createServiceDescriptor } from "../descriptors.js";
 
 /**
@@ -91,3 +91,39 @@ export interface IOAuthService {
 }
 
 export const IOAuthService = createServiceDescriptor<IOAuthService>(ServiceChannels.OAuth);
+
+/** Keep the shared RPC contract while the built-in account is retired. */
+export function createRetiredOAuthService(): IOAuthService {
+  const signedOut = async (): Promise<OAuthAccountAvailability> => ({
+    loginProvider: null,
+    userId: null,
+    sessionRevision: null,
+    families: [],
+  });
+  const unavailable = async (): Promise<never> => {
+    throw Object.assign(new Error("ZCode account sign-in is unavailable"), {
+      kind: "feature_disabled",
+    });
+  };
+  const noSession = async () => null;
+  const noChange = async () => {};
+  return {
+    onDidChangeSession: Event.None,
+    getProviders: async () => [],
+    getActiveProvider: noSession,
+    getAccountAvailability: signedOut,
+    getWebsiteSession: noSession,
+    refreshAccountProfile: signedOut,
+    restoreCachedSession: noSession,
+    restoreCachedSessionState: async () => ({ status: "signed-out" }),
+    restoreSession: noSession,
+    startOAuth: unavailable,
+    startOAuthWithPolling: unavailable,
+    pollPendingOAuth: noSession,
+    handleCallback: noSession,
+    refreshToken: noChange,
+    logout: noChange,
+    logoutAll: noChange,
+    cancelPending: noChange,
+  };
+}

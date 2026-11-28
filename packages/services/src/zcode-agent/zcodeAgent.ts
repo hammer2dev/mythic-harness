@@ -147,11 +147,6 @@ import type {
   V4WorkspaceConfigSubscribeResult,
   WorkspaceConfigTopicWireCandidate,
 } from "@zcode/shared/zcode-protocol-v4";
-import type {
-  V4SessionDataMeasureResult,
-  V4SessionDataParams,
-  V4SessionDataPurgeResult,
-} from "@zcode/shared/zcode-protocol-v4";
 import { createServiceDescriptor } from "../descriptors.js";
 
 export * from "./zcodeAgentPluginParams.js";
@@ -736,15 +731,6 @@ export interface IZCodeAgentService {
     params: V4SessionDeletionPreviewBatchParams,
   ): Promise<V4SessionDeletionPreviewBatchResult>;
   executeSessionDeletion?(params: V4SessionDeletionExecuteParams): Promise<V4SessionDeletionResult>;
-  /** 项目数据删除前的测量：只读，用本机已有 runtime 或管理面进程，不为某个项目拉起 Agent。 */
-  measureSessionData?(params: V4SessionDataParams): Promise<V4SessionDataMeasureResult>;
-  /**
-   * 彻底删除会话与目录记忆。workspace 已有 Agent 进程时交给它（它持有会话运行态，能判断运行中
-   * 并释放已加载会话）；否则交给管理面进程。只用于本机。
-   */
-  purgeSessionData?(
-    params: V4SessionDataParams & { workspace: ZCodeAgentWorkspaceTarget },
-  ): Promise<V4SessionDataPurgeResult>;
   /** 该 workspace 的 CLI 是否在 runtime/capabilities 中声明 worktreeCwd（只供 Host 进程内调用）。 */
   supportsWorktreeCwd?(target: ZCodeAgentWorkspaceTarget): Promise<boolean>;
   /**
