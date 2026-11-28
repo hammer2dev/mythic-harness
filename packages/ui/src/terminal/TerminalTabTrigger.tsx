@@ -1,63 +1,68 @@
-import { X } from "lucide-react";
+import { SquareTerminal, X } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
-import { TabsTrigger } from "@/components/ui/tabs.js";
-import type { TerminalSessionDescriptor } from "@/terminal/terminalPanelState.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { formatTerminalTabTitle } from "@/terminal/terminalPanelState.js";
 
 export function TerminalTabTrigger({
-  session,
-  title,
-  closeLabel,
+  sessionId,
+  name,
+  index,
   isActive,
+  onSelect,
   onClose,
 }: {
-  session: TerminalSessionDescriptor;
-  title: string;
-  closeLabel: string;
+  sessionId: string;
+  name: string;
+  index: number;
   isActive: boolean;
-  onClose: (sessionId: string) => void;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
 }) {
+  const { intl } = useZCodeIntl();
+  const title = formatTerminalTabTitle(name, index);
+  const closeLabel = intl.formatMessage({ id: "terminal.closeTab" }, { title });
   return (
-    <TabsTrigger value={session.id} asChild>
-      <div
-        data-active={isActive ? "" : undefined}
-        data-state={isActive ? "active" : "inactive"}
-        className={cn(
-          "group relative inline-flex !h-7 w-auto max-w-36 min-w-0 flex-none shrink-0 cursor-default items-center justify-start gap-1 overflow-hidden whitespace-nowrap rounded-lg border !border-transparent !bg-transparent pl-2 pr-1 text-ui-base font-medium text-foreground-subtle transition-all",
-          "hover:text-foreground",
-          !isActive && "hover:!bg-hover",
-          "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring",
-          "data-active:!bg-selected data-active:text-foreground",
-        )}
+    <div
+      className={cn(
+        "group flex min-w-0 items-center gap-1 rounded-md pr-0.5 text-ui-caption text-foreground-subtle hover:bg-hover",
+        isActive && "bg-selected text-foreground hover:bg-selected",
+      )}
+    >
+      <button
+        type="button"
+        title={title}
+        aria-label={title}
+        aria-pressed={isActive}
+        aria-controls={`terminal-pane-${sessionId}`}
+        data-terminal-select={sessionId}
+        className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md pl-1.5 text-left focus-visible:outline-ring"
+        onClick={() => onSelect(sessionId)}
       >
-        <span
-          data-terminal-tab-content=""
-          className="flex min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-0.5rem),transparent)]"
-        >
-          <span className="shrink-0 whitespace-nowrap">{title}</span>
+        <SquareTerminal className="size-3 shrink-0" />
+        <span className="flex min-w-0 items-baseline">
+          <span className="min-w-0 overflow-hidden whitespace-nowrap pr-1 [mask-image:linear-gradient(to_right,black_calc(100%-0.25rem),transparent)]">
+            {name}
+          </span>
+          {index > 1 && <span className="shrink-0 tabular-nums">{index}</span>}
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={closeLabel}
-          className={cn(
-            "shrink-0 rounded-md",
-            !isActive &&
-              "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
-          )}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onClose(session.id);
-          }}
-        >
-          <X className="size-3" />
-        </Button>
-      </div>
-    </TabsTrigger>
+      </button>
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="ghost"
+        title={closeLabel}
+        aria-label={closeLabel}
+        className={cn(
+          "shrink-0",
+          !isActive &&
+            "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+        )}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => onClose(sessionId)}
+      >
+        <X className="size-3" />
+      </Button>
+    </div>
   );
 }

@@ -5,7 +5,6 @@ import {
   TID_THEME_TOGGLE,
   TID_LOGOUT_BUTTON,
   TID_TERMINAL_TOGGLE,
-  TID_TERMINAL_CLOSE_BUTTON,
   TID_BROWSER_TOGGLE,
   TID_BROWSER_CLOSE_BUTTON,
   TID_BROWSER_ADDRESS_INPUT,
@@ -82,9 +81,6 @@ class AppPage {
   }
   get terminal(): ChainablePromiseElement {
     return $(sel(TID_TERMINAL));
-  }
-  get terminalCloseButton(): ChainablePromiseElement {
-    return $(sel(TID_TERMINAL_CLOSE_BUTTON));
   }
 
   // ── Chat View ──

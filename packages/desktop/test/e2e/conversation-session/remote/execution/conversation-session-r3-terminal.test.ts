@@ -289,43 +289,8 @@ async function captureTerminalPanelDiagnostics(): Promise<Record<string, unknown
   );
 }
 
-/** 点击终端面板头部按钮（按 aria-label 匹配中英文文案）。 */
-async function clickTerminalButtonByLabel(labels: string[]): Promise<void> {
-  const clicked = await browser.execute(
-    (terminalTestId, candidates) => {
-      const buttons = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(
-          `[data-testid="${terminalTestId}"] button[aria-label]`,
-        ),
-      );
-      const target = buttons.find((button) =>
-        candidates.includes(button.getAttribute("aria-label") ?? ""),
-      );
-      target?.click();
-      return Boolean(target);
-    },
-    TID_TERMINAL,
-    labels,
-  );
-  if (!clicked) throw new Error(`${CASE_MARKER}: 终端面板没有找到按钮 ${labels.join("/")}`);
-}
-
-/** 关闭当前激活的终端 tab：tab 触发器内容标记为 data-terminal-tab-content，其父级带 data-active。 */
 async function closeActiveTerminalTab(): Promise<void> {
-  const clicked = await browser.execute((terminalTestId) => {
-    const contents = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        `[data-testid="${terminalTestId}"] [data-terminal-tab-content]`,
-      ),
-    );
-    const activeTrigger = contents
-      .map((content) => content.parentElement)
-      .find((trigger) => trigger?.hasAttribute("data-active"));
-    const close = activeTrigger?.querySelector<HTMLButtonElement>("button");
-    close?.click();
-    return Boolean(close);
-  }, TID_TERMINAL);
-  if (!clicked) throw new Error(`${CASE_MARKER}: 没有找到激活终端 tab 的关闭按钮`);
+  await $(`[data-testid="${TID_TERMINAL}"] [data-terminal-action="close-session"]`).click();
 }
 
 describe(`${CASE_MARKER}: 远端终端长命令、跨 workspace 归属、断线恢复与关闭回收`, () => {
@@ -497,7 +462,7 @@ describe(`${CASE_MARKER}: 远端终端长命令、跨 workspace 归属、断线�
     // 按 terminal 合同回收：关闭一个终端 tab 才释放其 PTY。新建第二个 tab（新 PTY）再关闭它，
     // 远端对应 shell 被回收；A 的首个终端与 B 都不受影响。
     const shellsBeforeNewTab = await countRemoteShells(prepared.config, workspaceA);
-    await clickTerminalButtonByLabel(["新建终端", "New terminal"]);
+    await $(`[data-testid="${TID_TERMINAL}"] [data-terminal-action="new-group"]`).click();
     await browser.waitUntil(
       async () => (await countRemoteShells(prepared.config, workspaceA)) > shellsBeforeNewTab,
       { timeout: 30_000, timeoutMsg: `${CASE_MARKER}: 新建终端 tab 后远端没有出现新的 PTY shell` },

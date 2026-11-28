@@ -1,6 +1,23 @@
 # Terminal Sessions
 
-终端面板支持一个 workspace 下多个 terminal tab，并按 workspace identity 隔离保活。
+底部终端按工作区分组。同一工作区内切换任务时，共用这些终端、排列方向和当前选中项。切换工作区时显示该工作区自己的组。
+
+## 工作区终端分屏
+
+- 首次打开面板创建一个组和一个终端。单终端使用整行，多个终端时右侧显示组列表。组标题显示布局和数量，在列表或窗格内可以选中终端。
+- 左右或上下分屏会在当前终端之后插入一个新会话，并把焦点移给它。同组所有窗格沿所选方向等分，每组最多四格。加号创建一个独立的单终端组并切入，满组时仍可新建组。
+- 点另一组标题进入该组的第一个终端，点具体条目则直接进入所选终端。显示的所有窗格独立适配行列，只有当前选中的窗格请求键盘焦点。
+- 垃圾桶结束当前会话，列表中的关闭按钮结束对应会话。关闭活动终端后优先选同组的下一个、再选上一个。空组自动移除，其他组接续显示。收起面板、切任务或切组时保留正在运行的命令。最后一个终端结束后收起当前工作区的空面板。
+
+```text
+工具栏或分组列表 → Terminal 按 workspace 更新组、顺序和活动会话
+                        ├─ 当前组各窗格 → xterm fit → 各自的 PTY resize
+                        ├─ 活动窗格 → 键盘焦点 → 该终端的输入
+                        └─ 删除会话 → TerminalSession 卸载 → 回收对应 PTY
+主菜单切换 → WorkspaceShellLayout 更新面板显隐 → Terminal 保留已有会话
+```
+
+验收时从一个终端依次点左右分屏、加号、上下分屏，应得到两组各两格。切回第一组验证原命令和焦点，改变分屏方向验证整组重排，达到四格后验证仍可新建组。切换同工作区任务及不同工作区，分别核对共享与隔离。
 
 ## 手机软键盘输入（2026-10-23）
 
@@ -52,7 +69,7 @@ MRO04 的手机软键盘命令也用 229 + insertLineBreak 提交，不能用普
 | 字段         | 内容                                                                                  |
 | ------------ | ------------------------------------------------------------------------------------- |
 | 变更         | 首个 terminal tab 不显示 `1`；后续 tab 从 `2` 开始；关闭或 PTY 退出时同步关闭对应 tab |
-| 用户可见位置 | 底部 Terminal 面板的 tab strip                                                        |
+| 用户可见位置 | 底部终端单会话标题、分组列表和活动窗格                                                |
 | 状态 owner   | `Terminal` renderer 本地状态；PTY 生命周期由每个 `TerminalSession` 管理               |
 | 不在范围内   | 右侧 side pane Terminal tab、聊天 session/task realtime、协议与 Host/Agent runtime    |
 
@@ -63,16 +80,17 @@ MRO04 的手机软键盘命令也用 229 + insertLineBreak 提交，不能用普
 - workspace key 使用 `workspaceIdentity?.trim() || workspacePath`，只用于终端会话隔离。
 - `workspacePath` 只作为 PTY 的 cwd 传给 `terminalService.create()`。
 - 收起终端面板或切换 workspace/task 不会 dispose 已创建的 terminal tab。
+- 底部终端只在「项目」会话工作区显示。离开「项目」时隐藏面板、释放占用空间，并保留开合状态和运行中的终端。回到同一工作区时恢复原分组、选中项、分屏、工作目录、终端输出及尚未回车的输入。
 - 任意 terminal tab 的关闭按钮都会删除对应 session 并卸载 `TerminalSession`，从而 dispose 后端 PTY；关闭最后一个 tab 时同时收起空面板。
-- Terminal 面板右上角关闭按钮只收起面板，不卸载 session。重新打开面板时继续使用原 session。
-- Tab 与 Side Header 使用相同的 ghost 风格：无可见边框，选中背景 hover 不变，4px 间距；内容溢出用 mask 淡出、不使用省略号。关闭按钮参与普通 flex 布局，仅选中、hover 或 focus-within 时显示，隐藏时保留占位；mask 不随按钮显示状态移动。「终端」标题保持原样，shell 名称采用普通辅助文字，不使用 pill 样式。
+- 底部工具栏提供左右分屏、上下分屏、新建组和关闭当前终端。点工作区顶栏的终端开关可收起面板，再次打开时继续使用原会话。
+- 分组列表使用工作区的 ghost 按钮和选中背景。工作区名称溢出时淡出，同名终端的编号始终可见。行内关闭按钮在选中、悬停或键盘聚焦时显示。
 - shell/PTY session 自身退出时自动关闭对应 tab；普通子命令返回非 0 但 shell 仍存活时不关闭。
 - 多 tab 中的后台 session 退出时只移除自身，不改变当前活动 tab；活动 session 退出时沿用手动关闭的相邻 tab fallback。
 - 当前 workspace 的最后一个 session 退出时移除已结束的 session 并关闭整个 Terminal 面板；下次打开时才懒创建一个全新 session，不保留 `[进程已退出]` tab。
 - 隐藏 workspace 的最后一个 session 退出时只清理该 workspace 的 terminal state，不关闭当前 workspace 的 Terminal 面板。
 - terminal 启动失败不属于 PTY exit；错误内容继续留在 tab 中供排查。
 - 关闭 workspace tab 后，面板会根据仍打开的 workspace key 回收隐藏终端，避免后台 PTY 泄漏。
-- 打开终端面板、切换 terminal tab、或新建 terminal tab 后，当前可见的 xterm 必须自动获得键盘焦点；隐藏的 workspace/session 不抢焦点。
+- 展开面板、选中或新建终端后，活动 xterm 自动获得键盘焦点。
 - 拖拽调整底部终端高度时，xterm fit 和后端 PTY resize 不能按每个 `ResizeObserver` 回调同步执行；拖拽中按 `TERMINAL_RESIZE_DRAG_THROTTLE_MS` 低频预览，松手后立即 flush 最终尺寸，并对相同 `{ cols, rows }` 去重，避免 Windows / PowerShell 下连续 resize 卡住 UI。
 - tab 展示名使用对应 session 的 cwd 叶子名；首个编号 `1` 不显示，例如 `z-code`。编号 `2` 及以后显示为 `z-code 2`、`z-code 3`。
 - tab 名称在创建后保持不变。关闭其他 tab 不会触发已有 tab 重命名。
@@ -136,12 +154,13 @@ MRO04 的手机软键盘命令也用 229 + insertLineBreak 提交，不能用普
 
 ## 概念图与状态 owner
 
-| 概念                        | 权威状态 / 代码入口                                         | 可观察证据                                                 |
-| --------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| workspace terminal registry | `packages/ui/src/Terminal.tsx` 的 renderer state            | 当前 workspace 的 tab strip                                |
-| session 编号与最小可用编号  | `packages/ui/src/terminal/terminalPanelState.ts`            | tab 标题和纯状态单测                                       |
-| PTY 生命周期                | `packages/ui/src/terminal/TerminalSession.tsx`              | tab X 删除 session 后组件卸载并 dispose PTY；面板 X 只隐藏 |
-| 面板开关                    | `packages/ui/src/hooks/useAppPanels.ts` 的 `isTerminalOpen` | Terminal 面板显隐                                          |
+| 概念                        | 权威状态 / 代码入口                                         | 可观察证据                                       |
+| --------------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| workspace terminal registry | `packages/ui/src/Terminal.tsx` 的 renderer state            | 当前工作区的分组、可见窗格与活动终端             |
+| session 编号与最小可用编号  | `packages/ui/src/terminal/terminalPanelState.ts`            | 单会话标题及分组列表中的名称与编号               |
+| PTY 生命周期                | `packages/ui/src/terminal/TerminalSession.tsx`              | 关闭会话时组件卸载并释放 PTY，收起面板时保留 PTY |
+| 面板开关                    | `packages/ui/src/hooks/useAppPanels.ts` 的 `isTerminalOpen` | 返回项目页时使用原开合状态                       |
+| 面板实际显隐                | `packages/ui/src/app-shell/WorkspaceShellLayout.tsx`        | 打开状态下，仅在可见的项目会话工作区显示         |
 
 ## 状态维度与候选组合
 
@@ -164,6 +183,8 @@ MRO04 的手机软键盘命令也用 229 + insertLineBreak 提交，不能用普
 
 ## 覆盖计划
 
+当前桌面回归入口为 `packages/desktop/test/e2e/ui-shell/panels/side-pane-tabs-responsive-interactions.test.ts`。其中 `TERM-GROUP` 验证分屏、按工作区共享、切组保活和数量边界，`TERM-TAB-05` 验证最后一个终端及其子进程的回收。`TERM-NAV` 验证切到其他菜单时终端释放占用空间，返回「项目」后 shell 进程、原输出及尚未回车的输入仍在。下表保留原标签方案的历史验收记录。
+
 | Case                 | setup / action / assertion                                                                        | 证据层                                           | 状态                       |
 | -------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------- |
 | TERM-TAB-01/02/03/04 | 构造 workspace terminal state，执行创建/关闭并断言稳定编号与标题                                  | renderer state + UI label helper                 | covered unit + runtime CDP |
@@ -173,11 +194,11 @@ MRO04 的手机软键盘命令也用 229 + insertLineBreak 提交，不能用普
 | TERM-TAB-09/10       | 当前/隐藏 workspace 最后一个 PTY exit，断言面板关闭边界与懒重建                                   | renderer state + panel callback                  | covered unit + runtime CDP |
 | TERM-TAB-11/12       | 子命令失败不产生 exit；create reject 继续保留错误 tab                                             | terminal service/event contract                  | covered by invariant       |
 
-E2E 交接：该变更不发送 provider 请求，不需要 replay/file fixture；桌面 E2E 直接区分 tab X 与面板 X，断言唯一 tab 关闭后旧 xterm 卸载、面板收起，重新打开时创建新 session，并避免把右侧 side pane Terminal 纳入同一 case。
+桌面 E2E 使用真实 shell。关闭唯一终端后检查 xterm 卸载、面板收起和子进程结束，重新展开时检查新会话。
 
 文件分层：
 
-- `packages/ui/src/Terminal.tsx`：终端面板、workspace 会话注册表、tab UI。
+- `packages/ui/src/Terminal.tsx` 管理工作区的会话、分组列表与窗格显示。
 - `packages/ui/src/terminal/TerminalSession.tsx`：单个 xterm 实例和后端 PTY 生命周期。
 - `packages/ui/src/terminal/terminalPanelState.ts`：terminal tab/workspace 状态的纯数据辅助函数。
 - `packages/ui/src/terminal/terminalLinks.ts`：terminal buffer 中 HTTP 链接识别和 xterm range 计算。

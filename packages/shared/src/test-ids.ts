@@ -65,8 +65,6 @@ export const TID_SIDE_PANE_FULL_VIEW_ANSWER_BUBBLE_CLOSE =
 export const TID_SIDE_PANE_FULL_VIEW_MENU_OPEN_CONVERSATION =
   "side-pane-full-view-menu-open-conversation";
 export const TID_SIDE_PANE_FULL_VIEW_MENU_MINIMIZE = "side-pane-full-view-menu-minimize";
-/** 终端面板关闭按钮 */
-export const TID_TERMINAL_CLOSE_BUTTON = "terminal-close-button";
 /** 浏览器显隐切换按钮 */
 export const TID_BROWSER_TOGGLE = "browser-toggle";
 /** Git 显隐切换按钮 */

@@ -3,7 +3,14 @@ import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { ClipboardPaste, Copy } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  type Ref,
+} from "react";
 import type { ILink, ILinkHandler, ITheme, IWindowsPty } from "@xterm/xterm";
 import type { IServiceAccessor } from "@zcode/services";
 import type { IDisposable } from "@zcode/rpc";
@@ -88,10 +95,12 @@ function isHttpTerminalUrl(text: string): boolean {
 }
 
 export function TerminalSession({
+  ref,
   sessionId,
   services,
   cwd,
   isVisible,
+  isActive = isVisible,
   isPanelResizing = false,
   isWindowsDesktop = false,
   onShellLabelChange,
@@ -100,10 +109,12 @@ export function TerminalSession({
   persistentKey,
   workspaceKey,
 }: {
+  ref?: Ref<{ focus: () => void }>;
   sessionId: string;
   services: IServiceAccessor;
   cwd?: string;
   isVisible: boolean;
+  isActive?: boolean;
   isPanelResizing?: boolean;
   isWindowsDesktop?: boolean;
   onShellLabelChange: (sessionId: string, shellLabel: string | null) => void;
@@ -113,7 +124,7 @@ export function TerminalSession({
    * 跨组件生命周期的会话复用 key（仅 side pane terminal 用）。
    * 传入后 xterm 实例 + PTY 所有权上移到 sidePaneTerminalSessionRegistry 模块级单例，
    * 组件卸载只 detach DOM、不 dispose；重挂按 key 复用，scrollback 历史跨 workspace 保活。
-   * 不传（下侧 terminal）走原 effect 路径，字节级不变。
+   * 底部终端由当前组件持有 xterm 和 PTY，卸载时回收。
    */
   persistentKey?: string;
   /**
@@ -132,6 +143,7 @@ export function TerminalSession({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const terminalIdRef = useRef<string | undefined>(undefined);
   const isVisibleRef = useRef(isVisible);
+  const isActiveRef = useRef(isActive);
   const resizeRAFRef = useRef(0);
   const resizeThrottleTimerRef = useRef<number | null>(null);
   const isPanelResizingRef = useRef(isPanelResizing);
@@ -301,12 +313,11 @@ export function TerminalSession({
     focusRAFRef.current = requestAnimationFrame(() => {
       focusRAFRef.current = 0;
       const term = termRef.current;
-      if (!isVisibleRef.current || !term) {
+      if (!isActiveRef.current || !term) {
         return;
       }
 
-      // 打开/新建/切换终端时 React 只更新了可见 tab，焦点仍停在按钮或输入框。
-      // xterm 的 textarea 会在 open 后创建，所以要等下一帧确认当前 session 仍可见再聚焦。
+      // 同组窗格可以同时完成初始化，只有仍被选中的终端可以接过键盘。
       term.focus();
       logger.debug("[Terminal] focused visible terminal", {
         terminalId: terminalIdRef.current,
@@ -315,13 +326,19 @@ export function TerminalSession({
     });
   }, [sessionId]);
 
-  useEffect(() => {
+  useImperativeHandle(ref, () => ({ focus: requestFocus }), [requestFocus]);
+
+  useLayoutEffect(() => {
+    isActiveRef.current = isActive;
+    if (isActive) requestFocus();
+  }, [isActive, requestFocus]);
+
+  useLayoutEffect(() => {
     isVisibleRef.current = isVisible;
     if (isVisible) {
       scheduleFitAndResize("visible");
-      requestFocus();
     }
-  }, [isVisible, requestFocus, scheduleFitAndResize]);
+  }, [isVisible, scheduleFitAndResize]);
 
   useEffect(() => {
     const wasResizing = isPanelResizingRef.current;
@@ -338,7 +355,6 @@ export function TerminalSession({
     // ===== persistentKey 路径：side pane terminal 跨 workspace 会话保活 =====
     // xterm 实例 + PTY 所有权上移到 sidePaneTerminalSessionRegistry 模块级单例，
     // 组件卸载只 detach DOM、不 dispose；重挂按 persistentKey 复用，scrollback 跨 workspace 保活。
-    // 原路径（下侧 terminal，不传 persistentKey）字节级不变。
     if (persistentKey) {
       sidePaneTerminalSessionRegistry.releaseStaleOwner(clientNamespace, terminalOwnerId);
       terminalProfileThemeRef.current = undefined;

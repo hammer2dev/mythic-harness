@@ -10,8 +10,17 @@ export interface TerminalSessionDescriptor {
   shellLabel: string | null;
 }
 
-export interface TerminalWorkspaceState {
+export type TerminalSplitDirection = "horizontal" | "vertical";
+export const MAX_TERMINALS_PER_GROUP = 4;
+
+export interface TerminalGroup {
+  id: string;
+  direction: TerminalSplitDirection;
   sessionIds: string[];
+}
+
+export interface TerminalWorkspaceState {
+  groups: TerminalGroup[];
   activeSessionId: string;
 }
 
@@ -20,55 +29,47 @@ export interface TerminalPanelState {
   workspaces: Record<string, TerminalWorkspaceState>;
 }
 
-export function createTerminalSession(params: {
+interface TerminalLaunch {
   workspaceKey: string;
   services: IServiceAccessor;
   cwd?: string;
-  index: number;
-}): TerminalSessionDescriptor {
+}
+
+function createTerminalSession(params: TerminalLaunch, index: number): TerminalSessionDescriptor {
   return {
     id: createUuid(),
     workspaceKey: params.workspaceKey,
     services: params.services,
     cwd: params.cwd,
-    index: params.index,
+    index,
     shellLabel: null,
   };
 }
 
-export function createWorkspaceTerminalState(params: {
-  workspaceKey: string;
-  services: IServiceAccessor;
-  cwd?: string;
-}): {
+function singleTerminalGroup(sessionId: string): TerminalGroup {
+  return { id: sessionId, direction: "horizontal", sessionIds: [sessionId] };
+}
+
+export function createWorkspaceTerminalState(params: TerminalLaunch): {
   session: TerminalSessionDescriptor;
   workspace: TerminalWorkspaceState;
 } {
-  const session = createTerminalSession({
-    workspaceKey: params.workspaceKey,
-    services: params.services,
-    cwd: params.cwd,
-    index: 1,
-  });
+  const session = createTerminalSession(params, 1);
 
   return {
     session,
     workspace: {
-      sessionIds: [session.id],
+      groups: [singleTerminalGroup(session.id)],
       activeSessionId: session.id,
     },
   };
 }
 
-export function getNextTerminalSessionIndex(
-  state: TerminalPanelState,
-  workspaceKey: string,
-): number {
-  const workspace = state.workspaces[workspaceKey];
+function getNextTerminalSessionIndex(state: TerminalPanelState, workspaceKey: string): number {
   const usedIndices = new Set(
-    workspace?.sessionIds
-      .map((sessionId) => state.sessions[sessionId]?.index)
-      .filter((index): index is number => typeof index === "number") ?? [],
+    Object.values(state.sessions)
+      .filter((session) => session.workspaceKey === workspaceKey)
+      .map((session) => session.index),
   );
 
   // 把 nextIndex 作为只增不减的派生状态保存，会让关闭编号 2 后再新建错误地得到 3。
@@ -84,45 +85,60 @@ export function formatTerminalTabTitle(projectName: string, index: number): stri
   return index === 1 ? projectName : `${projectName} ${index}`;
 }
 
-export type TerminalSessionCloseAction = "none" | "close-panel" | "close-session";
-
-export interface TerminalSessionExitResult {
-  state: TerminalPanelState;
-  action: TerminalSessionCloseAction;
+export function getActiveTerminalGroup(workspace: TerminalWorkspaceState): TerminalGroup {
+  return workspace.groups.find((group) => group.sessionIds.includes(workspace.activeSessionId))!;
 }
 
-export function getTerminalSessionCloseAction(
+export function addWorkspaceTerminal(
   state: TerminalPanelState,
-  sessionId: string,
-): TerminalSessionCloseAction {
-  const session = state.sessions[sessionId];
-  const workspace = session ? state.workspaces[session.workspaceKey] : undefined;
-  if (!session || !workspace?.sessionIds.includes(sessionId)) {
-    return "none";
-  }
+  launch: TerminalLaunch,
+  direction?: TerminalSplitDirection,
+): TerminalPanelState {
+  const workspace = state.workspaces[launch.workspaceKey];
+  if (!workspace) return ensureWorkspaceTerminalState(state, launch);
+  const activeGroup = getActiveTerminalGroup(workspace);
+  if (direction && activeGroup.sessionIds.length >= MAX_TERMINALS_PER_GROUP) return state;
 
-  return workspace.sessionIds.length === 1 ? "close-panel" : "close-session";
+  const session = createTerminalSession(
+    launch,
+    getNextTerminalSessionIndex(state, launch.workspaceKey),
+  );
+  let groups: TerminalGroup[];
+  if (direction) {
+    const sessionIds = [...activeGroup.sessionIds];
+    sessionIds.splice(sessionIds.indexOf(workspace.activeSessionId) + 1, 0, session.id);
+    groups = workspace.groups.map((group) =>
+      group === activeGroup ? { ...group, direction, sessionIds } : group,
+    );
+  } else {
+    groups = [...workspace.groups, singleTerminalGroup(session.id)];
+  }
+  return {
+    sessions: { ...state.sessions, [session.id]: session },
+    workspaces: {
+      ...state.workspaces,
+      [launch.workspaceKey]: { groups, activeSessionId: session.id },
+    },
+  };
 }
 
 export function closeTerminalSession(
   state: TerminalPanelState,
   sessionId: string,
 ): TerminalPanelState {
-  if (getTerminalSessionCloseAction(state, sessionId) === "none") {
-    return state;
-  }
-
   const session = state.sessions[sessionId];
-  const workspace = session ? state.workspaces[session.workspaceKey] : undefined;
-  if (!session || !workspace) {
-    return state;
-  }
+  if (!session) return state;
+  const workspace = state.workspaces[session.workspaceKey]!;
+  const groupIndex = workspace.groups.findIndex((group) => group.sessionIds.includes(sessionId));
+  const group = workspace.groups[groupIndex]!;
+  const index = group.sessionIds.indexOf(sessionId);
+  const sessionIds = group.sessionIds.filter((id) => id !== sessionId);
+  const groups = workspace.groups.slice();
+  if (sessionIds.length) groups[groupIndex] = { ...group, sessionIds };
+  else groups.splice(groupIndex, 1);
 
-  const closingIndex = workspace.sessionIds.indexOf(sessionId);
-  const nextSessionIds = workspace.sessionIds.filter((id) => id !== sessionId);
-  const fallbackSessionId = nextSessionIds[Math.max(0, closingIndex - 1)] ?? nextSessionIds[0];
   const { [sessionId]: _closedSession, ...nextSessions } = state.sessions;
-  if (!fallbackSessionId) {
+  if (!groups.length) {
     const { [session.workspaceKey]: _closedWorkspace, ...nextWorkspaces } = state.workspaces;
     return {
       sessions: nextSessions,
@@ -135,51 +151,23 @@ export function closeTerminalSession(
     workspaces: {
       ...state.workspaces,
       [session.workspaceKey]: {
-        sessionIds: nextSessionIds,
+        groups,
         activeSessionId:
-          workspace.activeSessionId === sessionId ? fallbackSessionId : workspace.activeSessionId,
+          workspace.activeSessionId === sessionId
+            ? (sessionIds[index] ??
+              sessionIds[index - 1] ??
+              groups[Math.min(groupIndex, groups.length - 1)]!.sessionIds[0]!)
+            : workspace.activeSessionId,
       },
     },
   };
 }
 
-export function exitTerminalSession(
-  state: TerminalPanelState,
-  sessionId: string,
-  activeWorkspaceKey: string,
-): TerminalSessionExitResult {
-  const session = state.sessions[sessionId];
-  const workspace = session ? state.workspaces[session.workspaceKey] : undefined;
-  if (!session || !workspace?.sessionIds.includes(sessionId)) {
-    return { state, action: "none" };
-  }
-
-  if (workspace.sessionIds.length > 1) {
-    return {
-      state: closeTerminalSession(state, sessionId),
-      action: "close-session",
-    };
-  }
-
-  const action = session.workspaceKey === activeWorkspaceKey ? "close-panel" : "close-session";
-  return {
-    state: closeTerminalSession(state, sessionId),
-    action,
-  };
-}
-
 export function ensureWorkspaceTerminalState(
   state: TerminalPanelState,
-  params: {
-    workspaceKey: string;
-    services: IServiceAccessor;
-    cwd?: string;
-  },
+  params: TerminalLaunch,
 ): TerminalPanelState {
-  const existingWorkspace = state.workspaces[params.workspaceKey];
-  if (existingWorkspace?.sessionIds.some((sessionId) => state.sessions[sessionId])) {
-    return state;
-  }
+  if (state.workspaces[params.workspaceKey]) return state;
 
   const { session, workspace } = createWorkspaceTerminalState(params);
   return {
