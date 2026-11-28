@@ -2,12 +2,13 @@
 
 ## 背景
 
-新版 New task 首页在 Chat composer 正下方增加「推荐提示词」入口。原有横向按钮组由
-`clientScenesService` 的 `draft-suggestion` scene 下发；主动任务推荐列表使用本地按功能维护的推荐池。
+编程模式的新任务草稿页移除输入框下方的横向推荐按钮及其占位。办公模式开启「主动任务推荐」时，
+非浮窗的草稿视图在输入框下方展示本地推荐列表。原横向入口使用 `clientScenesService` 的
+`draft-suggestion` scene，下文保留其接入记录。
 
 ## 主动任务推荐
 
-- 本期主动任务推荐仅在办公模式显示。办公模式在 onboarding 第三步提供默认勾选的选项；编程模式不显示该选项，也不显示主动推荐列表，保留原有 Client Scenes 小型场景入口。设置页保留「主动任务推荐」开关，说明「仅在办公模式下支持」，编程模式下不可操作。即使旧设置里主动推荐为开启，编程模式也不能显示主动列表。
+- 本期主动任务推荐仅在办公模式显示。办公模式在 onboarding 第三步提供默认勾选的选项；编程模式不显示该选项，也不显示主动推荐列表。设置页保留「主动任务推荐」开关，说明「仅在办公模式下支持」，编程模式下不可操作。即使旧设置里主动推荐为开启，编程模式也不能显示主动列表。
 - 办公模式草稿输入框上方保留插件入口：缩略展示当前列表前三个插件图标，展开后仍列出这三个和其他插件；点击条目导航到现有插件市场，不在推荐功能中注入插件市场假数据。
 - 展示文案简短，不含 `[占位符]`；点击后填入的正文完整、可执行，可以用 `[目标对象]` 等占位符补充非必需信息。推荐任务不得以“如果当前仓库是某类项目”作为开始条件。
 - 每个可见面板展示三条。抽取时优先避免同屏重复图标与插件，并尽量避开其他分屏已显示的图标；候选不足时仍显示三条。“换一批”只重新分配当前面板，其他面板已展示的批次和插件确认锚点保持不变。轮换应让池内每条推荐在有限轮次内可达。关闭推荐复用既有设置和 onboarding record 回写。
@@ -117,7 +118,7 @@ operation A active
         -> 不显示取消或中断反馈
 ```
 
-## 组件
+## 组件与原横向布局
 
 `packages/ui/src/v4/ConversationDraftSuggestedPrompts.tsx`
 
@@ -133,7 +134,7 @@ operation A active
 | `disabled`            | 旧 operation 取消收敛期间禁用推荐项                     |
 | `pluginActionPopover` | 当前安装/开启 Popover 的锚点、阶段、文案与确认动作      |
 
-- 挂载点：`packages/ui/src/v4/SessionPane.tsx` 的 `conversationBottomDock` 中、`{composerNode}` 之后，
+- 原横向布局的挂载点为 `packages/ui/src/v4/SessionPane.tsx` 的 `conversationBottomDock` 中、`{composerNode}` 之后，
   仅草稿态（`isDraft`）渲染。草稿页按 `welcome -> composer -> suggested slot` 的顺序组织；Container
   使用正常文档流中的固定 `h-8` 槽位，不使用 absolute 定位。列表异步加载期间槽位保持为空，数据返回后按钮填入同一槽位，避免加载前后高度变化。
 - 布局：按钮组从 Composer 下沿保留 `24px` 间距，内部使用 hug-content 的单行横向排列，
@@ -156,7 +157,7 @@ operation A active
   相关的 `imgs.cn` / `imgs.en`。
 - 服务端 i18n 字段使用 `cn` / `en`；`zh-CN` 读取 `cn`，`en-US` 读取 `en`，字段为空时回退另一语言。
 
-## Client Scenes 映射
+## 原横向推荐的 Client Scenes 映射
 
 只消费 `ClientSceneConfig.scene === "draft-suggestion"` 的 `options.prompts.items`；旧的
 `ai-writing` 不再作为 fallback，其他 scene 和 option 均不参与推荐列表：
@@ -212,7 +213,7 @@ Service/cache authority 的多个推荐项或模板消费方不得重复请求�
 - conversation E2E 采用代表链路：桌面本地安装、桌面远程 User-scope Host 隔离、手机远控刷新失败恢复，另加安装中切换推荐项。
   主题、语言、Popover action/常驻/外部点击、键盘焦点、移动布局和 reduced-motion 由人工验收，不宣称自动化覆盖 UI。
 
-## Impact Brief
+## 原横向推荐的 Impact Brief
 
 | 字段           | 结论                                                                                                                                                                                                                    |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

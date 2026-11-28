@@ -39,11 +39,7 @@ import {
 import type { Theme } from "../useTheme.js";
 import { applyTheme, normalizeThemePreference, resolveTheme } from "../useTheme.js";
 
-import {
-  INTERFACE_MODE_STORAGE_KEY,
-  normalizeInterfaceMode,
-  type InterfaceMode,
-} from "@/lib/interfaceMode.js";
+import { INTERFACE_MODE_STORAGE_KEY, type InterfaceMode } from "@/lib/interfaceMode.js";
 import { logger } from "@/logger.js";
 
 export type LoginEntryPurpose = "app-login";
@@ -297,9 +293,9 @@ export function createZCodeStore(
   let syncSystemThemeListener = (_theme: Theme) => {};
 
   const useStore = create<ZCodeState>()((set, get) => ({
-    interfaceMode: normalizeInterfaceMode(readSafeLocalStorage(INTERFACE_MODE_STORAGE_KEY)),
-    setInterfaceMode: (mode) => {
-      const interfaceMode = normalizeInterfaceMode(mode);
+    interfaceMode: "coding",
+    setInterfaceMode: () => {
+      const interfaceMode = "coding";
       if (get().interfaceMode !== interfaceMode) {
         logger.debug("[InterfaceMode] 切换界面模式", {
           interfaceMode,
@@ -566,7 +562,7 @@ export function createZCodeStore(
         field === "interfaceMode" &&
         (msg.payload === "office" || msg.payload === "coding")
       ) {
-        state.setInterfaceMode(normalizeInterfaceMode(msg.payload));
+        state.setInterfaceMode("coding");
       } else if (field === "fontSmoothingEnabled" && typeof msg.payload === "boolean") {
         state.setFontSmoothingEnabled(msg.payload);
       } else if (field === "uiFontSizePx" && typeof msg.payload === "number") {

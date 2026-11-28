@@ -54,8 +54,8 @@ Service authority + SWR cache authority 合并为一次强制重验；普通 foc
 手机浏览器从后台恢复时使用同一语义；仅首次收到 visible、重复 hidden 或重复 visible 均不得额外请求。
 
 `ConversationDraftSuggestedPromptsContainer` 在当前 workspace RPC 就绪后调用
-`clientScenesService.list()`，并把 `scene === "draft-suggestion"` 的 `options.prompts.items` 映射为推荐提示词；
-旧的 `ai-writing` 不再作为该入口的 fallback。
+`clientScenesService.list()`，并将 `scene === "draft-suggestion"` 的 `options.prompts.items` 映射为原横向入口的提示词。
+编程模式已移除该入口，办公模式的主动推荐列表读取本地推荐池。旧的 `ai-writing` 不作为横向入口的 fallback。
 映射细节和失败边界见 `docs/ui/conversation-draft-suggested-prompts.md`。
 
 `AutomationsSection` 与 `OffPeakNewTaskEntry` 还消费两个明确 scene：

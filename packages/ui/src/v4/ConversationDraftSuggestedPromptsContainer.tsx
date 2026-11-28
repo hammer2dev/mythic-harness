@@ -147,11 +147,9 @@ export function ConversationDraftSuggestedPromptsContainer({
     () =>
       (proactive ? recommendedItems : allItems).filter(
         (item) =>
-          !item.actions?.some(
-            (action) =>
-              action === DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS ||
-              action === DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK,
-          ) || Boolean(onOpenAutomations),
+          !item.actions?.includes(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK) &&
+          (!item.actions?.includes(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS) ||
+            Boolean(onOpenAutomations)),
       ),
     [allItems, onOpenAutomations, proactive, recommendedItems],
   );
@@ -547,13 +545,6 @@ export function ConversationDraftSuggestedPromptsContainer({
           templateName,
           templatePrompt: prompt,
         });
-      }
-      if (
-        onOpenAutomations &&
-        item.actions?.includes(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK)
-      ) {
-        onOpenAutomations("idle");
-        return;
       }
       if (
         onOpenAutomations &&

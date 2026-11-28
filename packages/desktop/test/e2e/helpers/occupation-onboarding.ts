@@ -12,20 +12,15 @@ export async function skipOccupationOnboardingIfPresent(
       (await $(sel(TID_TASK_SETTINGS_BUTTON)).isExisting()),
     { timeout: 30000 },
   );
-  // 新隔离 profile 可能进入职业引导，按真实 UI 跳过三步，不改全局测试夹具。
-  for (
-    let step = 0;
-    step < 3 && (await $('[data-testid="onboarding-page"]').isExisting());
-    step++
-  ) {
-    if (!options.keepCloudDialog) {
-      await closeCloudContentDialogIfPresent();
-    }
-    const skip = $('//button[normalize-space(.)="Skip" or normalize-space(.)="跳过"]');
-    await skip.waitForClickable({ timeout: 15000 });
-    await skip.click();
+  const onboarding = $('[data-testid="onboarding-page"]');
+  if (!(await onboarding.isExisting())) return;
+  if (!options.keepCloudDialog) {
+    await closeCloudContentDialogIfPresent();
   }
-  await $('[data-testid="onboarding-page"]').waitForExist({ reverse: true, timeout: 15000 });
+  const skip = onboarding.$('.//button[normalize-space(.)="Skip" or normalize-space(.)="跳过"]');
+  await skip.waitForClickable({ timeout: 15000 });
+  await skip.click();
+  await onboarding.waitForExist({ reverse: true, timeout: 15000 });
 }
 
 // 测试后端的真实营销投放（如 2026-11 的版本介绍弹窗）会盖住引导页，「跳过」一直不可点，

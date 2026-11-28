@@ -6624,14 +6624,13 @@ export function SessionPane({
           onConversationOnly={handleComposerEditConflictConversationOnly}
         />
       ) : null}
-      {/* 办公模式显示主动任务推荐；编程模式保留原有小型场景入口。 */}
-      {/* 完整视图浮窗只露出输入框，草稿推荐提示不进入浮窗。 */}
       {isDraft &&
       !isFloatingPresentation &&
-      (!isOfficeMode || sharedSettings?.proactiveSuggestionsEnabled === true) ? (
+      isOfficeMode &&
+      sharedSettings?.proactiveSuggestionsEnabled === true ? (
         <ConversationDraftSuggestedPromptsContainer
-          className={isOfficeMode ? "mt-4" : "mt-6"}
-          proactive={isOfficeMode}
+          className="mt-4"
+          proactive
           onOpenAutomations={
             onOpenAutomationsMain && !compactForRemoteControl
               ? (automationTab) => onOpenAutomationsMain(undefined, automationTab)
