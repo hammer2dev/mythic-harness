@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { DraftPluginUiOpenRequest } from "@/plugin-ui/contract.js";
 import { withPluginTelemetry } from "@zcode/services";
 import { usePlatform } from "@/hooks/usePlatform.js";
@@ -9,9 +10,19 @@ import { useStore } from "zustand";
 import { useOptionalTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
 import { marketingNavigation, finishMarketingNavigation } from "@/lib/marketingNavigation.js";
-import { ArrowLeft, RefreshCw, Store } from "lucide-react";
+import {
+  ArrowLeft,
+  Compass,
+  PackageCheck,
+  RefreshCw,
+  Server,
+  Store,
+  WandSparkles,
+} from "lucide-react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { WorkspacePageHeader } from "@/settings/SettingsPageParts.js";
 import { Button } from "@/components/ui/button.js";
+import { cn } from "@/components/lib/utils.js";
 import { toast } from "@/components/ui/toast.js";
 import { getWorkspaceKey } from "@/lib/workspaceKey.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -64,6 +75,7 @@ import {
 } from "@/settings/pluginStoreTryPrompt.js";
 
 interface PluginStorePageProps {
+  secondaryNavigation?: HTMLElement | null;
   isDesktop?: boolean;
   isMacDesktop?: boolean;
   isWindowsDesktop?: boolean;
@@ -79,9 +91,107 @@ interface PluginStorePageProps {
   onBack?: () => void;
 }
 
-type PluginStoreView = "store" | "detail" | "manage";
+type PluginStoreView = "store" | "detail" | "manage" | "mcps" | "skills";
+type PluginStoreNavTarget = Exclude<PluginStoreView, "detail">;
+
+const PLUGIN_STORE_NAV_GROUPS = [
+  {
+    titleId: "settings.plugins.store.navigation.browse",
+    items: [
+      {
+        target: "store",
+        titleId: "settings.plugins.store.navigation.discover",
+        icon: Compass,
+        testId: "plugin-store-discover-open",
+      },
+    ],
+  },
+  {
+    titleId: "settings.plugins.store.navigation.manage",
+    items: [
+      {
+        target: "manage",
+        titleId: "settings.plugins.store.manageInstalled",
+        icon: PackageCheck,
+        testId: "plugin-store-manage-open",
+      },
+      {
+        target: "mcps",
+        titleId: "settings.mcpTitle",
+        icon: Server,
+        testId: "plugin-store-mcps-open",
+      },
+      {
+        target: "skills",
+        titleId: "settings.skills.title",
+        icon: WandSparkles,
+        testId: "plugin-store-skills-open",
+      },
+    ],
+  },
+] as const;
+
+const PLUGIN_STORE_NAV_ROW_CLASS = cn(
+  "relative w-full min-w-0 justify-start gap-2.5 text-left text-remote-foreground-muted pointer-coarse:h-11",
+  // 全局样式会清除默认焦点环，菜单行用现有边框显示键盘焦点。
+  "focus-visible:border-foreground/60 motion-reduce:transition-none",
+  "aria-pressed:bg-selected aria-pressed:font-medium aria-pressed:text-foreground aria-pressed:hover:bg-selected",
+  "aria-pressed:before:pointer-events-none aria-pressed:before:absolute aria-pressed:before:left-0 aria-pressed:before:top-1/2",
+  "aria-pressed:before:h-3.5 aria-pressed:before:w-0.5 aria-pressed:before:-translate-y-1/2 aria-pressed:before:rounded-r-full aria-pressed:before:bg-current",
+);
+
+function PluginStoreSecondaryNavigation({
+  active,
+  onSelect,
+}: {
+  active: PluginStoreNavTarget;
+  onSelect(target: PluginStoreNavTarget): void;
+}) {
+  const { intl } = useZCodeIntl();
+  return (
+    <nav
+      aria-label={intl.formatMessage({ id: "workspace.openPluginsSettings" })}
+      className="space-y-3 px-3 pt-2 pb-4"
+      data-testid="plugin-store-secondary-navigation"
+    >
+      {PLUGIN_STORE_NAV_GROUPS.map(({ titleId, items }) => {
+        const label = intl.formatMessage({ id: titleId });
+        return (
+          <div key={titleId} role="group" aria-label={label}>
+            <div
+              aria-hidden="true"
+              className="truncate px-2.5 pb-1 text-ui-sm font-medium text-remote-foreground-muted"
+            >
+              {label}
+            </div>
+            <div className="space-y-0.5">
+              {items.map(({ target, titleId: itemTitleId, icon: Icon, testId }) => (
+                <Button
+                  key={target}
+                  type="button"
+                  variant="ghost"
+                  size="lg"
+                  className={PLUGIN_STORE_NAV_ROW_CLASS}
+                  data-testid={testId}
+                  aria-pressed={active === target}
+                  onClick={() => onSelect(target)}
+                >
+                  <Icon aria-hidden="true" className="size-4" strokeWidth={1.75} />
+                  <span className="min-w-0 truncate">
+                    {intl.formatMessage({ id: itemTitleId })}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
 
 export function PluginStorePage({
+  secondaryNavigation,
   isDesktop = false,
   isMacDesktop = false,
   isWindowsDesktop = false,
@@ -572,14 +682,30 @@ export function PluginStorePage({
   }
 
   const detailUpdatePending = canUpdatePluginItem(detailItem);
+  const sectionNav = secondaryNavigation
+    ? createPortal(
+        <PluginStoreSecondaryNavigation
+          active={view === "detail" ? "store" : view}
+          onSelect={(target) => {
+            if (target === "store" && view !== "store") {
+              backToStore();
+              return;
+            }
+            setView(target);
+          }}
+        />,
+        secondaryNavigation,
+      )
+    : null;
 
   return (
     <div
       ref={rootRef}
-      className="@container/plugin-store space-y-5"
+      className={cn("@container/plugin-store", embedded ? "space-y-5" : "space-y-6")}
       data-testid="plugin-store-root"
       data-view={view}
     >
+      {sectionNav}
       {!embedded ? (
         <SettingsBreadcrumbReporter
           items={
@@ -597,10 +723,16 @@ export function PluginStorePage({
         </Button>
       ) : null}
       {view === "store" ? (
-        // 对齐原型：标题与动作同一行、去掉副标题，压缩头部信息密度。
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {onBack ? (
+        <WorkspacePageHeader
+          compact={embedded}
+          title={intl.formatMessage({
+            id: embedded
+              ? "workspace.openPluginsSettings"
+              : "settings.plugins.store.navigation.discover",
+          })}
+          titleTestId="plugin-store-title"
+          leading={
+            onBack ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -610,79 +742,77 @@ export function PluginStorePage({
               >
                 <ArrowLeft className="size-4" aria-hidden="true" />
               </Button>
-            ) : null}
-            <h1
-              data-testid="plugin-store-title"
-              className="text-ui-xl font-semibold tracking-tight text-foreground"
-            >
-              {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
-            </h1>
-          </div>
-          {/* 顶栏动作：刷新 / 市场源管理 / 添加 / 插件管理。 */}
-          <div className="flex flex-wrap items-center gap-2">
-            <ControlHintTooltip
-              title={
-                refreshing
-                  ? intl.formatMessage({ id: "settings.plugins.refreshing" })
-                  : intl.formatMessage({ id: "settings.plugins.refresh" })
-              }
-            >
-              <Button
-                type="button"
-                data-testid="plugin-store-refresh"
-                variant="secondary"
-                size="icon-lg"
-                aria-label={
+            ) : null
+          }
+          actions={
+            <>
+              <ControlHintTooltip
+                title={
                   refreshing
                     ? intl.formatMessage({ id: "settings.plugins.refreshing" })
                     : intl.formatMessage({ id: "settings.plugins.refresh" })
                 }
-                onClick={() => void handleRefresh()}
-                disabled={refreshing}
               >
-                <RefreshCw
-                  className={refreshing ? "size-3.5 animate-spin" : "size-3.5"}
-                  aria-hidden="true"
-                />
-              </Button>
-            </ControlHintTooltip>
-            <ControlHintTooltip
-              title={intl.formatMessage({ id: "settings.plugins.store.sources.title" })}
-            >
-              <Button
-                type="button"
-                data-testid="plugin-store-sources-open"
+                <Button
+                  type="button"
+                  data-testid="plugin-store-refresh"
+                  variant="secondary"
+                  size="icon-lg"
+                  aria-label={
+                    refreshing
+                      ? intl.formatMessage({ id: "settings.plugins.refreshing" })
+                      : intl.formatMessage({ id: "settings.plugins.refresh" })
+                  }
+                  onClick={() => void handleRefresh()}
+                  disabled={refreshing}
+                >
+                  <RefreshCw
+                    className={refreshing ? "size-3.5 animate-spin" : "size-3.5"}
+                    aria-hidden="true"
+                  />
+                </Button>
+              </ControlHintTooltip>
+              <ControlHintTooltip
+                title={intl.formatMessage({ id: "settings.plugins.store.sources.title" })}
+              >
+                <Button
+                  type="button"
+                  data-testid="plugin-store-sources-open"
+                  variant="secondary"
+                  size="icon-lg"
+                  aria-label={intl.formatMessage({ id: "settings.plugins.store.sources.title" })}
+                  aria-haspopup="dialog"
+                  onClick={() => setSourcesOpen(true)}
+                >
+                  <Store className="size-3.5" aria-hidden="true" />
+                </Button>
+              </ControlHintTooltip>
+              <PluginAddMenu
+                testId="plugin-store-create"
                 variant="secondary"
-                size="icon-lg"
-                aria-label={intl.formatMessage({ id: "settings.plugins.store.sources.title" })}
-                onClick={() => setSourcesOpen(true)}
-              >
-                <Store className="size-3.5" aria-hidden="true" />
-              </Button>
-            </ControlHintTooltip>
-            <PluginAddMenu
-              testId="plugin-store-create"
-              variant="secondary"
-              size="lg"
-              isWebRemoteControl={isWebRemoteControl}
-              onCreateTask={onCreateTask}
-              onAddMarketplace={() => {
-                setAddMarketplaceError(null);
-                setAddSourceOpen(true);
-              }}
-            />
-            <Button
-              type="button"
-              variant="default"
-              size="lg"
-              className="font-normal"
-              data-testid="plugin-store-manage-open"
-              onClick={() => setView("manage")}
-            >
-              {intl.formatMessage({ id: "settings.plugins.store.manageInstalled" })}
-            </Button>
-          </div>
-        </div>
+                size="lg"
+                isWebRemoteControl={isWebRemoteControl}
+                onCreateTask={onCreateTask}
+                onAddMarketplace={() => {
+                  setAddMarketplaceError(null);
+                  setAddSourceOpen(true);
+                }}
+              />
+              {!secondaryNavigation ? (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="lg"
+                  className="font-normal"
+                  data-testid="plugin-store-manage-open"
+                  onClick={() => setView("manage")}
+                >
+                  {intl.formatMessage({ id: "settings.plugins.store.manageInstalled" })}
+                </Button>
+              ) : null}
+            </>
+          }
+        />
       ) : null}
 
       {/* 来源错误可能带连续长路径；允许断行，避免窄屏内容被错误文本撑宽。 */}
@@ -695,7 +825,20 @@ export function PluginStorePage({
         </div>
       ) : null}
 
-      {view === "manage" ? (
+      {view === "mcps" || view === "skills" ? (
+        <PluginsSection
+          initialTab={view}
+          onCreateTask={onCreateTask}
+          isWebRemoteControl={isWebRemoteControl}
+          mode={view === "mcps" ? "mcp" : "skill"}
+          onOpenPluginStore={(_scope, intent) => {
+            backToStore();
+            if (intent === "add-marketplace") setAddSourceOpen(true);
+          }}
+          workspacePath={workspacePath ?? undefined}
+          workspaceIdentity={workspaceIdentity}
+        />
+      ) : view === "manage" ? (
         <div data-testid="plugin-store-manage" className="space-y-4">
           <div className="flex items-center gap-2">
             <Button

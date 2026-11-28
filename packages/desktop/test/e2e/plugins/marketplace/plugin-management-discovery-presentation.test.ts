@@ -34,7 +34,36 @@ describe("PLM-LC-001/002 插件商店发现、入口与展示 E2E", () => {
     await openPluginSettings();
     await setPluginPresentation({ locale: "zh-CN", theme: "zai-light", width: 1440, height: 720 });
 
-    expect(await isPressed("plugin-store-segment-public")).toBe(true);
+    const navigation = $('[data-testid="plugin-store-secondary-navigation"]');
+    const discovery = navigation.$(
+      '[role="group"][aria-label="浏览"] [data-testid="plugin-store-discover-open"]',
+    );
+    await expect(discovery).toHaveText("发现资源");
+    await expect(discovery).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      navigation.$('[role="group"][aria-label="管理"] [data-testid="plugin-store-manage-open"]'),
+    ).toBeDisplayed();
+    await expect(navigation.$('[data-testid^="plugin-store-segment-"]')).not.toExist();
+    await expect(navigation.$('[data-testid="plugin-store-sources-open"]')).not.toExist();
+
+    const market = $('[data-testid="plugin-store-root"]');
+    await expect(market.$('[data-testid="plugin-store-sources-open"]')).toHaveAttribute(
+      "aria-haspopup",
+      "dialog",
+    );
+    await clickPluginControl("plugin-store-sources-open");
+    const sourcesDialog = $('[data-testid="plugin-store-sources-dialog"]');
+    await expect(sourcesDialog).toBeDisplayed();
+    await browser.keys("Escape");
+    await expect(sourcesDialog).not.toBeDisplayed();
+
+    const storeList = market.$('[data-testid="plugin-store-list"]');
+    await expect(storeList.$('[data-testid="plugin-store-segment-public"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await clickPluginControl("plugin-store-segment-community");
+    expect(await isPressed("plugin-store-segment-community")).toBe(true);
     await addLifecycleMarketplaceThroughUi(fixture);
     await clickPluginControl("plugin-store-segment-personal");
     expect(await isPressed("plugin-store-segment-personal")).toBe(true);
@@ -68,9 +97,12 @@ describe("PLM-LC-001/002 插件商店发现、入口与展示 E2E", () => {
     await waitForPluginControl("plugin-store-detail", { pluginId: PLUGIN_LIFECYCLE_ID });
     await clickPluginControl("plugin-store-detail-back");
     await openManageView();
+    expect(await isPressed("plugin-store-manage-open")).toBe(true);
     await waitForPluginControl("plugin-settings-plugin-row", { pluginId: PLUGIN_LIFECYCLE_ID });
     await capturePluginManualReview("PLM-LC-001", "manage-installed");
-    await clickPluginControl("plugin-store-manage-back");
+    await clickPluginControl("plugin-store-discover-open");
+    await expect(discovery).toHaveAttribute("aria-pressed", "true");
+    expect(await isPressed("plugin-store-segment-personal")).toBe(true);
 
     await assertPluginStoreFitsViewport();
     await capturePluginManualReview("PLM-LC-002", "zh-zai-light-wide");

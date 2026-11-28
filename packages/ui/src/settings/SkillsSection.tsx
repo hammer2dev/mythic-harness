@@ -795,7 +795,9 @@ export function SkillsSection({
         </div>
       ) : null}
 
-      {targetServiceResolution.rpcReady && !capability?.userScopeAvailable ? (
+      {targetServiceResolution.rpcReady &&
+      projectionMatchesTarget &&
+      capability?.userScopeAvailable === false ? (
         <div className="rounded-lg border border-border bg-card px-3 py-2 text-ui-base text-foreground-subtle">
           {intl.formatMessage({ id: "settings.skills.userScopeDesktopOnly" })}
         </div>
