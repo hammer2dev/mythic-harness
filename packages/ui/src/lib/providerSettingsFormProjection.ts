@@ -1,4 +1,4 @@
-import type { ProviderSettingsView } from "@zcode/services";
+import type { ProviderSettingsProviderView, ProviderSettingsView } from "@zcode/services";
 import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
 import type { ProviderOrderView } from "@/lib/modelProviderOrdering.js";
 
@@ -6,13 +6,13 @@ import type { ProviderOrderView } from "@/lib/modelProviderOrdering.js";
 export function projectProviderSettingsViewToFormProviders(
   view: ProviderSettingsView,
 ): ProviderSettingsFormProvider[] {
-  return projectProviderSettingsProviders(view.providers);
+  return view.providers.map(projectProviderSettingsProviderToForm);
 }
 
-function projectProviderSettingsProviders(
-  providers: ProviderSettingsView["providers"],
-): ProviderSettingsFormProvider[] {
-  return providers.map((provider) => ({
+export function projectProviderSettingsProviderToForm(
+  provider: ProviderSettingsProviderView,
+): ProviderSettingsFormProvider {
+  return {
     providerId: provider.providerId,
     providerName: provider.providerName,
     templateId: provider.templateId,
@@ -36,7 +36,7 @@ function projectProviderSettingsProviders(
       selectable: model.selectable,
       issues: model.issues,
     })),
-  }));
+  };
 }
 
 export function resolveProviderSettingsFormProviders(params: {

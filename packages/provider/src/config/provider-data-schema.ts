@@ -89,6 +89,7 @@ export const providerConfigDataSchema = z
     access: providerAccessDataSchema.nullable().optional(),
     api: providerApiDataSchema.nullable().optional(),
     builtinModelIds: modelIdsDataSchema,
+    inheritTemplateModels: z.boolean().optional(),
     personalModelIds: modelIdsDataSchema,
     modelOrder: modelIdsDataSchema,
     visibility: providerVisibilityDataSchema.nullable().optional(),

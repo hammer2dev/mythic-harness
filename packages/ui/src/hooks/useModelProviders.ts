@@ -1,11 +1,13 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
+import type { ProviderSettingsCreateInput } from "@zcode/provider";
 import type { ModelConnectivityResult } from "@zcode/shared";
 import type { ProviderSettingsView } from "@zcode/services";
 import { useServices } from "@/hooks/useServices.js";
 import { logger } from "@/logger.js";
 import { useProviderSettingsServiceView } from "@/hooks/useProviderSettingsView.js";
 import {
+  projectProviderSettingsProviderToForm,
   projectProviderSettingsViewToFormProviders,
   resolveProviderSettingsFormProviders,
   resolveProviderOrdering,
@@ -92,6 +94,23 @@ export function useModelProviders(target: {
       return created;
     },
     [commitProviderSettingsView, providerSettingsService],
+  );
+
+  const previewPersonalProvider = useCallback(
+    async (input: ProviderSettingsCreateInput) =>
+      projectProviderSettingsProviderToForm(
+        await providerSettingsService.previewPersonalProvider(input),
+      ),
+    [providerSettingsService],
+  );
+
+  const listDraftModels = useCallback(
+    async (providerId: string, draft: ProviderSettingsCreateInput) => {
+      if (!providerSettingsService.listAvailableModels)
+        throw new Error("The provider model directory is unavailable.");
+      return providerSettingsService.listAvailableModels(providerId, draft);
+    },
+    [providerSettingsService],
   );
 
   const addPersonalModel = useCallback(
@@ -236,6 +255,8 @@ export function useModelProviders(target: {
     refresh,
     saveProvider,
     createPersonalProvider,
+    previewPersonalProvider,
+    listDraftModels,
     addPersonalModel,
     savePersonalModelDraft,
     setPersonalModelEnabled,

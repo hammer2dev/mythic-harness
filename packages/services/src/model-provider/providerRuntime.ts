@@ -24,6 +24,8 @@ import {
   type ModelSelectionConfiguredDefaultSource,
   type ProviderSettingsConnectivityTester,
 } from "./providerFacadeServices.js";
+import type { ProviderConfigObject } from "@zcode/provider";
+import { z } from "zod";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
 const log = createServiceLogger("provider-runtime");
@@ -35,6 +37,7 @@ export interface ProviderRuntimeOptions extends ProviderConfigRuntimeOptions {
 
 export interface ProviderRuntimeDependencies {
   readonly configRuntime: ProviderConfigRuntime;
+  readonly fetchModelCatalog?: typeof fetch;
   readonly accountSource?: RefreshableProviderSource<AccountProviderConfigSnapshot>;
   readonly disposeAccountSource?: () => void;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
@@ -108,6 +111,9 @@ export class ProviderRuntime {
       settingsFacade,
       ensureReady,
       dependencies.testConnectivity,
+      dependencies.fetchModelCatalog
+        ? (config) => listProviderModelIds(config, dependencies.fetchModelCatalog!)
+        : undefined,
     );
     this.#modelSelectionRuntime = createModelSelectionService(
       createNodeModelSelectionFacade(this.registryService),
@@ -221,4 +227,76 @@ export function createProviderRuntimeFromConfigRuntime(
   dependencies: ProviderRuntimeDependencies,
 ): ProviderRuntime {
   return new ProviderRuntime(dependencies);
+}
+
+const modelPage = z.object({
+  data: z.array(z.object({ id: z.string() })),
+  has_more: z.boolean().optional(),
+  last_id: z.string().optional(),
+});
+
+/** Runs in the Host so catalog requests use the configured network transport and saved credential. */
+async function listProviderModelIds(
+  config: ProviderConfigObject,
+  fetcher: typeof fetch,
+): Promise<string[]> {
+  const { api, access } = config;
+  if (!api?.baseUrl || !api.type || access?.type !== "api-key" || !access.apiKey) {
+    throw new Error("Save the provider address, API format and key before loading models.");
+  }
+
+  const url = new URL(api.baseUrl);
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) {
+    throw new Error("The provider address must be an HTTP or HTTPS URL.");
+  }
+  const path = url.pathname.replace(/\/+$/, "");
+  const anthropic = api.type === "anthropic-messages";
+  const deepseek = anthropic && url.origin === "https://api.deepseek.com" && path === "/anthropic";
+  const anthropicCatalog = anthropic && !deepseek;
+  url.pathname = deepseek
+    ? "/models"
+    : `${path}${anthropicCatalog && !path.endsWith("/v1") ? "/v1" : ""}/models`;
+
+  const headers = new Headers(api.headers ?? undefined);
+  if (anthropicCatalog) {
+    if (!headers.has("x-api-key")) headers.set("x-api-key", access.apiKey);
+    if (!headers.has("anthropic-version")) headers.set("anthropic-version", "2023-06-01");
+    url.searchParams.set("limit", "1000");
+  } else if (!headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${access.apiKey}`);
+  }
+
+  const signal = AbortSignal.timeout(20_000);
+  const models = new Set<string>();
+  const seenCursors = new Set<string>();
+  for (;;) {
+    let response: Response;
+    try {
+      response = await fetcher(url, { headers, signal, redirect: "error" });
+    } catch {
+      // A transport error can contain the request address or headers.
+      throw new Error(
+        signal.aborted
+          ? "The model directory timed out."
+          : "The model directory could not be reached.",
+      );
+    }
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`The model directory returned HTTP ${response.status}.`);
+    }
+
+    const data: unknown = await response.json().catch(() => null);
+    const result = modelPage.safeParse(data);
+    if (!result.success) throw new Error("The provider returned an unsupported model directory.");
+    for (const { id } of result.data.data) {
+      if (id.trim()) models.add(id.trim());
+    }
+    if (!result.data.has_more) return [...models];
+    const cursor = result.data.last_id ?? result.data.data.at(-1)?.id;
+    if (!cursor || seenCursors.has(cursor))
+      throw new Error("The model directory returned an invalid cursor.");
+    seenCursors.add(cursor);
+    url.searchParams.set(anthropicCatalog ? "after_id" : "after", cursor);
+  }
 }

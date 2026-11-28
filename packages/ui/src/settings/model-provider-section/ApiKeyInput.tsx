@@ -6,6 +6,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { TECHNICAL_INPUT_ATTRIBUTES } from "@/lib/technicalInputAttributes.js";
 
 export function ApiKeyInput({
+  id,
   value,
   visible,
   readOnly,
@@ -16,6 +17,7 @@ export function ApiKeyInput({
   onCompositionEnd,
   onToggleVisibility,
 }: {
+  id: string;
   value: string;
   visible: boolean;
   readOnly?: boolean;
@@ -32,10 +34,11 @@ export function ApiKeyInput({
     <div className="relative">
       <Input
         {...TECHNICAL_INPUT_ATTRIBUTES}
+        id={id}
         type={visible && !readOnly ? "text" : "password"}
         size="lg"
         data-testid={TID_MODEL_PROVIDER_API_KEY_INPUT}
-        className="pr-10 h-9"
+        className="pr-10"
         placeholder={intl.formatMessage({
           id: "settings.modelProvider.apiKeyPlaceholder",
         })}
@@ -56,6 +59,8 @@ export function ApiKeyInput({
         type="button"
         variant="ghost"
         size="icon-sm"
+        aria-label={intl.formatMessage({ id: "settings.modelProvider.showApiKey" })}
+        aria-pressed={visible}
         disabled={readOnly}
         className="absolute top-1/2 right-1.5 -translate-y-1/2"
         onClick={onToggleVisibility}

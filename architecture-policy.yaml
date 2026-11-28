@@ -2028,6 +2028,21 @@ modules:
     layers:
       adapters: .
     owner: runtime
+  # 只纳入本次变更的 Provider 数据校验层。
+  - id: provider-config-schema
+    roots:
+      - packages/provider/src/config/data-schema
+      - packages/provider/src/config/provider-data-schema.ts
+      - packages/provider/src/config/rule-data-schema.ts
+    managed: true
+    requires:
+      - provider
+      - shared
+    publicEntrypoints:
+      - packages/provider/src/config/data-schema/contract.ts
+    layers:
+      domain: .
+    owner: provider
 
 global:
   # 临时时间戳（2026-09-10）：unmanaged-new-file 只约束此日期之后首次入库的文件。

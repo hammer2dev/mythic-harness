@@ -176,6 +176,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
   readonly access?: ProviderAccessConfig | null;
   readonly api?: ProviderApiConfig | null;
   readonly builtinModelIds?: ProviderConfigObject["builtinModelIds"];
+  readonly inheritTemplateModels?: ProviderConfigObject["inheritTemplateModels"];
   readonly personalModelIds?: ProviderConfigObject["personalModelIds"];
   readonly modelOrder?: ProviderConfigObject["modelOrder"];
   readonly visibility?: ProviderConfigObject["visibility"];
@@ -187,6 +188,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
     this.access = input.access;
     this.api = input.api;
     this.builtinModelIds = freezeModelIds(input.builtinModelIds);
+    this.inheritTemplateModels = input.inheritTemplateModels;
     this.personalModelIds = freezeModelIds(input.personalModelIds);
     this.modelOrder = freezeModelIds(input.modelOrder);
     this.visibility = input.visibility;
@@ -200,6 +202,10 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       access: overlayProviderAccess(this.access, next.access),
       api: this.overlayConfig(this.api, next.api),
       builtinModelIds: this.overlayValue(this.builtinModelIds, next.builtinModelIds),
+      inheritTemplateModels: this.overlayValue(
+        this.inheritTemplateModels,
+        next.inheritTemplateModels,
+      ),
       personalModelIds: this.overlayValue(this.personalModelIds, next.personalModelIds),
       modelOrder: this.overlayValue(this.modelOrder, next.modelOrder),
       visibility: this.overlayValue(this.visibility, next.visibility),
@@ -224,6 +230,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       access: this.access,
       api: this.api,
       builtinModelIds: this.builtinModelIds,
+      inheritTemplateModels: this.inheritTemplateModels,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
       visibility: this.visibility,
@@ -238,6 +245,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       access: this.access,
       api: this.api,
       builtinModelIds: source?.builtinModelIds,
+      inheritTemplateModels: source?.inheritTemplateModels,
       personalModelIds: source?.personalModelIds,
       modelOrder: source?.modelOrder,
       visibility: this.visibility,
@@ -256,6 +264,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       access: this.access?.toJSON() ?? this.access,
       api: this.api?.toJSON() ?? this.api,
       builtinModelIds: this.builtinModelIds,
+      inheritTemplateModels: this.inheritTemplateModels,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
       visibility: this.visibility,
@@ -283,6 +292,13 @@ export class ProviderTemplate {
     this.templateNameMap = Object.freeze({ ...input.templateNameMap });
     this.config = input.config;
     Object.freeze(this);
+  }
+
+  configForPersonalProvider(personal: ProviderConfig): ProviderConfig {
+    // 新建供应商跟随模板的连接和能力规则，模型成员由 Personal 单独决定。
+    return personal.inheritTemplateModels === false
+      ? this.config.withBuiltinModelIds([])
+      : this.config;
   }
 
   toJSON(): ProviderTemplateObject {

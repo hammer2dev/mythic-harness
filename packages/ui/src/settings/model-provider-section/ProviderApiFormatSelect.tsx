@@ -64,7 +64,7 @@ export function ProviderApiFormatSelect({
         id={triggerId}
         data-testid={TID_MODEL_PROVIDER_API_FORMAT_TRIGGER}
         size="lg"
-        className="w-full justify-between"
+        className="w-full justify-between *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate"
       >
         <SelectValue />
       </SelectTrigger>

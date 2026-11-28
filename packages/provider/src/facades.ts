@@ -1,6 +1,11 @@
 /* oxlint-disable eslint(max-lines) -- Settings/Selection Facade 共享同一套 Registry 投影与写入边界。 */
 import type { ConfigValidationIssue } from "./config-overlay.js";
-import type { ProviderModelMembership } from "./config-service.js";
+import {
+  applyInitialProviderModels,
+  buildPersonalProviderInitialConfig,
+  type CreatePersonalProviderInput,
+  type ProviderModelMembership,
+} from "./config-service.js";
 import type {
   ModelConfig,
   ModelConfigObject,
@@ -12,15 +17,18 @@ import type {
 } from "./config/index.js";
 import {
   ModelConfigRules,
+  ProviderConfigMap,
   ProviderTemplateMap,
   type ProviderConfigRule,
   type ProviderTemplateNameMap,
   type ProviderTemplateLocale,
   parseModelConfig,
   parseProviderConfig,
+  resolveProviderTemplateName,
 } from "./config/index.js";
 import type { ProviderRegistryView } from "./registry.js";
 import {
+  ProviderConfigResolver,
   serializeRegistryModelConfig,
   serializeRegistryProviderConfig,
   type ProviderConfigResolution,
@@ -46,12 +54,9 @@ export interface ProviderRegistryFacadeSource {
 }
 
 export interface ProviderSettingsMutationTarget {
-  createPersonalProvider(input?: {
-    readonly templateId?: ProviderTemplateId;
-    readonly providerName?: string;
-    readonly locale?: ProviderTemplateLocale;
-    readonly initialConfig?: ProviderConfig;
-  }): Promise<{ readonly providerId: ProviderId }>;
+  createPersonalProvider(
+    input?: CreatePersonalProviderInput,
+  ): Promise<{ readonly providerId: ProviderId }>;
   savePersonalProviderOverlay(
     providerId: ProviderId,
     config: ProviderConfig,
@@ -180,6 +185,36 @@ export interface ProviderSettingsCreationResult {
   readonly view: ProviderSettingsView;
 }
 
+export interface ProviderSettingsCreateInput {
+  readonly templateId?: ProviderTemplateId;
+  readonly providerName?: string;
+  readonly locale?: ProviderTemplateLocale;
+  readonly initialConfig?: ProviderConfigObject;
+  readonly initialModels?: readonly {
+    readonly modelId: ModelId;
+    readonly config: ModelConfigObject;
+    readonly useRecommendedConfig?: boolean;
+  }[];
+}
+
+function parsePersonalProviderInput(
+  input: ProviderSettingsCreateInput,
+): CreatePersonalProviderInput {
+  const { initialConfig, initialModels, ...metadata } = input;
+  return {
+    ...metadata,
+    ...(initialConfig ? { initialConfig: parseProviderConfig(initialConfig) } : {}),
+    ...(initialModels
+      ? {
+          initialModels: initialModels.map((model) => ({
+            ...model,
+            config: parseModelConfig(model.config),
+          })),
+        }
+      : {}),
+  };
+}
+
 export interface ModelSelectionModelView {
   readonly modelId: ModelId;
   readonly config: RegistryModelConfigObject;
@@ -301,21 +336,57 @@ export class ProviderSettingsFacade {
     return this.#source.onDidChange(() => listener(this.getView()));
   }
 
-  createPersonalProvider(input?: {
-    readonly templateId?: ProviderTemplateId;
-    readonly providerName?: string;
-    readonly locale?: ProviderTemplateLocale;
-    readonly initialConfig?: ProviderConfigObject;
-  }): Promise<ProviderSettingsCreationResult> {
+  previewPersonalProvider(input: ProviderSettingsCreateInput): ProviderSettingsProviderView {
+    const snapshot = requireSnapshot(this.#source);
+    const draft = parsePersonalProviderInput(
+      input.templateId?.trim()
+        ? { ...input, initialConfig: { ...input.initialConfig, inheritTemplateModels: false } }
+        : input,
+    );
+    const providerId = "settings-provider-draft";
+    const templateId = draft.templateId?.trim();
+    const templates = snapshot.config.zcodeBuiltinProviderTemplates;
+    const template = templateId ? templates?.get(templateId) : undefined;
+    if (templateId && !template) throw new Error(`Provider Template 不存在: ${templateId}`);
+    const emptyProviders = ProviderConfigMap.empty();
+    const personalProviders = emptyProviders.setRule({
+      providerId,
+      templateId,
+      providerName:
+        draft.providerName ??
+        (template && templateId
+          ? resolveProviderTemplateName(templateId, template, draft.locale ?? "en-US")
+          : "new-provider"),
+      config: buildPersonalProviderInitialConfig(draft),
+    });
+    const personalModels = applyInitialProviderModels(
+      ModelConfigRules.empty(),
+      providerId,
+      draft.initialModels,
+    );
+    const resolution = new ProviderConfigResolver().resolve({
+      zcodeBuiltinProviders: emptyProviders,
+      accountProviders: emptyProviders,
+      zcodeBuiltinProviderTemplates: templates,
+      zcodeBuiltinModelRules: snapshot.config.zcodeBuiltinModelRules,
+      personalProviders,
+      personalModels,
+    });
+    return createProviderSettingsView({
+      revision: snapshot.registry.revision,
+      zcodeBuiltinProviders: emptyProviders,
+      zcodeBuiltinProviderTemplates: templates,
+      personalProviders,
+      personalModels,
+      resolution,
+    }).providers[0]!;
+  }
+
+  createPersonalProvider(
+    input: ProviderSettingsCreateInput = {},
+  ): Promise<ProviderSettingsCreationResult> {
     return this.#mutateWithResult("create-provider", (target) =>
-      target.createPersonalProvider({
-        ...(input?.templateId ? { templateId: input.templateId } : {}),
-        ...(input?.providerName ? { providerName: input.providerName } : {}),
-        ...(input?.locale ? { locale: input.locale } : {}),
-        ...(input?.initialConfig
-          ? { initialConfig: parseProviderConfig(input.initialConfig) }
-          : {}),
-      }),
+      target.createPersonalProvider(parsePersonalProviderInput(input)),
     ).then(({ result, view }) => ({ providerId: result.providerId, view }));
   }
 

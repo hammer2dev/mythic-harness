@@ -63,6 +63,9 @@ export function serializeRegistryProviderConfig(
       ...(config.api.headers == null ? {} : { headers: config.api.headers }),
     },
     ...(config.builtinModelIds == null ? {} : { builtinModelIds: [...config.builtinModelIds] }),
+    ...(config.inheritTemplateModels === undefined
+      ? {}
+      : { inheritTemplateModels: config.inheritTemplateModels }),
     ...(config.personalModelIds == null ? {} : { personalModelIds: [...config.personalModelIds] }),
     ...(config.modelOrder == null ? {} : { modelOrder: [...config.modelOrder] }),
     ...(config.visibility === undefined ? {} : { visibility: config.visibility }),
@@ -201,7 +204,7 @@ export class ProviderConfigResolver {
     const templatePersonalProviders = personalProviders.mapConfigs((personal, providerId, rule) => {
       if (effectiveBuiltinProviders.has(providerId)) return personal;
       const template = rule.templateId
-        ? providerTemplates?.get(rule.templateId)?.config
+        ? providerTemplates?.get(rule.templateId)?.configForPersonalProvider(personal)
         : undefined;
       return template ? template.overlay(personal) : personal;
     });

@@ -22,6 +22,61 @@ import { useSettingsSearchTarget, type SettingsSearchId } from "@/settings-searc
 export const SETTINGS_FRAME_CONTENT_CLASSNAME =
   "mx-auto w-full max-w-4xl px-4 pb-8 pt-0 lg:px-8 lg:pb-10";
 
+export const WORKSPACE_PAGE_TOP_PADDING_CLASSNAME = "pt-1.5 md:pt-2.5";
+export const WORKSPACE_PAGE_TITLE_CLASSNAME =
+  "text-ui-workspace-page-title font-semibold tracking-tight text-foreground";
+export const WORKSPACE_WIDE_PAGE_MAX_WIDTH_CLASSNAME = "max-w-[80rem]";
+export const WORKSPACE_PAGE_CONTENT_CLASSNAME = cn(
+  "mx-auto w-full min-w-0 px-4 pb-8 md:px-6 md:pb-10",
+  WORKSPACE_PAGE_TOP_PADDING_CLASSNAME,
+);
+
+interface WorkspacePageHeaderProps {
+  title: string;
+  titleTestId?: string;
+  actions?: ReactNode;
+  leading?: ReactNode;
+  compact?: boolean;
+}
+
+export function WorkspacePageHeader({
+  title,
+  titleTestId,
+  actions,
+  leading,
+  compact = false,
+}: WorkspacePageHeaderProps) {
+  return (
+    <header
+      className={cn(
+        "flex flex-wrap justify-between",
+        compact ? "items-center gap-3" : "items-start gap-x-4 gap-y-2",
+      )}
+      data-workspace-page-header={compact ? undefined : "true"}
+    >
+      <div className="flex min-w-0 max-w-full items-center gap-2">
+        {leading}
+        <h1
+          className={cn(
+            "min-w-0 break-words",
+            compact
+              ? "text-ui-xl font-semibold tracking-tight text-foreground"
+              : WORKSPACE_PAGE_TITLE_CLASSNAME,
+          )}
+          data-testid={titleTestId}
+        >
+          {title}
+        </h1>
+      </div>
+      {actions ? (
+        <div className={cn("flex min-w-0 flex-wrap items-center gap-2", !compact && "ml-auto")}>
+          {actions}
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
 export function ThemeSelect({
   value,
   onValueChange,

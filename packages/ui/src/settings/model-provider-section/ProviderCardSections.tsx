@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- 模型供应商卡片仍在迁移期集中维护多个紧耦合区块，后续拆分时再移除。 */
 import {
-  useCallback,
+  useId,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -11,7 +12,7 @@ import type {
   ProviderSettingsFormModel,
 } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
-import type { ProviderApiType } from "@zcode/provider";
+import type { ModelConfigResolution, ProviderApiType } from "@zcode/provider";
 import {
   TID_MODEL_PROVIDER_ADD_MODEL_BUTTON,
   TID_MODEL_PROVIDER_BASE_URL_INPUT,
@@ -21,7 +22,15 @@ import {
   TID_MODEL_PROVIDER_NAME_INPUT,
   testId,
 } from "@zcode/shared/test-ids";
-import { InfoIcon, LockKeyholeIcon, Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
+import {
+  ArrowLeft,
+  InfoIcon,
+  LockKeyholeIcon,
+  Plus,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import {
@@ -37,15 +46,20 @@ import { TECHNICAL_INPUT_ATTRIBUTES } from "@/lib/technicalInputAttributes.js";
 import { ApiKeyInput } from "./ApiKeyInput.js";
 import { ModelRowInput } from "./ProviderFormControls.js";
 import { PresetProviderApiKeyBanner } from "./PresetProviderApiKeyBanner.js";
-import { type ProviderModelDraftValues } from "@/settings/model-provider-section/ProviderModelMetadata.js";
-import { ProviderModelMetadataDialog } from "@/settings/model-provider-section/ProviderModelMetadataDialog.js";
 import {
   PROVIDER_CONNECTION_API_FORMATS,
   ProviderApiFormatSelect,
   resolveProviderConnectionApiFormatDisplayLabel,
 } from "@/settings/model-provider-section/ProviderApiFormatSelect.js";
+import { Checkbox } from "@/components/ui/checkbox.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog.js";
 import { SortableProviderModelList } from "@/settings/model-provider-section/SortableProviderModelList.js";
-import { useProviderModelDraft } from "@/settings/model-provider-section/useProviderModelDraft.js";
 import { ProviderLogo } from "@/settings/model-provider-section/ProviderLogo.js";
 import type { ProviderConfigObject } from "@zcode/provider";
 
@@ -103,9 +117,11 @@ export function ProviderCardHeader({
   const secondaryActionsVisible = actionsVisible && (nameEditable || Boolean(onDelete));
 
   return (
-    <div className="flex items-center justify-between gap-3" data-testid="model-provider-header">
-      <div className="flex min-w-0 items-center gap-2">
-        <ProviderLogo logo={logo} className="size-5" />
+    <header className="flex items-center justify-between gap-3" data-testid="model-provider-header">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface text-foreground-subtle">
+          <ProviderLogo logo={logo} className="size-6" />
+        </span>
         {editingName ? (
           <Input
             {...TECHNICAL_INPUT_ATTRIBUTES}
@@ -122,11 +138,9 @@ export function ProviderCardHeader({
             onKeyDown={onNameKeyDown}
           />
         ) : (
-          <>
-            <div className="min-w-0 truncate text-ui-lg font-semibold text-foreground">
-              {providerName}
-            </div>
-          </>
+          <h3 className="min-w-0 break-words text-ui-xl font-semibold leading-snug text-foreground">
+            {providerName}
+          </h3>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -177,7 +191,7 @@ export function ProviderCardHeader({
           </DropdownMenu>
         ) : null}
       </div>
-    </div>
+    </header>
   );
 }
 
@@ -205,6 +219,8 @@ export function ProviderConnectionSection({
   onBaseUrlCompositionEnd?: () => void;
 }) {
   const { intl } = useZCodeIntl();
+  const baseUrlId = useId();
+  const apiFormatId = useId();
   const showApiFormat = shouldShowProviderApiFormat(provider);
   const readOnlyBaseUrl = provider.config.api?.baseUrl ?? "";
   const resolvedApiFormat = provider.config.api?.type ?? "anthropic-messages";
@@ -248,11 +264,12 @@ export function ProviderConnectionSection({
   return (
     <>
       <div>
-        <label className="mb-1 block text-ui-base text-foreground-subtle">
+        <label htmlFor={baseUrlId} className="mb-1.5 block text-ui-base text-foreground-subtle">
           {intl.formatMessage({ id: "settings.modelProvider.baseUrl" })}
         </label>
         <Input
           {...TECHNICAL_INPUT_ATTRIBUTES}
+          id={baseUrlId}
           type="text"
           size="lg"
           data-testid={TID_MODEL_PROVIDER_BASE_URL_INPUT}
@@ -269,10 +286,14 @@ export function ProviderConnectionSection({
       </div>
       {showApiFormat ? (
         <div>
-          <label className="mb-1 block text-ui-base text-foreground-subtle">
+          <label htmlFor={apiFormatId} className="mb-1.5 block text-ui-base text-foreground-subtle">
             {intl.formatMessage({ id: "settings.modelProvider.apiFormat" })}
           </label>
-          <ProviderApiFormatSelect value={apiFormat} onChange={onApiFormatChange} />
+          <ProviderApiFormatSelect
+            value={apiFormat}
+            onChange={onApiFormatChange}
+            triggerId={apiFormatId}
+          />
         </div>
       ) : null}
     </>
@@ -305,11 +326,12 @@ export function ProviderApiKeySection({
   onToggleApiKeyVisibility: () => void;
 }) {
   const { intl } = useZCodeIntl();
+  const apiKeyId = useId();
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <label className="block text-ui-base text-foreground-subtle">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <label htmlFor={apiKeyId} className="block text-ui-base text-foreground-subtle">
           {intl.formatMessage({ id: "settings.modelProvider.apiKey" })}
         </label>
         {presetApiKeyUrl && onOpenPresetApiKey ? (
@@ -317,6 +339,7 @@ export function ProviderApiKeySection({
         ) : null}
       </div>
       <ApiKeyInput
+        id={apiKeyId}
         value={apiKeyValue}
         visible={apiKeyVisible}
         readOnly={readOnly}
@@ -358,6 +381,10 @@ export function ProviderModelsSection({
   onModelEnabledChange,
   onDeleteModel,
   onAddModel,
+  prepareCatalogConnection,
+  onListDraftModels,
+  onResolveDraftModel,
+  catalogConnection,
   onReorderModelIds,
   settingsRevision = 0,
 }: {
@@ -375,119 +402,134 @@ export function ProviderModelsSection({
   onDeleteModel: (modelId: string) => void;
   onModelEnabledChange?: (modelId: string, enabled: boolean) => void | Promise<void>;
   onAddModel: (model: ProviderSettingsFormModel) => void | Promise<void>;
+  prepareCatalogConnection?: () => Promise<void>;
+  onListDraftModels?: () => Promise<string[]>;
+  onResolveDraftModel?: (
+    originalModelId: string,
+    nextModelId: string,
+    personalConfig: ProviderSettingsFormModel["personalConfig"],
+  ) => Promise<ModelConfigResolution>;
+  catalogConnection?: {
+    apiFormat: ProviderApiType;
+    baseUrlValue: string;
+    apiKeyValue: string;
+    headers?: Readonly<Record<string, string>> | null;
+  };
   onReorderModelIds?: (modelIds: string[]) => void;
   settingsRevision?: number;
 }) {
   const { intl } = useZCodeIntl();
   const { providerSettingsService } = useServices();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [addSaving, setAddSaving] = useState(false);
-  const addSavingRef = useRef(false);
-  const [addCommitError, setAddCommitError] = useState<string | null>(null);
-  const [addModel] = useState(createEmptyModel);
-  const [addDraftErrorField, setAddDraftErrorField] = useState<
-    | "id"
-    | "contextWindow"
-    | "maxOutputTokens"
-    | "inputFormat"
-    | "reasoningLevelValues"
-    | "reasoningLevelMap"
-    | null
-  >(null);
-  const resolveAddModelConfig = useCallback(
-    (modelId: string) => providerSettingsService.resolveModelConfig({ providerId, modelId }),
-    [providerId, providerSettingsService],
+  const catalogHeadersKey = JSON.stringify(catalogConnection?.headers);
+  const catalogKey = useMemo(
+    () => ({
+      providerId,
+      providerSettingsService,
+      apiFormat: catalogConnection?.apiFormat,
+      baseUrl: catalogConnection?.baseUrlValue,
+      apiKey: catalogConnection?.apiKeyValue,
+      headers: catalogHeadersKey,
+    }),
+    [
+      providerId,
+      providerSettingsService,
+      catalogConnection?.apiFormat,
+      catalogConnection?.baseUrlValue,
+      catalogConnection?.apiKeyValue,
+      catalogHeadersKey,
+    ],
   );
-  const editor = useProviderModelDraft({
-    model: addModel,
-    open: addDialogOpen,
-    scopeKey: providerId,
-    resolve: resolveAddModelConfig,
-  });
-  const { draft: addDraft } = editor;
-
-  const openAddDialog = useCallback(() => {
-    editor.reset(createEmptyModel());
-    setAddDraftErrorField(null);
-    setAddCommitError(null);
-    setAddDialogOpen(true);
-  }, [editor.reset]);
-
-  const updateAddDraft = (patch: Partial<ProviderModelDraftValues>) => {
-    editor.change(patch);
-    setAddDraftErrorField(null);
-  };
-
-  const cancelAddDialog = () => {
-    setAddDialogOpen(false);
-    editor.reset(createEmptyModel());
-    setAddDraftErrorField(null);
-    editor.cancel();
-  };
-
-  const handleAddDialogOpenChange = useCallback(
-    (open: boolean) => {
-      // 保存中的关闭/再打开会让旧请求结束掉新草稿，等待本次提交完成再结束编辑。
-      if (addSavingRef.current) return;
-      if (!open) {
-        cancelAddDialog();
-        return;
-      }
-      setAddDialogOpen(true);
-    },
-    [cancelAddDialog],
-  );
-
-  const commitAddDraft = useCallback(async (): Promise<boolean> => {
-    if (addSavingRef.current) return false;
-    addSavingRef.current = true;
-    setAddSaving(true);
-    setAddCommitError(null);
+  const [catalogResult, setCatalogResult] = useState<{
+    key: object;
+    ids: string[];
+    status: "loading" | "ready" | "error";
+  }>();
+  const activeCatalog = catalogResult?.key === catalogKey ? catalogResult : undefined;
+  const catalogKeyRef = useRef(catalogKey);
+  catalogKeyRef.current = catalogKey;
+  const catalogFlight = useRef<object | null>(null);
+  const catalogLoading = activeCatalog?.status === "loading";
+  const catalogError = activeCatalog?.status === "error";
+  const loadCatalog = async () => {
+    if (
+      catalogFlight.current === catalogKey ||
+      (!onListDraftModels && !providerSettingsService.listAvailableModels)
+    )
+      return;
+    catalogFlight.current = catalogKey;
+    setCatalogResult({ key: catalogKey, status: "loading", ids: [] });
     try {
-      const result = await editor.commit();
-      if (result.status === "invalid") {
-        setAddDraftErrorField(result.field);
-        return false;
-      }
-      // 过去只发起异步添加就关闭弹窗，失败后输入也丢了；以实际保存完成作为结束边界。
-      await onAddModel(result.model);
-      setAddDialogOpen(false);
-      editor.reset(createEmptyModel());
-      return true;
-    } catch (error) {
-      setAddCommitError(error instanceof Error ? error.message : String(error));
-      return false;
+      await prepareCatalogConnection?.();
+      if (catalogKeyRef.current !== catalogKey) return;
+      const ids = onListDraftModels
+        ? await onListDraftModels()
+        : await providerSettingsService.listAvailableModels?.(providerId);
+      if (catalogKeyRef.current === catalogKey)
+        setCatalogResult({ key: catalogKey, status: "ready", ids: ids ?? [] });
+    } catch {
+      if (catalogKeyRef.current === catalogKey)
+        setCatalogResult({ key: catalogKey, status: "error", ids: [] });
     } finally {
-      addSavingRef.current = false;
-      setAddSaving(false);
+      if (catalogFlight.current === catalogKey) catalogFlight.current = null;
     }
-  }, [editor, onAddModel]);
-  const addDraftErrorMessage = addDraftErrorField
-    ? intl.formatMessage({
-        id: `settings.modelProvider.modelMetadata.invalid.${addDraftErrorField}`,
-      })
-    : null;
+  };
 
   return (
-    <div>
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-ui-base text-foreground-subtle">
+    <section>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-ui-lg font-semibold text-foreground">
           {intl.formatMessage({ id: "settings.modelProvider.models" })}
-        </span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="default"
-          className="rounded-lg"
-          data-testid={TID_MODEL_PROVIDER_ADD_MODEL_BUTTON}
-          onClick={openAddDialog}
-        >
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          {intl.formatMessage({ id: "settings.modelProvider.addModel" })}
-        </Button>
+        </h3>
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
+          {providerAccess?.type === "api-key" &&
+          (onListDraftModels || providerSettingsService.listAvailableModels) ? (
+            <Button
+              variant="outline"
+              size="lg"
+              disabled={catalogLoading}
+              data-testid="model-catalog-fetch"
+              onClick={() => void loadCatalog()}
+            >
+              {intl.formatMessage({
+                id: catalogLoading ? "common.loading" : "settings.modelProvider.catalog.fetch",
+              })}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="default"
+            size="lg"
+            className="rounded-lg"
+            data-testid={TID_MODEL_PROVIDER_ADD_MODEL_BUTTON}
+            onClick={() => setAddDialogOpen(true)}
+          >
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            {intl.formatMessage({ id: "settings.modelProvider.addModel" })}
+          </Button>
+        </div>
       </div>
+      {catalogError ? (
+        <p role="alert" className="mb-2 text-ui-sm text-destructive">
+          {intl.formatMessage({ id: "settings.modelProvider.catalog.loadFailed" })}
+        </p>
+      ) : null}
+      {activeCatalog?.status === "ready" ? (
+        <p
+          role="status"
+          className="mb-2 text-ui-sm text-foreground-subtle"
+          data-testid="model-catalog-status"
+        >
+          {activeCatalog.ids.length > 0
+            ? intl.formatMessage(
+                { id: "settings.modelProvider.catalog.ready" },
+                { count: activeCatalog.ids.length },
+              )
+            : intl.formatMessage({ id: "settings.modelProvider.catalog.emptyDirectory" })}
+        </p>
+      ) : null}
       {models.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-input-border bg-input">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <SortableProviderModelList
             modelIds={models.map((model) => model.modelId)}
             sortableModelIds={models.map((model) => model.modelId)}
@@ -518,14 +560,16 @@ export function ProviderModelsSection({
                     onCommit={(value, basedOnRevision) =>
                       onModelCommit(model.modelId, value, basedOnRevision)
                     }
-                    onResolveDraft={(nextModelId, personalConfig) =>
-                      providerSettingsService.resolveModelConfig({
+                    onResolveDraft={(nextModelId, personalConfig) => {
+                      if (onResolveDraftModel)
+                        return onResolveDraftModel(model.modelId, nextModelId, personalConfig);
+                      return providerSettingsService.resolveModelConfig({
                         providerId,
                         originalModelId: model.modelId,
                         modelId: nextModelId,
                         personalConfig: structuredClone(personalConfig),
-                      })
-                    }
+                      });
+                    }}
                     settingsRevision={settingsRevision}
                     onDelete={!model.builtin ? () => onDeleteModel(model.modelId) : undefined}
                     onEnabledChange={(enabled) => {
@@ -552,35 +596,148 @@ export function ProviderModelsSection({
           {intl.formatMessage({ id: "settings.modelProvider.modelsEmpty" })}
         </div>
       )}
-      <>
-        <ProviderModelMetadataDialog
-          onRestore={() => {
-            setAddDraftErrorField(null);
-            setAddCommitError(null);
-            void editor
-              .restore()
-              .catch((error) =>
-                setAddCommitError(error instanceof Error ? error.message : String(error)),
-              );
-          }}
-          mode="add"
-          open={addDialogOpen}
-          draft={addDraft}
-          draftErrorMessage={addCommitError ?? addDraftErrorMessage}
-          draftErrorField={addDraftErrorField}
-          inheritedConfig={editor.inheritedConfig}
-          overrideFields={editor.overrides}
-          onOpenChange={handleAddDialogOpenChange}
-          onDraftChange={updateAddDraft}
-          onCommit={commitAddDraft}
-          saving={addSaving}
-          modelConfigResolutionPending={editor.pending}
-          modelDefaultsLoaded={editor.defaultsLoaded}
-          onModelIdBlur={() => {
-            void editor.flush().catch(() => undefined);
+      {addDialogOpen ? (
+        <ModelCatalogAddDialog
+          catalog={activeCatalog?.ids ?? []}
+          existing={new Set(models.map((model) => model.modelId))}
+          onClose={() => setAddDialogOpen(false)}
+          onAdd={async (modelId) => {
+            const model = { ...createEmptyModel(), modelId, useRecommendedConfig: true };
+            await onAddModel(model);
           }}
         />
-      </>
-    </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ModelCatalogAddDialog({
+  catalog,
+  existing,
+  onAdd,
+  onClose,
+}: {
+  catalog: readonly string[];
+  existing: ReadonlySet<string>;
+  onAdd(modelId: string): Promise<void>;
+  onClose(): void;
+}) {
+  const { intl } = useZCodeIntl();
+  const [filter, setFilter] = useState("");
+  const [manual, setManual] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const saving = useRef(false);
+  const saved = useRef(new Set<string>());
+  const ids = [...new Set([...selected, manual.trim()].filter((id) => id && !existing.has(id)))];
+  const matching = catalog.filter((id) => id.toLowerCase().includes(filter.trim().toLowerCase()));
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (saving.current || !ids.length) return;
+    saving.current = true;
+    setBusy(true);
+    setError(undefined);
+    try {
+      for (const id of ids) {
+        if (saved.current.has(id)) continue;
+        await onAdd(id);
+        saved.current.add(id);
+      }
+      onClose();
+    } catch {
+      setError(intl.formatMessage({ id: "settings.modelProvider.catalog.addFailed" }));
+    } finally {
+      setBusy(false);
+      saving.current = false;
+    }
+  }
+
+  const close = () => {
+    if (!saving.current) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && close()}>
+      <DialogContent className="sm:max-w-lg" data-testid="model-catalog-add-dialog">
+        <div className="flex items-center gap-2 pr-8">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            aria-label={intl.formatMessage({ id: "common.back" })}
+            onClick={close}
+          >
+            <ArrowLeft aria-hidden="true" />
+          </Button>
+          <DialogTitle>{intl.formatMessage({ id: "settings.modelProvider.addModel" })}</DialogTitle>
+        </div>
+        <DialogDescription>
+          {intl.formatMessage({ id: "settings.modelProvider.catalog.addHint" })}
+        </DialogDescription>
+        <form className="min-w-0 space-y-3" onSubmit={(event) => void save(event)}>
+          {catalog.length > 0 ? (
+            <>
+              <Input
+                size="lg"
+                disabled={busy}
+                aria-label={intl.formatMessage({ id: "settings.modelProvider.catalog.search" })}
+                placeholder={intl.formatMessage({ id: "settings.modelProvider.catalog.search" })}
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              />
+              <div className="max-h-[30dvh] overflow-y-auto rounded-lg border border-border">
+                {matching.map((id) => (
+                  <label
+                    key={id}
+                    className="flex min-h-8 min-w-0 items-center gap-2 px-3 py-1 text-ui-base hover:bg-surface-hover"
+                  >
+                    <Checkbox
+                      checked={selected.includes(id) || existing.has(id)}
+                      disabled={busy || existing.has(id)}
+                      onCheckedChange={(checked) => {
+                        setSelected((current) =>
+                          checked ? [...current, id] : current.filter((item) => item !== id),
+                        );
+                      }}
+                    />
+                    <span className="min-w-0 break-all">{id}</span>
+                  </label>
+                ))}
+                {!matching.length ? (
+                  <p className="px-3 py-2 text-ui-sm text-foreground-subtle">
+                    {intl.formatMessage({ id: "settings.modelProvider.catalog.empty" })}
+                  </p>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+          <Input
+            {...TECHNICAL_INPUT_ATTRIBUTES}
+            size="lg"
+            disabled={busy}
+            aria-label={intl.formatMessage({ id: "settings.modelProvider.catalog.manual" })}
+            placeholder={intl.formatMessage({ id: "settings.modelProvider.catalog.manual" })}
+            value={manual}
+            onChange={(event) => setManual(event.target.value)}
+          />
+          {error ? (
+            <p role="alert" className="text-ui-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={close} disabled={busy}>
+              {intl.formatMessage({ id: "common.cancel" })}
+            </Button>
+            <Button type="submit" disabled={busy || ids.length === 0}>
+              {intl.formatMessage({ id: "common.save" })}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

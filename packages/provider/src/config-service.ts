@@ -57,6 +57,39 @@ export interface CreatePersonalProviderInput {
   readonly providerName?: string;
   readonly locale?: ProviderTemplateLocale;
   readonly initialConfig?: ProviderConfig;
+  readonly initialModels?: readonly {
+    readonly modelId: ModelId;
+    readonly config: ModelConfig;
+    readonly useRecommendedConfig?: boolean;
+  }[];
+}
+
+export function buildPersonalProviderInitialConfig(
+  input: CreatePersonalProviderInput,
+): ProviderConfig {
+  const initial = input.initialConfig;
+  if (initial?.group !== undefined) throw new Error("initialConfig 不能包含 group");
+  if (initial?.builtinModelIds !== undefined)
+    throw new Error("initialConfig 不能包含 builtinModelIds");
+  const base = new ProviderConfigValue({
+    group: "standard-personal",
+    access: input.templateId?.trim() ? undefined : new ApiKeyAccessConfig(),
+    personalModelIds: [],
+    modelOrder: [],
+  });
+  return initial ? base.overlay(initial) : base;
+}
+
+export function applyInitialProviderModels(
+  rules: ModelConfigRules,
+  providerId: ProviderId,
+  models: CreatePersonalProviderInput["initialModels"] = [],
+): ModelConfigRules {
+  return models.reduce(
+    (current, model) =>
+      current.setExact(providerId, model.modelId, model.config, model.useRecommendedConfig),
+    rules,
+  );
 }
 
 /** Facade 提供的 Host 内部成员事实；不得接受 Renderer 自报的模型名单。 */
@@ -227,12 +260,7 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
     const templateId = input.templateId?.trim();
     const template = templateId ? zcodeBuiltin.providerTemplates?.get(templateId) : undefined;
     if (templateId && !template) throw new Error(`Provider Template 不存在: ${templateId}`);
-    if (input.initialConfig?.group !== undefined) {
-      throw new Error("initialConfig 不能包含 group");
-    }
-    if (input.initialConfig?.builtinModelIds !== undefined) {
-      throw new Error("initialConfig 不能包含 builtinModelIds");
-    }
+    const config = buildPersonalProviderInitialConfig(input);
     let createdProviderId: ProviderId | undefined;
     await this.#updatePersonal((current) => {
       const occupied = new Set([...zcodeBuiltin.providers.keys(), ...current.providers.keys()]);
@@ -246,21 +274,15 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
             : "new-provider"),
         effectiveProviders,
       );
-      const initial = input.initialConfig ?? new ProviderConfigValue();
       const providers = current.providers.setRule({
         providerId,
         ...(templateId ? { templateId } : {}),
         providerName: label,
-        config: new ProviderConfigValue({
-          group: "standard-personal",
-          access: templateId ? undefined : new ApiKeyAccessConfig(),
-          personalModelIds: [],
-          modelOrder: [],
-        }).overlay(initial),
+        config,
       });
       return {
         providers,
-        models: current.models,
+        models: applyInitialProviderModels(current.models, providerId, input.initialModels),
         providerOrder: appendCurrentProviderOrder(
           zcodeBuiltin.providers,
           providers,
@@ -711,12 +733,11 @@ function resolvePersonalProviderBaselines(
   zcodeBuiltin: ProviderConfigLayerSnapshot,
   personalProviders: ProviderConfigMap,
 ): ProviderConfigMap {
-  const personal = personalProviders.mapConfigs((config, _id, rule) => {
-    const template = rule.templateId
-      ? zcodeBuiltin.providerTemplates?.get(rule.templateId)
-      : undefined;
-    return template ? template.config.overlay(config) : config;
-  });
+  const personal = personalProviders.mapConfigs(
+    (config, providerId) =>
+      resolveTemplateBaseline(zcodeBuiltin, personalProviders, providerId)?.overlay(config) ??
+      config,
+  );
   return zcodeBuiltin.providers.overlay(personal);
 }
 
@@ -725,8 +746,10 @@ function resolveTemplateBaseline(
   providers: ProviderConfigMap,
   providerId: ProviderId,
 ): ProviderConfig | undefined {
-  const templateId = providers.getRule(providerId)?.templateId;
-  return templateId ? builtin.providerTemplates?.get(templateId)?.config : undefined;
+  const rule = providers.getRule(providerId);
+  return rule?.templateId
+    ? builtin.providerTemplates?.get(rule.templateId)?.configForPersonalProvider(rule.config)
+    : undefined;
 }
 
 function resolveProviderBuiltinModelIds(

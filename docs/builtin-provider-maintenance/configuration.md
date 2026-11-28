@@ -51,7 +51,9 @@ flowchart TD
 
 地域与账号站点分别命名。TokenHub 的 `tencent-tokenhub-cn` / `tencent-tokenhub-intl` 分别表示中国站账号下的广州 / 新加坡 API，展示名称明确地域和中国站归属；模板 ID、API 地址和 Key 管理入口保持不变。中国站官方说明同时列出这两个地域，并要求在同一控制台选择对应地域创建 Key。国际站账户使用另一组域名，不因 API 地址包含 `intl` 就切换获取 Key 的站点。[中国站 API 说明](https://cloud.tencent.com/document/product/1823/130078)、[Key 管理](https://cloud.tencent.com/document/product/1823/130090)、[国际站 API 说明](https://intl.cloud.tencent.com/zh/document/product/1300/78941)。
 
-模板创建 E2E 从本次加载的 Built-in 配置取得预期模型 ID，验证完整成员集合，而不固定某一版目录的数量。成员排序和默认启停由配置专项验证；不在模板创建用例里重复维护清单。G149-01 同时保留协议、地址、唯一获取 Key 入口和假 Key 保存验证，按钮文案与当前中英文翻译保持一致。
+模型设置中新建供应商时，模板预填名称、图标和连接配置，模型列表从空白开始。点击「获取模型列表」后，候选只在「添加模型」中显示。用户可以勾选候选或输入模型 ID，显式添加的模型默认启用。完成前可以继续编辑，也可以先保存空列表。
+
+新建模板实例在 Personal 配置中保存 `inheritTemplateModels: false`。预览和保存后的成员都由 `personalModelIds` 决定，显式添加的型号仍使用同一模板的能力建议。已有模板实例缺省继续继承 `builtinModelIds`，固定账号模型继续由账号配置提供。G149-01 验证 OpenCode Go 的预填连接、空列表、获取候选、按选择添加和重启后的保存结果。
 
 新增 Logo key 时核对[资源映射](../../packages/ui/src/settings/model-provider-section/ProviderLogo.tsx)、主题资源和来源记录；新名称核对本地化。纯配置动态更新不能凭空增加安装包内的图片资源。
 
@@ -61,7 +63,7 @@ flowchart TD
 
 2026-10-26 确认，revision 37 整理模板发布顺序。排序以查找入口为目的，不按接入时间、模型发布时间、价格、模型数量或实时热度重排品牌。最新模型优先维护和默认启用，不等于品牌随新品发布改变位置。
 
-**模板目录与已添加实例是两个顺序。** `providerConfigRules.templateRules` 数组顺序经 ProviderTemplateMap、ProviderSettingsView 传到添加供应商页面。页面单独提取智谱专区，其他模板保持发布顺序；不增加 Schema 外的 rank/category 字段或第二份运行时排序表。下述类别是维护约定，不表示界面新增分类标题。
+**模板发布目录和模型设置的选取器各有顺序。** `providerConfigRules.templateRules` 的数组顺序是发布目录的维护顺序。当前模型设置选取器在「创建自定义供应商」后按产品指定顺序展示入口。智谱和其他品牌同列。选取器顺序以 [ProviderTemplatePicker](../../packages/ui/src/settings/model-provider-section/ProviderTemplatePicker.tsx) 为准。
 
 1. **智谱专区 → 国内供应商 → 海外原厂 → 聚合平台。** 百炼、TokenHub、方舟归对应国内品牌；独立聚合服务 SiliconFlow、OpenRouter、OpenCode 放在聚合区。
 2. **同品牌连续，普通 API 在前，套餐随后。** Coding/Token/Agent 等产品按下表稳定排列；新产品插在同品牌最相关产品之后，不追加到整个目录末尾。
@@ -73,7 +75,7 @@ flowchart TD
 
 | 类别       | 品牌                              | 产品入口顺序                                                            |
 | ---------- | --------------------------------- | ----------------------------------------------------------------------- |
-| 智谱专区   | BigModel / Z.ai                   | 保留客户端固定专区顺序，见下文                                          |
+| 智谱       | BigModel / Z.ai                   | API 和套餐模板见发布目录                                                |
 | 国内供应商 | Kimi                              | API → Code 国内 → Code 国际                                             |
 | 国内供应商 | MiniMax                           | API → M Plan                                                            |
 | 国内供应商 | DeepSeek                          | API                                                                     |
@@ -85,7 +87,7 @@ flowchart TD
 | 海外原厂   | OpenAI、Anthropic、xAI            | 按此品牌顺序，各保留已有 API 入口                                       |
 | 聚合平台   | SiliconFlow、OpenRouter、OpenCode | 按此品牌顺序；OpenCode 内先 Go 后 Zen，各按 Responses → Messages → Chat |
 
-**智谱专区保留已有例外。** ProviderTemplatePicker 固定显示 BigModel Coding Plan → Z.ai Coding Plan → BigModel API → Z.ai API，不采用 JSON 内这四项的相对顺序。本轮保留四项原始数组顺序和专区 UI 行为，不能声称只改 JSON 就能改变专区次序。“创建自定义供应商”是其他供应商区第一张操作卡，不属于模板排序。
+当前模型设置选取器展示 BigModel 和 Z.ai 各一个普通 API 入口，两者排在 MiniMax 之后。
 
 **个人实例顺序归用户维护。** 设置侧栏和聊天模型菜单的普通供应商使用 Personal `providerOrder`，用户可拖拽调整。同模板多个实例分别按 providerId 排序。模板重排不迁移、不重写该字段，不重排已有实例或替换当前模型选择；固定账号 Provider 保留现有专区规则。模板内模型的 `builtinModelIds` / `modelOrder` 是另一维度，本轮不改。
 

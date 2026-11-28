@@ -16,6 +16,8 @@
 
 ## GLM 默认模型
 
+下列固定型号记录旧版预置。当前内置型号见 [Built-in 配置](../config/provider/zcode-builtin.json)，从模型设置新增供应商时按[手动选择模型的规则](./builtin-provider-maintenance/configuration.md#模板成员和规则)配置。
+
 - Z.ai / BigModel API Key 预置供应商的默认 GLM 模型列表固定为：`GLM-5.2`、`GLM-5-Turbo`。
 - Z.ai / BigModel Coding Plan 预置供应商的默认 GLM 模型列表固定为：`GLM-5.2`、`GLM-5-Turbo`。
 - Start Plan 免费入口模型列表固定为：`GLM-5.2`、`GLM-5-Turbo`。

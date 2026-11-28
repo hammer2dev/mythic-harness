@@ -1,5 +1,15 @@
 /* oxlint-disable eslint(max-lines) -- provider 卡片同时承载名称、连接、鉴权、模型和映射编辑；本阶段先维持单组件，后续再按表单域拆分。 */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type Ref,
+} from "react";
 import {
   getProviderFormApiKey,
   getProviderFormLabel,
@@ -154,7 +164,12 @@ export function InlineEditableProviderCard({
   nameEditable,
   headerVisible = true,
   headerActionsVisible,
+  providerToggleVisible = true,
   settingsRevision,
+  flushDraftRef,
+  onListDraftModels,
+  onResolveDraftModel,
+  onCommitDraftModel,
 }: {
   provider: ProviderSettingsFormProvider;
   onSave: (config: ProviderSettingsFormProvider) => void | Promise<void>;
@@ -181,7 +196,12 @@ export function InlineEditableProviderCard({
   nameEditable?: boolean;
   headerVisible?: boolean;
   headerActionsVisible?: boolean;
+  providerToggleVisible?: boolean;
   settingsRevision?: number;
+  flushDraftRef?: Ref<() => Promise<void>>;
+  onListDraftModels?: () => Promise<string[]>;
+  onResolveDraftModel?: ComponentProps<typeof ProviderModelsSection>["onResolveDraftModel"];
+  onCommitDraftModel?: (originalModelId: string, model: ProviderSettingsFormModel) => void;
 }) {
   const { intl } = useZCodeIntl();
   const { dismissFeedback, showFeedback } = useProviderDetailFeedback();
@@ -438,6 +458,9 @@ export function InlineEditableProviderCard({
     },
     [provider, readOnlyEndpoints, saveProviderWithCleanupGuard],
   );
+  useImperativeHandle(flushDraftRef, () => () => commitPendingDraft("dialog-complete", true), [
+    commitPendingDraft,
+  ]);
 
   const idleDraftSave = useIdleTrigger(() => {
     void commitPendingDraft("idle").catch(() => undefined);
@@ -638,11 +661,17 @@ export function InlineEditableProviderCard({
       const trimmed = nextModel.modelId.trim();
       const index = models.findIndex((model) => model.modelId === originalModelId);
       const currentModel = models[index];
-      if (!currentModel || !trimmed || !onSavePersonalModelDraft) {
-        throw new Error("当前设置入口未装配原子 Model Draft 保存能力");
+      if (!currentModel || !trimmed) {
+        throw new Error("模型配置缺少有效的模型 ID");
       }
+      const updatedModel = { ...nextModel, modelId: trimmed, hasPersonalConfig: true };
+      if (onCommitDraftModel) {
+        onCommitDraftModel(originalModelId, updatedModel);
+        return;
+      }
+      if (!onSavePersonalModelDraft) throw new Error("当前设置入口未装配原子 Model Draft 保存能力");
       const next = [...models];
-      next[index] = { ...nextModel, modelId: trimmed, hasPersonalConfig: true };
+      next[index] = updatedModel;
       if (JSON.stringify(next) === JSON.stringify(models)) {
         return;
       }
@@ -662,7 +691,7 @@ export function InlineEditableProviderCard({
         { modelId: trimmed, draftOwnsRetry: true },
       );
     },
-    [models, onSavePersonalModelDraft, provider.providerId, runSaveOperation],
+    [models, onCommitDraftModel, onSavePersonalModelDraft, provider.providerId, runSaveOperation],
   );
 
   const handleDeleteModel = useCallback(
@@ -751,7 +780,7 @@ export function InlineEditableProviderCard({
   const effectiveHeaderVisible = headerVisible && statusSection === undefined;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-6">
       {effectiveHeaderVisible ? (
         <ProviderCardHeader
           providerName={headerProviderName}
@@ -772,7 +801,7 @@ export function InlineEditableProviderCard({
           onDelete={onDelete ? handleDeleteProvider : undefined}
           actionsVisible={headerActionsVisible}
           providerToggle={
-            isAccountProvider ? undefined : (
+            isAccountProvider || !providerToggleVisible ? undefined : (
               <ControlHintTooltip
                 standalone
                 title={intl.formatMessage({
@@ -807,54 +836,71 @@ export function InlineEditableProviderCard({
 
       {statusSection}
 
-      <div className="space-y-3">
-        {isAccountProvider ? null : (
-          <ProviderConnectionSection
-            provider={provider}
-            readOnly={readOnlyEndpoints}
-            apiFormat={apiFormat}
-            baseUrlValue={baseUrlValue}
-            onApiFormatChange={handleApiFormatChange}
-            onBaseUrlChange={handleBaseUrlValueChange}
-            onBaseUrlBlur={saveConnection}
-            onBaseUrlKeyDown={handleTextCommitKeyDown}
-            onBaseUrlCompositionStart={handleTechnicalInputCompositionStart}
-            onBaseUrlCompositionEnd={handleTechnicalInputCompositionEnd}
-          />
-        )}
+      {!isAccountProvider || isApiKeyProvider ? (
+        <section className="@container/provider-connection space-y-4 rounded-xl border border-border bg-surface p-4 sm:p-5">
+          <h3 className="text-ui-lg font-semibold text-foreground">
+            {intl.formatMessage({ id: "settings.modelProvider.connectionTitle" })}
+          </h3>
+          {!isAccountProvider ? (
+            <div className="grid min-w-0 grid-cols-1 gap-4 @min-[38rem]/provider-connection:grid-cols-2">
+              <ProviderConnectionSection
+                provider={provider}
+                readOnly={readOnlyEndpoints}
+                apiFormat={apiFormat}
+                baseUrlValue={baseUrlValue}
+                onApiFormatChange={handleApiFormatChange}
+                onBaseUrlChange={handleBaseUrlValueChange}
+                onBaseUrlBlur={saveConnection}
+                onBaseUrlKeyDown={handleTextCommitKeyDown}
+                onBaseUrlCompositionStart={handleTechnicalInputCompositionStart}
+                onBaseUrlCompositionEnd={handleTechnicalInputCompositionEnd}
+              />
+            </div>
+          ) : null}
+          {isApiKeyProvider ? (
+            <ProviderApiKeySection
+              apiKeyValue={apiKeyValue}
+              apiKeyVisible={apiKeyVisible}
+              presetApiKeyUrl={presetApiKeyUrl}
+              onOpenPresetApiKey={onOpenPresetApiKey}
+              onApiKeyChange={handleApiKeyValueChange}
+              onApiKeyBlur={handleApiKeyBlur}
+              onApiKeyKeyDown={handleTextCommitKeyDown}
+              onApiKeyCompositionStart={handleTechnicalInputCompositionStart}
+              onApiKeyCompositionEnd={handleTechnicalInputCompositionEnd}
+              onToggleApiKeyVisibility={() => setApiKeyVisible((value) => !value)}
+            />
+          ) : null}
+        </section>
+      ) : null}
 
-        {isApiKeyProvider ? (
-          <ProviderApiKeySection
-            apiKeyValue={apiKeyValue}
-            apiKeyVisible={apiKeyVisible}
-            presetApiKeyUrl={presetApiKeyUrl}
-            onOpenPresetApiKey={onOpenPresetApiKey}
-            onApiKeyChange={handleApiKeyValueChange}
-            onApiKeyBlur={handleApiKeyBlur}
-            onApiKeyKeyDown={handleTextCommitKeyDown}
-            onApiKeyCompositionStart={handleTechnicalInputCompositionStart}
-            onApiKeyCompositionEnd={handleTechnicalInputCompositionEnd}
-            onToggleApiKeyVisibility={() => setApiKeyVisible((value) => !value)}
-          />
-        ) : null}
-
-        <ProviderModelsSection
-          // 不同 Provider 可以有同名模型；不能复用上一供应商的打开中草稿和版本。
-          key={provider.providerId}
-          providerId={provider.providerId}
-          providerName={getProviderFormLabel(provider)}
-          providerEnabled={provider.enabled}
-          providerAccess={provider.config.access}
-          models={models}
-          onTestModel={onTestModel ? handleTestModel : undefined}
-          onModelCommit={handleModelCommit}
-          onModelEnabledChange={handleModelEnabledChange}
-          onDeleteModel={handleDeleteModel}
-          onAddModel={handleAddModel}
-          onReorderModelIds={onReorderModelIds ? handleReorderModelIds : undefined}
-          settingsRevision={settingsRevision ?? 0}
-        />
-      </div>
+      <ProviderModelsSection
+        // 不同 Provider 可以有同名模型；不能复用上一供应商的打开中草稿和版本。
+        key={provider.providerId}
+        providerId={provider.providerId}
+        providerName={getProviderFormLabel(provider)}
+        providerEnabled={provider.enabled}
+        providerAccess={provider.config.access}
+        models={models}
+        onTestModel={onTestModel ? handleTestModel : undefined}
+        onModelCommit={handleModelCommit}
+        onModelEnabledChange={handleModelEnabledChange}
+        onDeleteModel={handleDeleteModel}
+        onAddModel={handleAddModel}
+        catalogConnection={{
+          apiFormat,
+          baseUrlValue,
+          apiKeyValue,
+          headers: provider.config.api?.headers,
+        }}
+        prepareCatalogConnection={async () => {
+          await commitPendingDraft("connectivity-test");
+        }}
+        onListDraftModels={onListDraftModels}
+        onResolveDraftModel={onResolveDraftModel}
+        onReorderModelIds={onReorderModelIds ? handleReorderModelIds : undefined}
+        settingsRevision={settingsRevision ?? 0}
+      />
     </div>
   );
 }

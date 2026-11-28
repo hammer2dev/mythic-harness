@@ -101,9 +101,11 @@ export const providerTemplateConfigRuleSchema = providerTemplateDataSchema.exten
     }),
 });
 export const builtinProviderConfigRuleSchema = providerConfigRuleSchema.extend({
-  config: providerConfigDataSchema.omit({ personalModelIds: true, modelOrder: true }).extend({
-    group: providerGroupDataSchema.exclude(["standard-personal"]),
-  }),
+  config: providerConfigDataSchema
+    .omit({ inheritTemplateModels: true, personalModelIds: true, modelOrder: true })
+    .extend({
+      group: providerGroupDataSchema.exclude(["standard-personal"]),
+    }),
 });
 export const personalProviderConfigRuleSchema = providerConfigRuleSchema
   .extend({

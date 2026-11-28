@@ -10,7 +10,9 @@ import {
   type ProviderConfigObject,
   type ProviderId,
   type ProviderSettingsFacade,
+  type ProviderSettingsCreateInput,
   type ProviderSettingsCreationResult,
+  type ProviderSettingsProviderView,
   type ModelConfigResolution,
   type ProviderSettingsView,
   type ResolveModelConfigInput,
@@ -30,7 +32,14 @@ export type {
 export interface IProviderSettingsService {
   readonly onDidChange: Event<ProviderSettingsView>;
   getView(): Promise<ProviderSettingsView>;
+  listAvailableModels?(
+    providerId: ProviderId,
+    draft?: ProviderSettingsCreateInput,
+  ): Promise<string[]>;
   refresh(reason: string): Promise<ProviderSettingsView>;
+  previewPersonalProvider(
+    input: ProviderSettingsCreateInput,
+  ): Promise<ProviderSettingsProviderView>;
   createPersonalProvider(
     input?: Parameters<ProviderSettingsFacade["createPersonalProvider"]>[0],
   ): Promise<ProviderSettingsCreationResult>;
@@ -110,6 +119,7 @@ export function createProviderSettingsService(
   facade: ProviderSettingsFacade,
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
+  readCatalog?: (config: ProviderConfigObject) => Promise<string[]>,
 ): IProviderSettingsService {
   return {
     onDidChange: toEvent((listener) => facade.onDidChange(listener)),
@@ -117,9 +127,22 @@ export function createProviderSettingsService(
       await ensureReady();
       return facade.getView();
     },
+    listAvailableModels: async (providerId, draft) => {
+      await ensureReady();
+      if (!readCatalog) throw new Error("The provider model directory is unavailable.");
+      if (draft) return readCatalog(facade.previewPersonalProvider(draft).effectiveConfig);
+      await facade.waitForProviderOperations(providerId);
+      const provider = facade.getView().providers.find((item) => item.providerId === providerId);
+      if (!provider) throw new Error("The provider model directory is unavailable.");
+      return readCatalog(provider.effectiveConfig);
+    },
     refresh: async (reason) => {
       await ensureReady();
       return facade.refresh(reason);
+    },
+    previewPersonalProvider: async (input) => {
+      await ensureReady();
+      return facade.previewPersonalProvider(input);
     },
     createPersonalProvider: async (input) => {
       await ensureReady();

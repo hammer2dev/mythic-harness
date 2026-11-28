@@ -243,17 +243,18 @@ export function ModelRowInput({
   );
 
   return (
-    <div className="space-y-2 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className="px-3 py-2.5">
+      <div className="flex min-h-6 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
           <span
             data-testid={inputTestId}
+            title={model.modelId}
             className="min-w-0 truncate font-mono text-ui-base text-foreground"
           >
             {model.modelId}
           </span>
           <span
-            className="inline-flex h-5 max-w-20 shrink-0 items-center truncate rounded-md border border-border bg-surface px-1.5 font-mono text-ui-sm text-foreground-subtle"
+            className="inline-flex h-5 max-w-20 shrink-0 items-center truncate rounded-md bg-hover px-1.5 font-mono text-ui-xs text-foreground-subtle"
             aria-label={contextWindowAccessibleLabel}
             title={contextWindowAccessibleLabel}
           >

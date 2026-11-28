@@ -1,4 +1,8 @@
-import { isApiKeyAccess, type ProviderApiType } from "@zcode/provider";
+import {
+  isApiKeyAccess,
+  type ProviderApiType,
+  type ProviderSettingsCreateInput,
+} from "@zcode/provider";
 import {
   getProviderFormLabel,
   type ProviderSettingsFormProvider,
@@ -9,6 +13,36 @@ export interface ProviderDraftValues {
   apiFormat: ProviderApiType;
   baseUrlValue: string;
   apiKeyValue: string;
+}
+
+export function serializePersonalProviderDraft(
+  provider: ProviderSettingsFormProvider,
+): ProviderSettingsCreateInput {
+  const {
+    group: _group,
+    builtinModelIds: _builtinModelIds,
+    ...connection
+  } = provider.personalConfig;
+  return {
+    ...(provider.templateId ? { templateId: provider.templateId } : {}),
+    ...(provider.providerName ? { providerName: provider.providerName } : {}),
+    initialConfig: {
+      ...connection,
+      personalModelIds: provider.models
+        .filter((model) => !model.builtin)
+        .map((model) => model.modelId),
+      modelOrder: provider.models.map((model) => model.modelId),
+    },
+    initialModels: provider.models
+      .filter((model) => model.hasPersonalConfig)
+      .map((model) => ({
+        modelId: model.modelId,
+        config: model.personalConfig,
+        ...(model.useRecommendedConfig === undefined
+          ? {}
+          : { useRecommendedConfig: model.useRecommendedConfig }),
+      })),
+  };
 }
 
 function normalizeConfiguredBaseUrl(value: string): string {
