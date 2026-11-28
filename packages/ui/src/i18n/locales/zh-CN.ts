@@ -6013,6 +6013,7 @@ const zhCN: Record<string, string> = {
   "settings.hooks.group.compatibility": "可导入 Hook",
   "settings.hooks.group.plugins": "插件 Hook",
   "settings.hooks.group.installed": "已安装",
+  "settings.hooks.group.discovered": "发现的钩子",
   "settings.hooks.group.legacy": "旧版",
   "settings.hooks.import": "导入",
   "settings.hooks.imported": "Hook 已导入",

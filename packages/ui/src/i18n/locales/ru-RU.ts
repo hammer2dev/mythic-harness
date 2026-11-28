@@ -5916,6 +5916,7 @@ const ruRU: Record<string, string> = {
   "settings.hooks.group.compatibility": "Доступны для импорта",
   "settings.hooks.group.plugins": "Хуки плагинов",
   "settings.hooks.group.installed": "Установленные",
+  "settings.hooks.group.discovered": "Обнаруженные хуки",
   "settings.hooks.group.legacy": "Устаревшие",
   "settings.hooks.import": "Импорт",
   "settings.hooks.imported": "Хук импортирован",

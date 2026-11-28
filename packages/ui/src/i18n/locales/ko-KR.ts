@@ -5799,6 +5799,7 @@ const koKR: Record<string, string> = {
   "settings.hooks.group.compatibility": "가져오기 가능",
   "settings.hooks.group.plugins": "플러그인 훅",
   "settings.hooks.group.installed": "설치됨",
+  "settings.hooks.group.discovered": "발견된 훅",
   "settings.hooks.group.legacy": "레거시",
   "settings.hooks.import": "가져오기",
   "settings.hooks.imported": "훅을 가져왔습니다",

@@ -646,7 +646,7 @@ export function HooksSection({
           editableHooks={filteredEditableHooks}
           operatingHookId={hooksState.operatingHookId}
           pluginHooks={filteredPluginHooks}
-          showInstalledSection={!normalizedQuery}
+          searchActive={Boolean(normalizedQuery)}
           installedEmptyTitle={intl.formatMessage({
             id: "settings.plugin.hooks.emptyInstalledTitle",
           })}

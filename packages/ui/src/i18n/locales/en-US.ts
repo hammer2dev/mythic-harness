@@ -6437,6 +6437,7 @@ const enUS: Record<string, string> = {
   "settings.hooks.group.compatibility": "Available to import",
   "settings.hooks.group.plugins": "Plugin hooks",
   "settings.hooks.group.installed": "Installed",
+  "settings.hooks.group.discovered": "Discovered hooks",
   "settings.hooks.group.legacy": "Legacy",
   "settings.hooks.import": "Import",
   "settings.hooks.imported": "Hook imported",

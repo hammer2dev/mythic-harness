@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Anchor, Download, ShieldCheck } from "lucide-react";
+import { Anchor, ChevronRight, Download, ShieldCheck } from "lucide-react";
 import type { Hook, PluginHookDetail, PluginScope } from "@zcode/shared";
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
@@ -82,7 +82,7 @@ export function HooksList({
   installedEmptyActions,
   installedEmptyDescription,
   installedEmptyTitle,
-  showInstalledSection = false,
+  searchActive = false,
 }: {
   compatibilityHooks: Hook[];
   editableHooks: Hook[];
@@ -99,75 +99,100 @@ export function HooksList({
   installedEmptyActions?: ReactNode;
   installedEmptyDescription?: string;
   installedEmptyTitle?: string;
-  showInstalledSection?: boolean;
+  searchActive?: boolean;
 }) {
   const { intl } = useZCodeIntl();
   const groupedSections = groupHookSections(editableHooks, compatibilityHooks, pluginHooks);
-  const sections: HookSection[] =
-    showInstalledSection && editableHooks.length === 0
-      ? [{ kind: "installed", title: "Installed", count: 0, hooks: [] }, ...groupedSections]
-      : groupedSections;
+  const installedSection: HookSection | undefined =
+    groupedSections.find((section) => section.kind === "installed") ??
+    (searchActive ? undefined : { kind: "installed", title: "Installed", count: 0, hooks: [] });
+  const discoveredSections = groupedSections.filter((section) => section.kind !== "installed");
+
+  const renderSection = (section: HookSection) => (
+    <section
+      key={`${section.kind}:${section.kind === "plugin" ? section.pluginId : section.title}`}
+      className="space-y-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="flex h-7 items-center gap-1.5 text-ui-base font-medium text-foreground">
+          {section.kind === "plugin"
+            ? formatPluginName(section.title, section.pluginId)
+            : intl.formatMessage({
+                id:
+                  section.kind === "installed"
+                    ? "settings.hooks.group.installed"
+                    : "settings.hooks.group.legacy",
+              })}
+          <span className="text-ui-sm font-normal text-foreground-subtle">{section.count}</span>
+        </h3>
+        {section.kind === "installed" ? installedAction : null}
+      </div>
+      {section.kind === "installed" && section.hooks.length === 0 ? (
+        <PluginInstallEmptyState
+          title={installedEmptyTitle ?? ""}
+          description={installedEmptyDescription ?? ""}
+          actions={installedEmptyActions}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-xl bg-surface">
+          {section.kind === "plugin"
+            ? section.hooks.map((hook, index) => (
+                <div key={`${hook.pluginId}-${hook.detail.sourcePath}-${index}`}>
+                  {index > 0 ? <div className="h-px bg-border/50" aria-hidden="true" /> : null}
+                  <PluginHookItem hook={hook} />
+                </div>
+              ))
+            : section.hooks.map((hook, index) => (
+                <div key={hook.id}>
+                  {index > 0 ? <div className="h-px bg-border/50" aria-hidden="true" /> : null}
+                  {section.kind === "installed" ? (
+                    <ConfiguredHookRow
+                      hook={hook}
+                      busy={operatingHookId === hook.id}
+                      readOnly={hook.editable === false}
+                      requiresTrust={requiresWorkspaceHookTrust(hook)}
+                      trustActionAvailable={trustActionAvailable}
+                      trusting={trustingHookId === hook.id}
+                      onToggle={onToggle}
+                      onEdit={onEdit}
+                      onTrust={onTrust}
+                    />
+                  ) : (
+                    <CompatibilityHookRow
+                      hook={hook}
+                      busy={operatingHookId === hook.id}
+                      onImport={onImport}
+                    />
+                  )}
+                </div>
+              ))}
+        </div>
+      )}
+    </section>
+  );
 
   return (
     <div className="space-y-6">
-      {sections.map((section) => (
-        <section
-          key={`${section.kind}:${section.kind === "plugin" ? section.pluginId : section.title}`}
-          className="space-y-4"
+      {installedSection ? renderSection(installedSection) : null}
+      {discoveredSections.length > 0 ? (
+        <details
+          key={searchActive ? "search" : "browse"}
+          open={searchActive}
+          className="group/discovered"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="flex h-7 items-center gap-1.5 text-ui-base font-medium text-foreground">
-              {section.kind === "plugin"
-                ? formatPluginName(section.title, section.pluginId)
-                : intl.formatMessage({
-                    id:
-                      section.kind === "installed"
-                        ? "settings.hooks.group.installed"
-                        : "settings.hooks.group.legacy",
-                  })}
-              <span className="text-ui-sm font-normal text-foreground-subtle">{section.count}</span>
-            </h3>
-            {section.kind === "installed" ? installedAction : null}
-          </div>
-          {section.kind === "installed" && section.hooks.length === 0 ? (
-            <PluginInstallEmptyState
-              title={installedEmptyTitle ?? ""}
-              description={installedEmptyDescription ?? ""}
-              actions={installedEmptyActions}
+          <summary className="flex min-h-7 cursor-pointer list-none items-center gap-1.5 rounded-md text-ui-base font-medium text-foreground transition-colors hover:bg-hover focus-visible:bg-hover">
+            <ChevronRight
+              aria-hidden="true"
+              className="size-3.5 shrink-0 text-foreground-subtle motion-safe:transition-transform group-open/discovered:rotate-90"
             />
-          ) : (
-            <div className="overflow-hidden rounded-xl bg-surface">
-              {section.kind === "plugin"
-                ? section.hooks.map((hook, index) => (
-                    <div key={`${hook.pluginId}-${hook.detail.sourcePath}-${index}`}>
-                      {index > 0 ? <div className="h-px bg-border/50" aria-hidden="true" /> : null}
-                      <PluginHookItem hook={hook} />
-                    </div>
-                  ))
-                : section.hooks.map((hook, index) => (
-                    <div key={hook.id}>
-                      {index > 0 ? <div className="h-px bg-border/50" aria-hidden="true" /> : null}
-                      {section.kind === "installed" ? (
-                        <ConfiguredHookRow
-                          hook={hook}
-                          busy={operatingHookId === hook.id}
-                          readOnly={hook.editable === false}
-                          requiresTrust={requiresWorkspaceHookTrust(hook)}
-                          trustActionAvailable={trustActionAvailable}
-                          trusting={trustingHookId === hook.id}
-                          onToggle={onToggle}
-                          onEdit={onEdit}
-                          onTrust={onTrust}
-                        />
-                      ) : (
-                        <CompatibilityHookRow hook={hook} busy={operatingHookId === hook.id} onImport={onImport} />
-                      )}
-                    </div>
-                  ))}
-            </div>
-          )}
-        </section>
-      ))}
+            {intl.formatMessage({ id: "settings.hooks.group.discovered" })}
+            <span className="text-ui-sm font-normal text-foreground-subtle">
+              {compatibilityHooks.length + pluginHooks.length}
+            </span>
+          </summary>
+          <div className="mt-4 space-y-6">{discoveredSections.map(renderSection)}</div>
+        </details>
+      ) : null}
     </div>
   );
 }

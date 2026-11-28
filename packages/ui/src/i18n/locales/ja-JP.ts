@@ -5937,6 +5937,7 @@ const jaJP: Record<string, string> = {
   "settings.hooks.group.compatibility": "インポート可能",
   "settings.hooks.group.plugins": "プラグインのフック",
   "settings.hooks.group.installed": "インストール済み",
+  "settings.hooks.group.discovered": "検出されたフック",
   "settings.hooks.group.legacy": "レガシー",
   "settings.hooks.import": "インポート",
   "settings.hooks.imported": "フックをインポートしました",
