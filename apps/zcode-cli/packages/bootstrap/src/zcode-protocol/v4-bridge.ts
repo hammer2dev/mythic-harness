@@ -1567,28 +1567,25 @@ export function createConversationV4Gateway(
   };
   nativeExecutor = new V4CommandExecutor(coreHost);
   // 存储元信息 → SessionSummary；目录扫描与受管 worktree 白名单两条读取路径共用。
-  const storedSessionSummary = (
-    session: SessionInfo,
-    workspaceId: string,
-  ) => ({
-        sessionId: String(session.id),
-        workspaceId,
-        ...(session.parentID ? { parentSessionId: String(session.parentID) } : {}),
-        title: session.title ?? "",
-        titleSource: normalizeStoredTitleSource(session.titleSource),
-        phase:
-          session.lastOutcome === "error"
-            ? ("error" as const)
-            : session.lastOutcome === "interrupted"
-              ? ("completedInterrupted" as const)
-              : ("completedSuccess" as const),
-        ...(session.lastOutcome ? { lastOutcome: session.lastOutcome } : {}),
-        sessionEnded: true,
-        hasBackgroundWork: false,
-        hasCompactWork: false,
-        lastActivityAt: session.time?.updated ?? 0,
-        createdAt: session.time?.created ?? 0,
-      });
+  const storedSessionSummary = (session: SessionInfo, workspaceId: string) => ({
+    sessionId: String(session.id),
+    workspaceId,
+    ...(session.parentID ? { parentSessionId: String(session.parentID) } : {}),
+    title: session.title ?? "",
+    titleSource: normalizeStoredTitleSource(session.titleSource),
+    phase:
+      session.lastOutcome === "error"
+        ? ("error" as const)
+        : session.lastOutcome === "interrupted"
+          ? ("completedInterrupted" as const)
+          : ("completedSuccess" as const),
+    ...(session.lastOutcome ? { lastOutcome: session.lastOutcome } : {}),
+    sessionEnded: true,
+    hasBackgroundWork: false,
+    hasCompactWork: false,
+    lastActivityAt: session.time?.updated ?? 0,
+    createdAt: session.time?.created ?? 0,
+  });
   /**
    * 本地 workspace 下 cwd 位于受管 worktree 的会话（docs/git/worktree.md §6.6.2）：目录扫描看不到，
    * Host 从 tasks-index 精确提供 id。只读：逐个读取，校验 cwd 映射回该 workspace 目录后才返回，
@@ -1645,10 +1642,10 @@ export function createConversationV4Gateway(
       // directory 是实际文件路径。查询必须同时带路径和 identity；否则同一路径下其他
       // authority 的会话会被误标成当前 workspace。legacy 空 identity 不能只凭路径
       // claim，只允许使用 host task-index 给出的精确 taskId 归属证明。
-      const parsedRemote = parseRemoteWorkspaceIdentity(workspaceId);
-      const persistedWorkspacePath = parsedRemote?.workspacePath ?? workspaceId;
+      const { workspacePath: persistedWorkspacePath, workspaceIdentity } =
+        resolveWorkspaceRefFromId(workspaceId);
       if (
-        parsedRemote &&
+        workspaceIdentity &&
         legacyTaskIds &&
         legacyTaskIds.length > 0 &&
         context.deps.sessionStore.claimLegacySessionWorkspace
@@ -1684,7 +1681,7 @@ export function createConversationV4Gateway(
         // parentID 只表达会话层级，不能作为左侧任务 membership。
         // 显式 fork 必然带 parentID，但重启后仍应由 taskType 投影进 sessions-index。
         taskTypes: [...TASK_LIST_SESSION_TYPES],
-        workspaceID: parsedRemote ? (workspaceId as WorkspaceId) : null,
+        workspaceID: workspaceIdentity ? (workspaceIdentity as WorkspaceId) : null,
       });
       return stored.map((session) => storedSessionSummary(session, workspaceId));
     } catch (error) {
@@ -1704,16 +1701,16 @@ export function createConversationV4Gateway(
     reconcileSessions: async ({ workspaceId, sessionIds }) => {
       const store = context.deps.sessionStore;
       if (!store) throw new Error("Session store is unavailable");
-      const remote = parseRemoteWorkspaceIdentity(workspaceId);
-      const directory = remote?.workspacePath ?? workspaceId;
+      const { workspacePath: directory, workspaceIdentity } =
+        resolveWorkspaceRefFromId(workspaceId);
       const sessions = await Promise.all(
         [...new Set(sessionIds)].map(async (sessionId) => {
           const session = await store.getSession(sessionId as SessionId);
           // 本地 workspace 还包含 cwd 位于受管 worktree、映射回该目录的会话（§6.6.2）。
           const sameWorkspace =
             session &&
-            (remote
-              ? session.directory === directory && session.workspaceID === workspaceId
+            (workspaceIdentity
+              ? session.directory === directory && session.workspaceID === workspaceIdentity
               : (!session.workspaceID || session.workspaceID === workspaceId) &&
                 (await sessionBelongsToLocalWorkspace(session, directory)));
           if (!sameWorkspace) return { sessionId, exists: false as const, deleted: false as const };

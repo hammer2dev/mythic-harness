@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { resolve, win32 } from "node:path";
 import { parseRemoteWorkspaceIdentity, type ZCodeWorkspaceRef } from "@zcode/shared";
 
 const REMOTE_WORKSPACE_ID_PREFIX = "remote:";
@@ -29,12 +29,14 @@ export function resolveWorkspaceRefFromId(workspaceId: string): ZCodeWorkspaceRe
     return buildWorkspaceRef({ workspacePath: workspaceId });
   }
 
-  // 带显式 user 的 WSL identity 以前解析失败后会落入本地路径分支，
-  // 使完整 identity 被当成 workingDirectory。这里统一通过 shared parser 拆分身份与路径。
-  return buildWorkspaceRef({
-    workspaceIdentity: workspaceId,
-    workspacePath: parsedRemote.workspacePath,
-  });
+  // URL Server identity 的前置斜线属于编码约定，Windows 执行目录必须保留原盘符。
+  const workspacePath =
+    parsedRemote.kind === "server" &&
+    process.platform === "win32" &&
+    /^\/[A-Za-z]:\//.test(parsedRemote.workspacePath)
+      ? win32.normalize(parsedRemote.workspacePath.slice(1))
+      : parsedRemote.workspacePath;
+  return buildWorkspaceRef({ workspaceIdentity: workspaceId, workspacePath });
 }
 
 // ── 会话 cwd 与 workspace 分离（受管 worktree，docs/git/worktree.md §1.1 / §9.3）──
@@ -54,7 +56,10 @@ export class WorktreeCwdLocalOnlyError extends Error {
 
 /** workspace 身份（key）不变，执行路径换成 cwd。远程 workspace 拒绝。 */
 export function workspaceRefWithCwd(workspace: ZCodeWorkspaceRef, cwd: string): ZCodeWorkspaceRef {
-  if (workspace.workspaceIdentity?.trim() || workspace.workspaceKey.startsWith(REMOTE_WORKSPACE_ID_PREFIX)) {
+  if (
+    workspace.workspaceIdentity?.trim() ||
+    workspace.workspaceKey.startsWith(REMOTE_WORKSPACE_ID_PREFIX)
+  ) {
     throw new WorktreeCwdLocalOnlyError(workspace.workspaceKey);
   }
   return { workspaceKey: workspace.workspaceKey, workspacePath: cwd };
