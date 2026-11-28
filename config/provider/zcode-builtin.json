@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 44,
+  "revision": 45,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -648,7 +648,6 @@
               "gpt-6-luna",
               "gpt-5.6-sol",
               "gpt-5.6-luna",
-              "gpt-5.6",
               "gpt-5.4",
               "gpt-5.4-pro",
               "gpt-5.4-mini",
@@ -776,13 +775,11 @@
               "xiaomi/mimo-v2.6-flash",
               "openai/gpt-5.6-sol",
               "anthropic/claude-opus-5",
-              "xiaomi/mimo-v2.5-pro",
               "x-ai/grok-4.6",
               "deepseek/deepseek-v4.1-flash",
               "qwen/qwen3.8-max-0902",
               "openai/gpt-5.6-terra",
               "openai/gpt-5.6-luna",
-              "openai/gpt-5.6",
               "openai/gpt-5.4",
               "openai/gpt-5.4-pro",
               "openai/gpt-5.4-mini",
@@ -819,12 +816,8 @@
               "qwen/qwen3.6-plus",
               "qwen/qwen3.6-flash",
               "qwen/qwen3.5-plus-20260420",
-              "qwen/qwen3-vl-plus",
-              "qwen/qwen3-vl-flash",
               "minimax/minimax-m2.7",
               "minimax/minimax-m2.5",
-              "xiaomi/mimo-v2.5",
-              "x-ai/grok-build-0.1",
               "x-ai/grok-4.3"
             ],
             "logo": {
@@ -848,7 +841,7 @@
               "type": "openai-responses",
               "baseUrl": "https://opencode.ai/zen/go/v1"
             },
-            "builtinModelIds": ["gpt-6-luna", "grok-4.7", "gpt-5.6-luna", "grok-4.6"],
+            "builtinModelIds": ["gpt-6-luna", "grok-4.7", "gpt-5.6-luna"],
             "logo": {
               "type": "builtin",
               "key": "opencode"
@@ -875,11 +868,7 @@
               "qwen3.8-max",
               "qwen3.8-flash",
               "claude-haiku-5-5",
-              "minimax-m2.7",
-              "minimax-m2.5",
-              "qwen3.7-max",
-              "qwen3.7-plus",
-              "qwen3.6-plus"
+              "qwen3.7-plus"
             ],
             "logo": {
               "type": "builtin",
@@ -913,13 +902,6 @@
               "deepseek-v4-pro",
               "mimo-v2.6-pro",
               "mimo-v2.6-flash",
-              "mimo-v2.5",
-              "mimo-v2.5-pro",
-              "glm-5.2",
-              "glm-5.1",
-              "kimi-k2.6",
-              "deepseek-v4-flash",
-              "deepseek-v4-flash-vision-exp",
               "hy4-preview",
               "hy3"
             ],
@@ -986,7 +968,6 @@
             },
             "builtinModelIds": [
               "claude-fable-5-1",
-              "qwen3.7-max",
               "qwen3.6-plus",
               "qwen3.5-plus",
               "claude-opus-5-5",
@@ -1001,8 +982,7 @@
               "claude-opus-4-6",
               "claude-opus-4-5",
               "claude-sonnet-4-6",
-              "claude-sonnet-4-5",
-              "qwen3.7-plus"
+              "claude-sonnet-4-5"
             ],
             "logo": {
               "type": "builtin",
@@ -1029,17 +1009,9 @@
               "kimi-k3",
               "minimax-m3",
               "deepseek-v4-pro",
-              "glm-5.2",
               "big-pickle",
-              "mimo-v2.5-free",
-              "hy3-free",
-              "ling-3.0-flash-fin-free",
-              "nemotron-3-ultra-free",
-              "muse-spark-1.2-contributor-free",
               "mimo-v2.6-flash-free",
               "minimax-m2.7",
-              "deepseek-v4-flash",
-              "glm-5.1",
               "nemotron-3.5-lightning-free"
             ],
             "logo": {
@@ -4757,20 +4729,6 @@
         },
         {
           "templateId": "opencode-go-chat",
-          "modelId": "glm-5.2",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
-          "modelId": "glm-5.1",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
           "modelId": "kimi-k3",
           "config": {
             "enabled": true
@@ -4785,13 +4743,6 @@
         },
         {
           "templateId": "opencode-go-chat",
-          "modelId": "kimi-k2.6",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
           "modelId": "deepseek-v4.1-flash",
           "config": {
             "enabled": true
@@ -4802,34 +4753,6 @@
           "modelId": "deepseek-v4-pro",
           "config": {
             "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
-          "modelId": "deepseek-v4-flash",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
-          "modelId": "deepseek-v4-flash-vision-exp",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
-          "modelId": "mimo-v2.5",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-chat",
-          "modelId": "mimo-v2.5-pro",
-          "config": {
-            "enabled": false
           }
         },
         {
@@ -4855,20 +4778,6 @@
         },
         {
           "templateId": "opencode-go-messages",
-          "modelId": "minimax-m2.7",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-messages",
-          "modelId": "minimax-m2.5",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-messages",
           "modelId": "qwen3.8-max",
           "config": {
             "enabled": true
@@ -4883,21 +4792,7 @@
         },
         {
           "templateId": "opencode-go-messages",
-          "modelId": "qwen3.7-max",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-messages",
           "modelId": "qwen3.7-plus",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-messages",
-          "modelId": "qwen3.6-plus",
           "config": {
             "enabled": false
           }
@@ -4905,13 +4800,6 @@
         {
           "templateId": "opencode-go-responses",
           "modelId": "gpt-5.6-luna",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-go-responses",
-          "modelId": "grok-4.6",
           "config": {
             "enabled": false
           }
@@ -5211,13 +5099,6 @@
           }
         },
         {
-          "modelId": "gpt-5.6",
-          "templateId": "openai",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
           "modelId": "gpt-5.3-codex",
           "templateId": "openai",
           "config": {
@@ -5394,20 +5275,6 @@
         },
         {
           "templateId": "openrouter",
-          "modelId": "xiaomi/mimo-v2.5-pro",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "openrouter",
-          "modelId": "xiaomi/mimo-v2.5",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "openrouter",
           "modelId": "x-ai/grok-4.6",
           "config": {
             "enabled": false
@@ -5576,20 +5443,6 @@
         },
         {
           "templateId": "opencode-zen-messages",
-          "modelId": "qwen3.7-max",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-messages",
-          "modelId": "qwen3.7-plus",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-zen-messages",
           "modelId": "qwen3.6-plus",
           "config": {
             "enabled": true
@@ -5632,27 +5485,6 @@
         },
         {
           "templateId": "opencode-zen-chat",
-          "modelId": "deepseek-v4-flash",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "modelId": "glm-5.2",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "modelId": "glm-5.1",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
           "modelId": "big-pickle",
           "config": {
             "enabled": true
@@ -5660,49 +5492,7 @@
         },
         {
           "templateId": "opencode-zen-chat",
-          "modelId": "mimo-v2.5-free",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "modelId": "hy3-free",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "modelId": "ling-3.0-flash-fin-free",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "modelId": "nemotron-3-ultra-free",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
           "modelId": "nemotron-3.5-lightning-free",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "opencode-zen-chat",
-          "modelId": "muse-spark-1.2-contributor-free",
-          "config": {
-            "enabled": true
-          }
-        },
-        {
-          "templateId": "openrouter",
-          "modelId": "openai/gpt-5.6",
           "config": {
             "enabled": false
           }
@@ -5877,20 +5667,6 @@
         },
         {
           "templateId": "openrouter",
-          "modelId": "qwen/qwen3-vl-plus",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "openrouter",
-          "modelId": "qwen/qwen3-vl-flash",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "openrouter",
           "modelId": "minimax/minimax-m2.7",
           "config": {
             "enabled": false
@@ -5899,13 +5675,6 @@
         {
           "templateId": "openrouter",
           "modelId": "minimax/minimax-m2.5",
-          "config": {
-            "enabled": false
-          }
-        },
-        {
-          "templateId": "openrouter",
-          "modelId": "x-ai/grok-build-0.1",
           "config": {
             "enabled": false
           }
