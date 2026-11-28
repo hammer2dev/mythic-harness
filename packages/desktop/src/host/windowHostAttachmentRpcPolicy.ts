@@ -13,6 +13,7 @@ import {
   IFeedbackService,
   IGenUiService,
   IHighspeedCardService,
+  IAccountGroupsService,
   createWindowProjectChangesService,
   type ServiceExposurePolicy,
   type ZCodeAgentV4ClientMode,
@@ -139,6 +140,7 @@ export function exposeWindowHostAttachmentServices(params: {
   overrides?: ReadonlyMap<string, unknown>;
   attachmentScope?: { kind: "local" | "remote" | "source-settings" };
   windowServices?: ServiceCollection;
+  accountGroupsService?: IAccountGroupsService;
   getAgentApplicationsService?: () => IAgentApplicationsService;
   /** 手机窗口目录与 project 频道同样叠加实时交互，避免远端 scope 下列表缺「待处理」。 */
   decorateWindowProjectService?: (service: IProjectService) => IProjectService;
@@ -176,6 +178,12 @@ export function exposeWindowHostAttachmentServices(params: {
       ...(isLocalDesktop ? { credentialStoreRecovery: "local-desktop" as const } : {}),
     },
   );
+  if (isLocalDesktop && params.accountGroupsService) {
+    params.server.registerChannel(
+      IAccountGroupsService.channelName,
+      ProxyChannel.fromService(params.accountGroupsService),
+    );
+  }
   if (isLocalDesktop && params.getAgentApplicationsService) {
     params.server.registerChannel(
       IAgentApplicationsService.channelName,

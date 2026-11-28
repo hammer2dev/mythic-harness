@@ -11,6 +11,7 @@ import {
   ISettingService,
   IOnboardingRecordService,
   ICredentialService,
+  IAccountGroupsService,
   IBroadcastService,
   IZCodeTaskService,
   IZCodeAgentService,
@@ -85,6 +86,7 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly settingService: ISettingService;
   readonly onboardingRecordService: IOnboardingRecordService;
   readonly credentialService: ICredentialService;
+  readonly accountGroupsService?: IAccountGroupsService;
   readonly agentApplicationsService?: IAgentApplicationsService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
@@ -153,6 +155,7 @@ export class RemoteServiceAccess implements IServiceAccessor {
       extensionsService?: boolean;
       managedWorktreeService?: boolean;
       windowProjectDirectory?: boolean;
+      accountGroupsService?: boolean;
       agentApplicationsService?: boolean;
     } = {},
   ) {
@@ -224,6 +227,11 @@ export class RemoteServiceAccess implements IServiceAccessor {
     this.managedWorktreeService = options.managedWorktreeService
       ? ProxyChannel.toService<IManagedWorktreeService>(
           channelClient.getChannel(IManagedWorktreeService.channelName),
+        )
+      : undefined;
+    this.accountGroupsService = options.accountGroupsService
+      ? ProxyChannel.toService<IAccountGroupsService>(
+          channelClient.getChannel(IAccountGroupsService.channelName),
         )
       : undefined;
     this.agentApplicationsService = options.agentApplicationsService

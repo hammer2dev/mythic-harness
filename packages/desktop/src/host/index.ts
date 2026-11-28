@@ -83,6 +83,7 @@ import {
 } from "@zcode/services";
 import {
   createLocalServices,
+  createAccountGroupsService,
   createProjectWorkspaceNavigation,
   createRemoteProjectConnectionAdmission,
   releaseRemoteProjectProfileHost,
@@ -109,6 +110,7 @@ import {
   type AppControlServiceHandle,
   type WindowHostExtensions,
   getAppConfigDir,
+  getCredentialsFilePath,
   getZCodeDataRootDir,
   OffPeakModelUnavailableError,
   OffPeakPermanentDispatchError,
@@ -283,6 +285,13 @@ const { parentPort } = process;
 const credentialCipherBridge = createCredentialCipherBridge((request) => {
   if (!parentPort) throw new Error("parentPort unavailable");
   parentPort.postMessage({ type: HostResponseTypes.CredentialCipherRequest, ...request });
+});
+const accountGroupsService = createAccountGroupsService({
+  paths: () => ({
+    filePath: join(getAppConfigDir(), "account-groups.enc"),
+    credentialsFilePath: getCredentialsFilePath(),
+  }),
+  cipher: credentialCipherBridge.cipher,
 });
 let windowHostAgentApplications: ReturnType<typeof createAgentApplications> | undefined;
 const hostNetworkCapture = createHostNetworkCapture(parentPort);
@@ -2891,6 +2900,7 @@ function exposeServicesOnMessagePort(
     overrides,
     clientMode,
     attachmentScope,
+    accountGroupsService,
     getAgentApplicationsService: () =>
       (windowHostAgentApplications ??= createAgentApplications()).service,
     windowServices: activeServices ?? undefined,

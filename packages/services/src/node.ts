@@ -151,6 +151,7 @@ export {
   readJsonObjectFileForUpdate,
   updateJsonObjectFile,
 } from "./fs/atomicFileUtils.js";
+export { createAccountGroupsService } from "./account-groups/index.js";
 export {
   setDataBaseDir,
   getDataBaseDir,

@@ -26,6 +26,18 @@ export {
 // Accessor
 export type { IServiceAccessor } from "./accessor.js";
 export {
+  ACCOUNT_ENTRY_TYPES,
+  DEFAULT_ACCOUNT_GROUP_ID,
+  IAccountGroupsService,
+  type AccountEntry,
+  type AccountEntryInput,
+  type AccountEntryTarget,
+  type AccountEntryType,
+  type AccountField,
+  type AccountGroup,
+  type AccountGroupInput,
+} from "./account-groups/contract.js";
+export {
   ConversationShareServiceError,
   createUnsupportedConversationShareService,
   IConversationShareService,

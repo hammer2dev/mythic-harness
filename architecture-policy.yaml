@@ -2,6 +2,24 @@ version: 1
 
 # 存量模块先标记为 legacy；新模块或完成迁移的模块设置 managed: true。
 modules:
+  - id: account-groups
+    roots: [ packages/services/src/account-groups ]
+    managed: true
+    requires: [ services, shared, credential-security ]
+    publicEntrypoints:
+      - packages/services/src/account-groups/index.ts
+      - packages/services/src/account-groups/contract.ts
+    layers: { contract: contract.ts, adapters: . }
+    owner: desktop-settings
+  - id: account-management-ui
+    roots: [ packages/ui/src/account-management, packages/ui/src/hooks/useAccountGroups.ts ]
+    managed: true
+    requires: [ account-groups, services, ui ]
+    publicEntrypoints:
+      - packages/ui/src/account-management/index.ts
+      - packages/ui/src/account-management/contract.ts
+    layers: { contract: contract.ts, ui: . }
+    owner: desktop-settings
   # windows-runtime-host：由 architecture:adopt 登记
   - id: windows-runtime-host
     roots:

@@ -26,6 +26,7 @@ function withLocalOnlyAccountServices(
 ): IServiceAccessor {
   return {
     ...services,
+    accountGroupsService: baseServices.accountGroupsService,
     highspeedCardService: remoteUnsupportedHighspeedCardService,
     offPeakTaskService: baseServices.offPeakTaskService,
   };
