@@ -214,13 +214,6 @@ function readMarkdownTableDockHeight(root: HTMLElement | null) {
   );
 }
 
-function readMarkdownTableBackToBottomClearance(root: HTMLElement | null) {
-  const button = root?.querySelector<HTMLElement>(MARKDOWN_TABLE_V4_BACK_TO_BOTTOM_SELECTOR);
-  if (!button) return 0;
-
-  return button.getBoundingClientRect().height + MARKDOWN_TABLE_V4_BACK_TO_BOTTOM_GAP_PX;
-}
-
 function resolveMarkdownTableVerticalViewport(
   element: HTMLElement | null,
   fallbackRoot: HTMLElement | null,
@@ -902,15 +895,22 @@ export function MarkdownTable({ className, children, node: _node, ...props }: Ma
       rafId = null;
       const frameRect = frame.getBoundingClientRect();
       const viewportRect = verticalViewport.getBoundingClientRect();
-      const dockHeight = readMarkdownTableDockHeight(root);
-      // 离底时“回到底部”按钮位于 composer dock 上方；只扣 dock 会让长表
-      // sticky 滚动条与按钮占用同一条水平带，导致按钮被宽滚动槽遮挡。
-      const backToBottomClearance = readMarkdownTableBackToBottomClearance(root);
+      const dockTop = viewportRect.bottom - readMarkdownTableDockHeight(root);
+      const backToBottom = root?.querySelector<HTMLElement>(
+        MARKDOWN_TABLE_V4_BACK_TO_BOTTOM_SELECTOR,
+      );
+      // 按钮与输入区之间还留有外边距，按实际上沿避让才能让整条滚动槽可拖动。
+      const viewportBottom = backToBottom
+        ? Math.min(
+            dockTop,
+            backToBottom.getBoundingClientRect().top - MARKDOWN_TABLE_V4_BACK_TO_BOTTOM_GAP_PX,
+          )
+        : dockTop;
       const offset = resolveMarkdownTableStickyScrollbarOffset({
         frameTop: frameRect.top,
         frameBottom: frameRect.bottom,
         scrollbarHeight: wrapper.getBoundingClientRect().height,
-        viewportBottom: viewportRect.bottom - dockHeight - backToBottomClearance,
+        viewportBottom,
       });
       wrapper.style.transform = offset === 0 ? "" : `translateY(${Math.round(offset)}px)`;
     };
@@ -1270,7 +1270,7 @@ export function MarkdownTable({ className, children, node: _node, ...props }: Ma
           <div
             ref={virtualScrollTrackRef}
             aria-hidden="true"
-            className="mt-1 h-3.5 w-full touch-none rounded-full bg-foreground/3"
+            className="relative mt-1 flex h-3.5 w-full touch-none items-center before:pointer-events-none before:absolute before:inset-0 before:my-auto before:h-1 before:rounded-full before:bg-foreground/3"
             data-markdown-table-virtual-scroll-track=""
             onPointerCancel={handleVirtualScrollbarPointerEnd}
             onPointerDown={handleVirtualScrollbarPointerDown}
@@ -1279,7 +1279,7 @@ export function MarkdownTable({ className, children, node: _node, ...props }: Ma
             onWheel={handleVirtualScrollbarWheel}
           >
             <div
-              className="h-3 rounded-full bg-foreground/20 transition-colors hover:bg-foreground/40"
+              className="relative h-3 shrink-0 after:pointer-events-none after:absolute after:inset-0 after:my-auto after:h-1 after:rounded-full after:bg-foreground/20 after:transition-colors hover:after:bg-foreground/40"
               onPointerCancel={handleVirtualScrollbarThumbPointerEnd}
               onPointerDown={handleVirtualScrollbarThumbPointerDown}
               onPointerMove={handleVirtualScrollbarThumbPointerMove}

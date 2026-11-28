@@ -50,6 +50,7 @@ interface MarkdownTableEnhancedSnapshot {
   tableWidth: number;
   thumbBackgroundColor: string;
   thumbHeight: number;
+  thumbVisibleHeight: string;
   thumbLeft: number;
   thumbWidth: number;
   trackBackdropFilter: string;
@@ -71,6 +72,7 @@ interface MarkdownTableEnhancedSnapshot {
 interface StickyOverlapSnapshot {
   composerOverlap: boolean;
   scrollBottomOverlap: boolean;
+  scrollBottomVisible: boolean;
   tableMiddleVisible: boolean;
   trackBottom: number;
   trackTop: number;
@@ -345,13 +347,19 @@ describe("会话区 Markdown Table Enhanced Scroll E2E", () => {
     expect(tall.trackBorderTopWidth).toBe("0px");
     expect(tall.trackHeight).toBeCloseTo(14, 1);
     expect(tall.thumbHeight).toBeCloseTo(12, 1);
+    expect(tall.thumbVisibleHeight).toBe("4px");
     expect(tall.thumbBackgroundColor).not.toBe("rgba(0, 0, 0, 0)");
 
     expect(await scrollTallTableToMiddle(TALL_TABLE_MARKER)).toBe(true);
     const overlap = await waitForStickyOverlapSnapshot(
       TALL_TABLE_MARKER,
-      (candidate) => candidate.tableMiddleVisible && !candidate.composerOverlap,
-      "滚动到长表格中部后 sticky 滚动条没有避让底部 dock",
+      // 「回到底部」按钮挂载后，滚动条在下一帧重新计算避让位置。
+      (candidate) =>
+        candidate.tableMiddleVisible &&
+        candidate.scrollBottomVisible &&
+        !candidate.composerOverlap &&
+        !candidate.scrollBottomOverlap,
+      "滚动到长表格中部后，sticky 滚动条仍覆盖底部输入区或回到底部按钮",
     );
     expect(overlap.scrollBottomOverlap).toBe(false);
     expect(overlap.trackBottom).toBeGreaterThan(overlap.trackTop);
@@ -720,6 +728,7 @@ function getEnhancedSnapshot(marker: string): Promise<MarkdownTableEnhancedSnaps
       tableWidth: 0,
       thumbBackgroundColor: "",
       thumbHeight: 0,
+      thumbVisibleHeight: "",
       thumbLeft: 0,
       thumbWidth: 0,
       trackBackdropFilter: "",
@@ -762,7 +771,7 @@ function getEnhancedSnapshot(marker: string): Promise<MarkdownTableEnhancedSnaps
     const contentStyle = window.getComputedStyle(contentLayer);
     const trackStyle = track ? window.getComputedStyle(track) : null;
     const trackOuterStyle = trackOuter ? window.getComputedStyle(trackOuter) : null;
-    const thumbStyle = thumb ? window.getComputedStyle(thumb) : null;
+    const thumbStyle = thumb ? window.getComputedStyle(thumb, "::after") : null;
     const actionLabels = Array.from(toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? [])
       .map((button) => button.getAttribute("aria-label") ?? "")
       .filter(Boolean);
@@ -795,6 +804,7 @@ function getEnhancedSnapshot(marker: string): Promise<MarkdownTableEnhancedSnaps
       tableWidth: tableRect.width,
       thumbBackgroundColor: thumbStyle?.backgroundColor ?? "",
       thumbHeight: thumbRect?.height ?? 0,
+      thumbVisibleHeight: thumbStyle?.height ?? "",
       thumbLeft,
       thumbWidth: thumbRect?.width ?? 0,
       trackBackdropFilter: trackStyle?.backdropFilter ?? "",
@@ -881,6 +891,7 @@ function getStickyOverlapSnapshot(marker: string): Promise<StickyOverlapSnapshot
       scrollBottomOverlap: Boolean(
         trackRect && scrollButtonRect && intersects(trackRect, scrollButtonRect),
       ),
+      scrollBottomVisible: Boolean(scrollButtonRect?.height),
       tableMiddleVisible: Boolean(
         middleRowRect && middleRowRect.top >= 0 && middleRowRect.bottom <= window.innerHeight,
       ),
