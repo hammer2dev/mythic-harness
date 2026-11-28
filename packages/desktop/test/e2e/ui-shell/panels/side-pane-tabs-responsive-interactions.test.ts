@@ -1,13 +1,17 @@
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { release } from "node:os";
 import {
   TID_TERMINAL_TOGGLE,
   TID_SIDE_PANE_TOGGLE,
   TID_WORKSPACE_HEADER,
   TID_WORKSPACE_TITLE,
 } from "@zcode/shared/test-ids";
-import { clearAppData } from "#e2e/helpers/desktop-app";
+import { clearAppData, DEFAULT_WORKSPACE } from "#e2e/helpers/desktop-app";
 import { listSystemProcesses } from "#e2e/helpers/e2e-process-cleanup";
+import {
+  selectNativeProjectDirectories,
+  startDraftFromProject,
+} from "#e2e/helpers/project-sidebar";
 import { prepareV4ConversationE2E } from "#e2e/helpers/v4-conversation";
 
 const TAB_SELECTOR = "[data-side-pane-tab-id]";
@@ -16,28 +20,28 @@ const CONTENT_SELECTOR = "[data-side-pane-tabs-content]";
 const ADD_TRIGGER_SELECTOR = "[data-side-pane-add-tab-trigger]";
 const TOOLTIP_SELECTOR = '[data-slot="tooltip-content"]';
 const DRAFT_SUGGESTED_PROMPTS_SLOT_SELECTOR = '[data-v4-draft-suggested-prompts-slot="true"]';
+const SIDEBAR_TOGGLE_SELECTOR = '[data-testid="desktop-top-sidebar-toggle"]';
+const PRIMARY_NAVIGATION_SELECTOR = '[data-testid="workspace-primary-navigation"]';
 
 async function bottomTerminalText(): Promise<string> {
   return browser.execute(() => {
-    const rows = Array.from(document.querySelectorAll<HTMLElement>("#terminal .xterm-rows")).filter(
-      (row) => row.offsetParent !== null,
-    );
-    return Array.from(rows.at(-1)?.children ?? [])
+    const rows = document.querySelector("#terminal [data-terminal-pane][data-active] .xterm-rows");
+    return Array.from(rows?.children ?? [])
       .map((row) => (row.textContent ?? "").replace(/\u00a0/gu, " ").trimEnd())
       .join("\n");
   });
 }
 
-async function typeInBottomTerminal(command: string): Promise<void> {
+async function typeInBottomTerminal(command: string, submit = true): Promise<void> {
   await browser.waitUntil(async () => /(?:>|[$#%])\s*$/u.test(await bottomTerminalText()), {
     timeout: 30_000,
     timeoutMsg: "底部终端提示符未就绪",
   });
   expect(
     await browser.execute((text) => {
-      const input = Array.from(
-        document.querySelectorAll<HTMLTextAreaElement>("#terminal .xterm-helper-textarea"),
-      ).find((candidate) => candidate.closest<HTMLElement>(".xterm")?.offsetParent !== null);
+      const input = document.querySelector<HTMLTextAreaElement>(
+        "#terminal [data-terminal-pane][data-active] .xterm-helper-textarea",
+      );
       if (!input) return false;
       input.focus();
       const clipboardData = new DataTransfer();
@@ -48,14 +52,7 @@ async function typeInBottomTerminal(command: string): Promise<void> {
       return document.activeElement === input;
     }, command),
   ).toBe(true);
-  await browser.keys("Enter");
-}
-
-function expectedWorkspacePanelRadiusPx(): number {
-  if (process.platform === "win32") return 6;
-  // Darwin 25 起对应 Tahoe，Sequoia 及旧系统的工作区使用更小的内层圆角。
-  if (process.platform === "darwin") return Number.parseInt(release(), 10) >= 25 ? 12 : 6;
-  return 12;
+  if (submit) await browser.keys("Enter");
 }
 
 interface TabStripMetrics {
@@ -120,14 +117,7 @@ describe("Side Pane Tab responsive interactions", () => {
     }
     expect(await $(`[data-testid="${TID_WORKSPACE_TITLE}"]`).isExisting()).toBe(false);
     expect(await readHeaderBorderBottomColor()).toBe("rgba(0, 0, 0, 0)");
-    expect(
-      await browser.execute((slotSelector) => {
-        const slot = document.querySelector<HTMLElement>(slotSelector);
-        if (!slot) return null;
-        const style = window.getComputedStyle(slot);
-        return { height: style.height, position: style.position };
-      }, DRAFT_SUGGESTED_PROMPTS_SLOT_SELECTOR),
-    ).toEqual({ height: "32px", position: "static" });
+    expect(await $(DRAFT_SUGGESTED_PROMPTS_SLOT_SELECTOR).isExisting()).toBe(false);
 
     const sidePaneToggle = await $(`[data-testid="${TID_SIDE_PANE_TOGGLE}"]`);
     await sidePaneToggle.waitForClickable({ timeout: 10_000 });
@@ -158,6 +148,7 @@ describe("Side Pane Tab responsive interactions", () => {
       },
       { timeout: 5000, timeoutMsg: "独立面板未形成上下对齐的 3px 间距" },
     );
+    expect(await $(DRAFT_SUGGESTED_PROMPTS_SLOT_SELECTOR).isExisting()).toBe(false);
     const panels = await readIndependentPanelMetrics();
     if (process.platform === "win32" || process.platform === "linux")
       expect(
@@ -190,42 +181,38 @@ describe("Side Pane Tab responsive interactions", () => {
         }),
       ).toBeCloseTo(2, 0);
     }
-    if (process.platform === "win32" || process.platform === "linux") {
-      expect(
-        await browser.execute(() => {
-          const logo = document.querySelector('[data-testid="desktop-top-logo-sidebar-toggle"]')!;
-          return logo.getBoundingClientRect().left;
-        }),
-      ).toBe(13);
-      const logoButton = await $('[data-testid="desktop-top-logo-sidebar-toggle"]');
-      expect(await logoButton.getSize("width")).toBe(28);
-      expect(await logoButton.$("[data-desktop-logo-badge]").getSize("width")).toBe(20);
-      expect(await logoButton.$("[data-desktop-logo-badge] svg").getSize("width")).toBe(13);
-      expect(await logoButton.$("animate").isExisting()).toBe(false);
-      await logoButton.moveTo();
-      await browser.waitUntil(
-        async () =>
-          await logoButton
-            .$("[data-desktop-logo-visual]")
-            .getCSSProperty("opacity")
-            .then((value) => Number(value.value) === 0),
-      );
-      await logoButton.click();
-      await logoButton.$("svg.lucide-panel-left-open").waitForExist();
-      await browser.waitUntil(async () =>
-        browser.execute(
-          (inset) =>
-            Math.abs(
-              document
-                .querySelector('[data-workspace-conversation-frame="true"]')!
-                .getBoundingClientRect().left - inset,
-            ) < 1,
-          process.platform === "win32" ? 6 : 4,
-        ),
-      );
-      await logoButton.click();
-      await logoButton.$("svg.lucide-panel-left-close").waitForExist();
-    }
+    const primaryNavigation = await $(PRIMARY_NAVIGATION_SELECTOR);
+    const sidebarToggle = await primaryNavigation.$(SIDEBAR_TOGGLE_SELECTOR);
+    const toggleLeft = await sidebarToggle.getLocation("x");
+    expect(await primaryNavigation.getSize("width")).toBe(48);
+    expect(await sidebarToggle.getSize("width")).toBe(36);
+    expect(await sidebarToggle.$$("img")).toHaveLength(1);
+    expect(await sidebarToggle.getAttribute("aria-controls")).toBe("sidebar");
+    expect(await sidebarToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(Number((await sidebarToggle.$("img").getCSSProperty("opacity")).value)).toBe(1);
+    const closeIcon = await sidebarToggle.$("svg.lucide-panel-left-close");
+    expect(Number((await closeIcon.getCSSProperty("opacity")).value)).toBe(0);
+    await sidebarToggle.moveTo();
+    await browser.waitUntil(
+      async () => Number((await closeIcon.getCSSProperty("opacity")).value) === 1,
+    );
+    expect(Number((await sidebarToggle.$("img").getCSSProperty("opacity")).value)).toBe(0);
+    await sidebarToggle.click();
+    await sidebarToggle.$("svg.lucide-panel-left-open").waitForDisplayed();
+    expect(await sidebarToggle.getAttribute("aria-expanded")).toBe("false");
+    await browser.waitUntil(async () =>
+      browser.execute((navigation) => {
+        const rail = document.querySelector(navigation)!.getBoundingClientRect();
+        const conversation = document
+          .querySelector('[data-workspace-conversation-frame="true"]')!
+          .getBoundingClientRect();
+        return Math.abs(conversation.left - rail.right) < 1;
+      }, PRIMARY_NAVIGATION_SELECTOR),
+    );
+    expect(await sidebarToggle.getLocation("x")).toBe(toggleLeft);
+    await sidebarToggle.click();
+    await sidebarToggle.$("svg.lucide-panel-left-close").waitForDisplayed();
+    expect(await sidebarToggle.getAttribute("aria-expanded")).toBe("true");
     if (process.platform === "win32" || process.platform === "linux") {
       expect(
         await browser.execute(() => {
@@ -257,17 +244,22 @@ describe("Side Pane Tab responsive interactions", () => {
         const content = document.querySelector("#content")!;
         const frame = document.querySelector('[data-workspace-conversation-frame="true"]')!;
         const style = getComputedStyle(content);
+        const frameStyle = getComputedStyle(frame);
         return {
           right: style.paddingRight,
           bottom: style.paddingBottom,
-          top: frame.getBoundingClientRect().top - content.getBoundingClientRect().top,
+          frame: [
+            frameStyle.borderTopWidth,
+            frameStyle.borderRightWidth,
+            frameStyle.borderBottomWidth,
+            frameStyle.borderLeftWidth,
+          ],
         };
       });
-      const outerInset = process.platform === "win32" ? 6 : 4;
       expect(inset).toEqual({
-        right: `${outerInset}px`,
-        bottom: `${outerInset}px`,
-        top: outerInset,
+        right: "0px",
+        bottom: "0px",
+        frame: ["0px", "0px", "0px", "0px"],
       });
       expect(
         await browser.execute(() => {
@@ -327,19 +319,9 @@ describe("Side Pane Tab responsive interactions", () => {
     );
     await sidePaneClose.waitForClickable({ timeout: 5000 });
     expect(panels?.headerInsideConversation).toBe(true);
-    const expectedPanelRadiusPx = expectedWorkspacePanelRadiusPx();
-    if (expectedPanelRadiusPx === 6) {
-      // Side Pane 展开时会话外框使用动态圆角变量，只有右侧 chrome 外框使用圆角 token。
-      const framesUseRadiusToken = await browser.execute(() => {
-        const frame = document.querySelector('[data-workspace-side-frame="true"]');
-        return Boolean(
-          frame?.classList.contains("rounded-md") || frame?.classList.contains("rounded-l-md"),
-        );
-      });
-      expect(framesUseRadiusToken).toBe(true);
-    }
-    expect(panels?.leftRadius).toBe(`${expectedPanelRadiusPx}px`);
-    expect(panels?.rightRadius).toBe(`${expectedPanelRadiusPx}px`);
+    expect(panels?.leftRadius).toBe("0px");
+    expect(panels?.rightRadius).toBe("0px");
+    expect(await hasSidePaneDividerOnly()).toBe(true);
     await movePointerAwayFromResizeHandles();
     expect(
       await readResizeHandleStyle('[data-workspace-side-pane-resize-handle="true"]'),
@@ -351,14 +333,6 @@ describe("Side Pane Tab responsive interactions", () => {
     await expectSidePaneIndicatorCentered();
     await hoverResizeHandle('[data-workspace-side-pane-resize-handle="true"]');
     await assertResizeHandleVisible('[data-workspace-side-pane-resize-handle="true"]');
-    if (process.platform === "win32" || process.platform === "linux") {
-      expect(
-        await browser.execute(() => {
-          const style = getComputedStyle(document.querySelector("[data-workspace-side-frame]")!);
-          return [style.borderTopRightRadius, style.borderBottomRightRadius];
-        }),
-      ).toEqual(process.platform === "win32" ? ["6px", "6px"] : ["12px", "12px"]);
-    }
     const drag = await browser.execute(() => {
       const frame = document
         .querySelector('[data-workspace-conversation-frame="true"]')!
@@ -460,32 +434,24 @@ describe("Side Pane Tab responsive interactions", () => {
         const left = document.querySelector('[data-workspace-conversation-frame="true"]')!;
         const right = document.querySelector('[data-workspace-side-frame="true"]')!;
         const terminal = document.querySelector('[data-workspace-terminal-frame="true"]')!;
+        const rail = document.querySelector('[data-testid="workspace-primary-navigation"]')!;
+        const sidebar = document.querySelector("#sidebar > aside")!;
         return [
           getComputedStyle(left).backgroundColor,
           getComputedStyle(right).backgroundColor,
           getComputedStyle(terminal).backgroundColor,
+          getComputedStyle(rail).backgroundColor,
+          getComputedStyle(sidebar).backgroundColor,
         ];
       });
       expect(colors[0]).toBe(colors[1]);
       expect(colors[0]).toBe(colors[2]);
       expect(colors[0]).not.toBe("rgba(0, 0, 0, 0)");
-      if (process.platform === "win32" || process.platform === "linux") {
-        expect(await $("[data-desktop-logo-badge] svg").getSize("width")).toBe(13);
-      }
-      const terminalTabStyle = await browser.execute(() => {
-        const tab = document.querySelector('#terminal [role="tab"][data-active]')!;
-        const content = tab.querySelector("[data-terminal-tab-content]")!;
-        return {
-          border: getComputedStyle(tab).borderColor,
-          mask: getComputedStyle(content).maskImage,
-          closePosition: getComputedStyle(tab.querySelector("button")!).position,
-          gap: getComputedStyle(tab.closest('[role="tablist"]')!).columnGap,
-        };
-      });
-      expect(terminalTabStyle.border).toBe("rgba(0, 0, 0, 0)");
-      expect(terminalTabStyle.mask).not.toBe("none");
-      expect(terminalTabStyle.closePosition).toBe("static");
-      expect(terminalTabStyle.gap).toBe("4px");
+      expect(colors[3]).toBe(colors[4]);
+      expect(await primaryNavigation.$("img").getSize("width")).toBe(22);
+      expect(Number((await sidebarToggle.$("img").getCSSProperty("opacity")).value)).toBe(1);
+      await expect($('#terminal [data-terminal-action="split-right"]')).toBeDisplayed();
+      expect(await $("#terminal [data-terminal-group]").isExisting()).toBe(false);
       await browser.saveScreenshot(
         join(
           process.env.ZCODE_E2E_ARTIFACT_DIR || process.cwd(),
@@ -515,16 +481,131 @@ describe("Side Pane Tab responsive interactions", () => {
       },
       { timeout: 5000, timeoutMsg: "关闭 Side Pane 后会话宽度未恢复" },
     );
-    const closedFrame = await browser.execute(() => {
-      const frame = document.querySelector('[data-workspace-conversation-frame="true"]')!;
-      return {
-        usesRadiusToken:
-          frame.classList.contains("rounded-md") || frame.classList.contains("rounded-l-md"),
-        leftRadius: getComputedStyle(frame).borderTopLeftRadius,
-      };
+    expect(
+      await $("[data-workspace-conversation-frame]").getCSSProperty("border-top-left-radius"),
+    ).toMatchObject({ value: "0px" });
+  });
+
+  it("TERM-GROUP splits, switches and keeps the original shell running", async () => {
+    const action = (name: string) => $(`#terminal [data-terminal-action="${name}"]`);
+    const groupHeadings = () => $$("#terminal [data-terminal-group] > button");
+    const readLayout = () =>
+      browser.execute(() => {
+        const panes = Array.from(
+          document.querySelectorAll<HTMLElement>("#terminal [data-terminal-pane]"),
+        )
+          .map((pane) => pane.getBoundingClientRect())
+          .filter((rect) => rect.width && rect.height);
+        return {
+          count: panes.length,
+          columns: new Set(panes.map((rect) => rect.left)).size,
+          rows: new Set(panes.map((rect) => rect.top)).size,
+          focused: Boolean(document.activeElement?.closest("[data-terminal-pane][data-active]")),
+        };
+      });
+    const expectLayout = async (columns: number, rows: number) => {
+      await browser.waitUntil(
+        async () => {
+          const layout = await readLayout();
+          return (
+            layout.count === columns * rows &&
+            layout.columns === columns &&
+            layout.rows === rows &&
+            layout.focused
+          );
+        },
+        { timeout: 15_000, timeoutMsg: `终端布局或输入焦点未切换到 ${columns} 列 × ${rows} 行` },
+      );
+    };
+
+    const selectedPane = () => $("#terminal [data-terminal-pane][data-active]");
+    const terminalToggle = $(`[data-testid="${TID_TERMINAL_TOGGLE}"]`);
+    if (await selectedPane().isDisplayed()) await terminalToggle.click();
+    await terminalToggle.click();
+    await expectLayout(1, 1);
+    expect(await $$("#terminal [data-terminal-action]").length).toBe(4);
+    await action("split-right").click();
+    await expectLayout(2, 1);
+    expect(await $$("#terminal [data-terminal-action]").length).toBe(4);
+    const active = await selectedPane().getAttribute("data-terminal-pane");
+    const marker = Date.now().toString(36);
+    await typeInBottomTerminal(
+      `node -e "setTimeout(()=>console.log(['GROUP','${marker}'].join('_')), 2000)"`,
+    );
+    await action("new-group").click();
+    await expectLayout(1, 1);
+    await action("split-down").click();
+    await expectLayout(1, 2);
+    expect(await groupHeadings().length).toBe(2);
+    const stackedSession = await selectedPane().getAttribute("data-terminal-pane");
+    await startDraftFromProject(DEFAULT_WORKSPACE);
+    await expect(selectedPane()).toHaveAttribute("data-terminal-pane", stackedSession!);
+    expect(await groupHeadings().length).toBe(2);
+    const selectedItem = $('#terminal [data-terminal-select][aria-pressed="true"]');
+    await expect(selectedItem.$("span=4")).toBeDisplayed();
+    await browser.waitUntil(async () => /(?:>|[$#%])\s*$/u.test(await bottomTerminalText()), {
+      timeout: 30_000,
+      timeoutMsg: "第二组终端的提示符未就绪",
     });
-    if (expectedPanelRadiusPx === 6) expect(closedFrame.usesRadiusToken).toBe(true);
-    expect(closedFrame.leftRadius).toBe(`${expectedPanelRadiusPx}px`);
+    await browser.saveScreenshot(
+      join(process.env.ZCODE_E2E_ARTIFACT_DIR || process.cwd(), "workspace-terminal-groups.png"),
+    );
+    await terminalToggle.click();
+    await expect(selectedPane()).not.toBeDisplayed();
+    await terminalToggle.click();
+    await expect(selectedPane()).toHaveAttribute("data-terminal-pane", stackedSession!);
+    // 新建任务可以继承当前项目。显式选择第二个项目才是在切换工作区。
+    const projectName = `E2E-Terminal-${marker}`;
+    const otherRoot = join(DEFAULT_WORKSPACE, ".zcode-e2e", projectName);
+    await mkdir(otherRoot, { recursive: true });
+    await $('[data-testid="project-section"]').moveTo();
+    await $('[data-testid="virtual-project-add"]').click();
+    await $('[data-testid="virtual-project-name"]').setValue(projectName);
+    await selectNativeProjectDirectories([otherRoot]);
+    await $('[data-testid="virtual-project-save"]').click();
+    await $('[data-testid="project-folder-trust-confirm"]').click();
+    await startDraftFromProject(otherRoot);
+    await browser.waitUntil(
+      async () =>
+        (await selectedPane().isDisplayed()) &&
+        (await selectedPane().getAttribute("data-terminal-pane")) !== stackedSession &&
+        (await groupHeadings().length) === 0,
+      { timeout: 15_000, timeoutMsg: "另一工作区未显示独立终端" },
+    );
+    await startDraftFromProject(DEFAULT_WORKSPACE);
+    await expect(selectedPane()).toHaveAttribute("data-terminal-pane", stackedSession!);
+    await groupHeadings()[0]!.click();
+    await expectLayout(2, 1);
+    await $(`#terminal [data-terminal-select="${active}"]`).click();
+    await expectLayout(2, 1);
+    await browser.waitUntil(async () => (await bottomTerminalText()).includes(`GROUP_${marker}`), {
+      timeout: 15_000,
+      timeoutMsg: "切回分组后未看到原 PTY 的延迟输出",
+    });
+    await action("split-down").click();
+    await expectLayout(1, 3);
+    await action("split-right").click();
+    await expectLayout(4, 1);
+    expect(await action("split-right").isEnabled()).toBe(false);
+    expect(await action("split-down").isEnabled()).toBe(false);
+    await action("new-group").click();
+    await expectLayout(1, 1);
+    expect(await groupHeadings().length).toBe(3);
+    await typeInBottomTerminal("exit");
+    await expectLayout(1, 2);
+    expect(await groupHeadings().length).toBe(2);
+    for (let remaining = 6; remaining > 0; remaining--) {
+      await action("close-session").click();
+      await browser.waitUntil(
+        async () =>
+          (await browser.execute(
+            () =>
+              document.querySelectorAll("#terminal [data-terminal-select]").length ||
+              document.querySelectorAll("#terminal [data-terminal-pane][data-active]").length,
+          )) ===
+          remaining - 1,
+      );
+    }
   });
 
   it("TERM-TAB-05 closes the sole terminal session and creates a fresh one on reopen", async () => {
@@ -538,8 +619,9 @@ describe("Side Pane Tab responsive interactions", () => {
         async () =>
           browser.execute(() =>
             Boolean(
-              document.querySelector<HTMLElement>("#terminal .xterm")?.getBoundingClientRect()
-                .height,
+              document
+                .querySelector<HTMLElement>("#terminal [data-terminal-pane][data-active] .xterm")
+                ?.getBoundingClientRect().height,
             ),
           ),
         { timeout: 15_000, timeoutMsg: "唯一终端没有打开" },
@@ -560,21 +642,14 @@ describe("Side Pane Tab responsive interactions", () => {
       );
       expect(
         await browser.execute((marker) => {
-          const terminal = document.querySelector<HTMLElement>("#terminal .xterm");
+          const terminal = document.querySelector<HTMLElement>(
+            "#terminal [data-terminal-pane][data-active] .xterm",
+          );
           terminal?.setAttribute("data-terminal-e2e-marker", marker);
           return Boolean(terminal);
         }, originalTerminalMarker),
       ).toBe(true);
-      expect(
-        await browser.execute(() => {
-          const activeTab = document.querySelector<HTMLElement>(
-            '#terminal [role="tab"][data-active]',
-          );
-          const close = activeTab?.querySelector<HTMLButtonElement>("button");
-          close?.click();
-          return Boolean(close);
-        }),
-      ).toBe(true);
+      await $('#terminal [data-terminal-action="close-session"]').click();
 
       await browser.waitUntil(
         async () =>
@@ -604,7 +679,9 @@ describe("Side Pane Tab responsive interactions", () => {
       await browser.waitUntil(
         async () =>
           browser.execute((marker) => {
-            const terminal = document.querySelector<HTMLElement>("#terminal .xterm");
+            const terminal = document.querySelector<HTMLElement>(
+              "#terminal [data-terminal-pane][data-active] .xterm",
+            );
             return Boolean(
               terminal &&
               terminal.getAttribute("data-terminal-e2e-marker") !== marker &&
@@ -628,6 +705,67 @@ describe("Side Pane Tab responsive interactions", () => {
         }
       }
     }
+  });
+
+  it("TERM-NAV hides the bottom terminal across menus and restores the same shell and input", async () => {
+    const navEntry = (id: string) => $(`${PRIMARY_NAVIGATION_SELECTOR} [data-testid="${id}"]`);
+    const project = navEntry("workspace-primary-chat");
+    const activePane = $("#terminal [data-terminal-pane][data-active]");
+    const resizeHandle = $("[data-workspace-terminal-resize-handle]");
+    const readShellPid = async (label: string) => {
+      const pidVariable = process.platform === "win32" ? "$PID" : "$$";
+      await typeInBottomTerminal(`echo "${label}:${pidVariable}"`);
+      let pid: string | undefined;
+      await browser.waitUntil(
+        async () => {
+          pid = (await bottomTerminalText()).match(new RegExp(`^${label}:(\\d+)$`, "mu"))?.[1];
+          return pid !== undefined;
+        },
+        { timeout: 15_000, timeoutMsg: `终端未输出 shell 进程号（${label}）` },
+      );
+      return pid;
+    };
+
+    await $(`[data-testid="${TID_TERMINAL_TOGGLE}"]`).click();
+    await expect(activePane).toBeDisplayed();
+    const terminalId = await activePane.getAttribute("data-terminal-pane");
+    const initialPid = await readShellPid("nav-before");
+    const pendingCommand = "echo zcode-nav-pending";
+    await typeInBottomTerminal(pendingCommand, false);
+    await browser.waitUntil(async () => (await bottomTerminalText()).includes(pendingCommand));
+
+    for (const id of [
+      "workspace-primary-environment",
+      "automations-open",
+      "plugin-store-sidebar-open",
+    ]) {
+      const entry = navEntry(id);
+      await entry.click();
+      await expect(entry).toHaveAttribute("aria-pressed", "true");
+      await expect(resizeHandle).not.toExist();
+      await browser.waitUntil(
+        () =>
+          browser.execute(
+            () => (document.querySelector("#terminal")?.getBoundingClientRect().height ?? 0) <= 1,
+          ),
+        { timeout: 5_000, timeoutMsg: `切到 ${id} 后底部终端仍占空间` },
+      );
+      await project.click();
+      await expect(activePane).toBeDisplayed();
+      await expect(activePane).toHaveAttribute("data-terminal-pane", terminalId!);
+      await browser.waitUntil(async () => {
+        const text = await bottomTerminalText();
+        return text.includes(`nav-before:${initialPid}`) && text.includes(pendingCommand);
+      });
+    }
+
+    await activePane.$(".xterm-rows").click();
+    await browser.keys("Enter");
+    await browser.waitUntil(async () =>
+      (await bottomTerminalText()).split("\n").includes("zcode-nav-pending"),
+    );
+    expect(await readShellPid("nav-after")).toBe(initialPid);
+    await $('#terminal [data-terminal-action="close-session"]').click();
   });
 
   it("SPT-E2E-001 keeps one tab at 156px and the add button beside it", async () => {
@@ -864,6 +1002,7 @@ describe("Side Pane Tab responsive interactions", () => {
       return;
     }
     if (process.platform === "win32" || process.platform === "linux") {
+      await ensureSidePaneExpanded();
       const maximize = await $('[data-testid="window-control-maximize"]');
       const normalBounds = await browser.electron.execute((electron) =>
         electron.BrowserWindow.getAllWindows()[0]!.getBounds(),
@@ -875,31 +1014,10 @@ describe("Side Pane Tab responsive interactions", () => {
       );
       expect(await maximize.$("svg.lucide-window-restore").isExisting()).toBe(true);
       try {
-        await browser.waitUntil(
-          async () =>
-            browser.execute(() => {
-              const style = getComputedStyle(
-                document.querySelector("[data-workspace-side-frame]")!,
-              );
-              return (
-                [
-                  style.borderTopLeftRadius,
-                  style.borderTopRightRadius,
-                  style.borderBottomLeftRadius,
-                  style.borderBottomRightRadius,
-                  // 修复原因：2026-10 起 Windows 面板圆角改用设计 token rounded-md（6px），
-                  // 旧断言沿用 09-04 的 5px 规则；以 workspace-independent-panels 规格为准。
-                ].every((value) => value === "6px") &&
-                [
-                  style.borderTopWidth,
-                  style.borderRightWidth,
-                  style.borderBottomWidth,
-                  style.borderLeftWidth,
-                ].every((value) => value === "1px")
-              );
-            }),
-          { timeout: 5000, timeoutMsg: "最大化后的 Side Pane 必须保持四角 6px 和完整边框" },
-        );
+        await browser.waitUntil(hasSidePaneDividerOnly, {
+          timeout: 5000,
+          timeoutMsg: "最大化后的 Side Pane 应保留左侧分隔线",
+        });
       } finally {
         await maximize.click();
         await browser.waitUntil(
@@ -909,11 +1027,8 @@ describe("Side Pane Tab responsive interactions", () => {
           const bounds = await browser.electron.execute((electron) =>
             electron.BrowserWindow.getAllWindows()[0]!.getBounds(),
           );
-          return (
-            bounds.width === normalBounds.width &&
-            bounds.height === normalBounds.height &&
-            Math.abs((await readIndependentPanelMetrics())!.gap - 3) < 1
-          );
+          // 窗口恢复时较窄的对话区可能按产品规则自动收起 Side Pane。
+          return bounds.width === normalBounds.width && bounds.height === normalBounds.height;
         });
       }
     }
@@ -1360,5 +1475,25 @@ async function readIndependentPanelMetrics() {
       leftRadius: getComputedStyle(left).borderTopLeftRadius,
       rightRadius: getComputedStyle(right).borderTopLeftRadius,
     };
+  });
+}
+
+async function hasSidePaneDividerOnly() {
+  return browser.execute(() => {
+    const pane = document.querySelector("[data-workspace-side-frame]");
+    if (!pane) return false;
+    const style = getComputedStyle(pane);
+    return (
+      parseFloat(style.borderLeftWidth) > 0 &&
+      [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth].every(
+        (value) => value === "0px",
+      ) &&
+      [
+        style.borderTopLeftRadius,
+        style.borderTopRightRadius,
+        style.borderBottomLeftRadius,
+        style.borderBottomRightRadius,
+      ].every((value) => value === "0px")
+    );
   });
 }

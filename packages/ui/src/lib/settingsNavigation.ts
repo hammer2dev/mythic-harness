@@ -100,6 +100,11 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
   );
 }
 
+/** These pages retain scoped entry points and belong to the plugin market in regular navigation. */
+export function isPluginMarketSettingsSection(section: SettingsSectionId): boolean {
+  return section === "plugin" || section === "mcp" || section === "skill";
+}
+
 export function isSettingsSectionEnabled(section: SettingsSectionId): boolean {
   return !HIDDEN_SETTINGS_SECTIONS.has(section);
 }
@@ -138,22 +143,12 @@ export function readLastSettingsSectionPreference(
 
   try {
     const raw = storage.getItem(SETTINGS_LAST_SECTION_STORAGE_KEY);
-    // 旧 section id 已并入 plugin；迁移持久化值，避免继续传播历史路由语义。
-    if (raw === "plugins") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "plugin");
-      setPendingPluginTab("plugins");
-      return "plugin";
-    }
-    if (raw === "skills") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "skill");
-      return "skill";
-    }
     // 旧版“代码预览”已并入“外观”，保留用户上次停留位置的迁移语义。
     if (raw === "codePreview") {
       storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "appearance");
       return "appearance";
     }
-    if (raw && isSettingsSectionId(raw)) {
+    if (raw && isSettingsSectionId(raw) && !isPluginMarketSettingsSection(raw)) {
       return resolveSettingsSection(raw, fallbackSection);
     }
     if (raw !== null) {
@@ -169,6 +164,7 @@ export function readLastSettingsSectionPreference(
 }
 
 export function writeLastSettingsSectionPreference(section: SettingsSectionId): void {
+  if (isPluginMarketSettingsSection(section)) return;
   const resolvedSection = resolveSettingsSection(section);
   const storage = getLocalStorage();
   if (!storage) {
@@ -186,8 +182,13 @@ export function writeLastSettingsSectionPreference(section: SettingsSectionId): 
 
 export function consumeInitialSettingsSection(
   fallbackSection: SettingsSectionId = "general",
+  { includeModelGatewayPreference = true } = {},
 ): SettingsSectionId {
-  const lastSection = readLastSettingsSectionPreference(fallbackSection);
+  const savedSection = readLastSettingsSectionPreference(fallbackSection);
+  const lastSection =
+    !includeModelGatewayPreference && (savedSection === "modelProvider" || savedSection === "usage")
+      ? fallbackSection
+      : savedSection;
   // 普通打开设置页以前把 consumePendingSettingsSection 的 fallback 写死为
   // modelProvider，导致没有显式跳转意图时也总进“模型供应商”。这里先读上次停留分区，
   // 再让 quickpick / 管理模型这类一次性意图覆盖它，保留显式入口的直达语义。

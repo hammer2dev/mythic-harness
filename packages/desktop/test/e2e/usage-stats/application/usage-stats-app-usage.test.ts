@@ -1,9 +1,4 @@
-import {
-  TID_SETTINGS_SECTION_NAV,
-  TID_SETTINGS_USAGE_TAB,
-  TID_TASK_SETTINGS_BUTTON,
-  testId,
-} from "@zcode/shared/test-ids";
+import { TID_SETTINGS_SECTION_NAV, testId } from "@zcode/shared/test-ids";
 import {
   clearAppData,
   clickTestIdByDom,
@@ -62,17 +57,13 @@ describe("Usage Stats App Usage E2E", () => {
 
 async function openAppUsage(): Promise<void> {
   await waitForDefaultWorkspaceReady(60_000);
-  await clickTestIdByDom(TID_TASK_SETTINGS_BUTTON, {
+  await clickTestIdByDom("workspace-primary-environment", {
     timeout: 20_000,
-    timeoutMsg: "App Usage E2E 无法打开设置页",
+    timeoutMsg: "App Usage E2E 无法打开环境菜单",
   });
   await clickTestIdByDom(testId(TID_SETTINGS_SECTION_NAV, "usage"), {
     timeout: 20_000,
-    timeoutMsg: "设置页 Usage 分区没有出现",
-  });
-  await clickTestIdByDom(testId(TID_SETTINGS_USAGE_TAB, "app"), {
-    timeout: 20_000,
-    timeoutMsg: "App Usage tab 没有出现",
+    timeoutMsg: "环境菜单没有出现使用统计入口",
   });
   await browser.waitUntil(
     async () => /Token activity|Token 活动/i.test(await $("body").getText()),

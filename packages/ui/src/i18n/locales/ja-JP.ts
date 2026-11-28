@@ -7387,9 +7387,9 @@ const jaJP: Record<string, string> = {
   "chat.error.feedback": "問題を報告",
   "chat.error.feedbackOpened": "エラーのコンテキストを添付してフィードバックを開きました",
   "chat.error.noAvailableModel":
-    "利用可能なモデルがありません。アップグレードするか、カスタムモデルを設定してください。",
+    "利用できるモデルがありません。モデルゲートウェイでモデルを追加してください。",
   "chat.error.remoteNoAvailableModel":
-    "このリモートデバイスにはまだ利用可能なモデルがありません。まずこのコンピューターでモデルを構成してください。保存後、リモートデバイスに自動的に同期されます。",
+    "このリモートワークスペースには利用できるモデルがありません。モデルゲートウェイでモデルを追加してください。",
   "chat.error.sendFailed": "送信に失敗しました。しばらくしてからもう一度お試しください。",
   "chat.error.modelSettings": "モデル設定",
   "chat.error.setModels": "設定",

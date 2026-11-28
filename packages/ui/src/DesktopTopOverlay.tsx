@@ -1,17 +1,10 @@
 import { SidebarTooltipProvider } from "@/ControlHintTooltip.js";
 import type { IPlatformService, UpdateStatePayload } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  MessageCirclePlus,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, MessageCirclePlus } from "lucide-react";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { UpdateStatusButton } from "@/UpdateStatusButton.js";
 import { DesktopTopOverlayActionButton } from "@/DesktopTopOverlayActionButton.js";
-import { ZCodeStartupLogoBadge } from "@/root/RootStartupLoading.js";
 import {
   createWindowsCaptionControlsStyle,
   WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
@@ -23,12 +16,12 @@ interface DesktopTopOverlayProps {
   isMacFullscreen?: boolean;
   isWindowsDesktop?: boolean;
   isDesktop?: boolean;
-  macWindowControlsLeftPaddingPx?: number;
+  macWindowControlsLeftPaddingPx: number;
   windowsWindowControlsRightPaddingPx?: number;
+  primaryNavigationWidthPx: number;
   isSidebarVisible: boolean;
   updateReadyVersion: string | null;
   updateState: UpdateStatePayload | null;
-  toggleSidebarShortcutLabel: string;
   newTaskShortcutLabel: string;
   goBackShortcutLabel: string;
   goForwardShortcutLabel: string;
@@ -37,9 +30,7 @@ interface DesktopTopOverlayProps {
   canGoBack: boolean;
   canGoForward: boolean;
   showNewTaskButton?: boolean;
-  appLogoUrl: string;
   platform: IPlatformService;
-  onToggleSidebar: () => void;
   onCreateTask: () => void;
   onGoBack: () => void;
   onGoForward: () => void;
@@ -55,10 +46,10 @@ export function DesktopTopOverlay({
   isDesktop,
   macWindowControlsLeftPaddingPx,
   windowsWindowControlsRightPaddingPx,
+  primaryNavigationWidthPx,
   isSidebarVisible,
   updateReadyVersion,
   updateState,
-  toggleSidebarShortcutLabel,
   newTaskShortcutLabel,
   goBackShortcutLabel,
   goForwardShortcutLabel,
@@ -67,9 +58,7 @@ export function DesktopTopOverlay({
   canGoBack: _canGoBack,
   canGoForward: _canGoForward,
   showNewTaskButton,
-  appLogoUrl: _appLogoUrl,
   platform,
-  onToggleSidebar,
   onCreateTask,
   onGoBack,
   onGoForward,
@@ -77,51 +66,44 @@ export function DesktopTopOverlay({
   newTaskDisabledReason,
 }: DesktopTopOverlayProps) {
   const { intl } = useZCodeIntl();
-  const SidebarToggleIcon = isSidebarVisible ? PanelLeftClose : PanelLeftOpen;
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesCustomCaptionArea = isWindowsDesktop || isLinuxDesktop;
-  const toggleSidebarTitle = intl.formatMessage({
-    id: "workspaceSidebar.toggleSidebar",
-  });
   const newTaskTitle = intl.formatMessage({ id: "sidebar.newTask" });
   const taskBackTitle = intl.formatMessage({ id: "taskNav.back" });
   const taskForwardTitle = intl.formatMessage({ id: "taskNav.forward" });
   const isNewTaskButtonVisible = showNewTaskButton ?? !isSidebarVisible;
-  const macTopOverlayPaddingStyle =
-    isMacDesktop && !isMacFullscreen && Number.isFinite(macWindowControlsLeftPaddingPx)
-      ? { paddingLeft: `${Math.round(macWindowControlsLeftPaddingPx ?? 96)}px` }
-      : undefined;
+  const topOverlayLeftPx =
+    isMacDesktop && !isMacFullscreen
+      ? Math.max(primaryNavigationWidthPx, macWindowControlsLeftPaddingPx)
+      : primaryNavigationWidthPx;
   const windowsTopOverlayPaddingStyle = isWindowsDesktop
     ? {
         ...createWindowsCaptionControlsStyle(windowsWindowControlsRightPaddingPx),
         paddingRight: WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
       }
     : undefined;
-  const topOverlayWidthStyle = isSidebarVisible
-    ? { width: "var(--workspace-sidebar-panel-width)" }
-    : undefined;
 
   return (
     <SidebarTooltipProvider>
       <div
-        style={topOverlayWidthStyle}
+        style={{
+          left: topOverlayLeftPx,
+          width: isSidebarVisible ? "var(--workspace-sidebar-panel-width)" : undefined,
+        }}
         className={cn(
-          "@container/topoverlayer pointer-events-none absolute h-14 flex left-0 top-0 z-20 w-fit",
-          // 工具组计入各平台顶部留白和 1px 边框，与 Header 中心线对齐。
-          usesCustomCaptionArea && "mt-px",
+          "@container/topoverlayer pointer-events-none absolute top-0 z-20 flex h-14 w-fit",
+          // 与贴边工作区的 Header 中心线对齐。
+          usesCustomCaptionArea && primaryNavigationWidthPx === 0 && "mt-px",
           isWindowsDesktop ? "top-1.5" : isLinuxDesktop && "top-1",
         )}
       >
         <div
-          style={{
-            ...macTopOverlayPaddingStyle,
-            ...windowsTopOverlayPaddingStyle,
-          }}
+          style={windowsTopOverlayPaddingStyle}
           className={cn(
             "flex items-center",
             isMacDesktop && "h-14",
             usesCustomCaptionArea && "h-12",
-            // Windows/Linux 工具组计入 4px 外沿留白和 1px 边框，较 8px 左边距右移 5px。
+            // Windows/Linux 工具组从一级导航右沿起，使用与 Header 对齐的 13px 留白。
             usesCustomCaptionArea && "pl-3 ml-px",
             isMacDesktop &&
               (isMacFullscreen ? (!isSidebarVisible ? "pl-5 pt-1" : "pl-3 pt-1") : "pt-1"),
@@ -135,37 +117,6 @@ export function DesktopTopOverlay({
               "pointer-events-auto flex items-center gap-1 shrink-0 [app-region:no-drag]",
             )}
           >
-            {usesCustomCaptionArea && (
-              <DesktopTopOverlayActionButton
-                title={toggleSidebarTitle}
-                shortcut={toggleSidebarShortcutLabel}
-                ariaLabel={toggleSidebarTitle}
-                testId="desktop-top-logo-sidebar-toggle"
-                buttonClassName="group relative overflow-hidden rounded-lg"
-                onClick={onToggleSidebar}
-              >
-                <span
-                  aria-hidden="true"
-                  data-desktop-logo-visual
-                  className="flex size-5 items-center justify-center transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
-                >
-                  <ZCodeStartupLogoBadge size="titlebar" animated={false} />
-                </span>
-                <SidebarToggleIcon className="absolute inset-0 m-auto size-4 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100" />
-              </DesktopTopOverlayActionButton>
-            )}
-
-            {isMacDesktop && (
-              <DesktopTopOverlayActionButton
-                title={toggleSidebarTitle}
-                shortcut={toggleSidebarShortcutLabel}
-                ariaLabel={toggleSidebarTitle}
-                onClick={onToggleSidebar}
-              >
-                <SidebarToggleIcon className="size-4" />
-              </DesktopTopOverlayActionButton>
-            )}
-
             {/* 远程控制移动端左上角空间有限，任务前进/后退在这里会与主操作拥挤重叠。*/}
             {hideTaskNavigationButtons ? null : (
               <>

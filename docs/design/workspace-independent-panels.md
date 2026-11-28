@@ -1,20 +1,32 @@
 # 工作区独立面板布局
 
+## Mythic Harness 桌面工作区
+
+下方的独立圆角面板描述为原方案。当前桌面工作区使用贴边布局，会话、Side Pane 和终端使用同一背景并移除外框。任务栏和设置页的二级菜单与一级导航采用同一侧栏底色。任务栏右缘、Side Pane 左缘和终端上缘各保留一条分隔线。相邻区域的拖动热区、窗口按钮和已有内容组件沿用原规则。
+
+一级导航内的 Logo 兼作二级栏开关，悬停和键盘聚焦时显示对应图标。顶部前进、后退、新建和更新从一级导航右侧排列。桌面偏好入口集中在设置和环境，工作区与设置栏底部不显示快捷偏好菜单。
+
+二级栏在顶部工具区下方显示当前一级入口的名称，沿用一级导航的本地化文案。项目标题位于「新建任务」上方。桌面切换设置和环境时同步更新标题，窄栏的图标导航通过辅助技术提供标题。
+
+桌面设置页和环境的内容区在普通、窄窗和最大化状态下都贴合窗口，侧栏与正文之间保留一条竖分隔线。顶部拖拽区和正文共用底色，沿用原有拖拽范围和窗控位置。
+
+桌面「环境」二级栏按顺序显示 Agent应用、账号管理、模型设置、使用统计，采用工作区侧栏宽度，默认 264px。模型设置和使用统计在宽度小于 640px 时采用 68px 图标栏。四页都高亮「环境」与当前二级入口。旧模型网关一级入口并入「环境」，模型设置和使用统计复用原页面与快捷跳转，其中套餐入口直达对应统计页签。Web 和远控网页沿用原模型网关及返回工作区入口。
+
 ## 目标
 
 桌面和宽屏 Web 保持侧栏，将原本共用外框的会话与 Side Pane 拆成独立面板；窗口根背景、侧栏保持原语义。
 
-Workspace layout 的平台圆角：Windows 为 `rounded-md`（默认 6px），macOS Sequoia 及更早版本为 6px，Tahoe 26+ 为 12px，未知 macOS 版本暂用 6px；Linux 和 Web 为 `xl`（12px）。Windows 设置页同步使用 6px。
+原工作区独立面板的圆角为 Windows 6px，macOS Sequoia 及更早版本 6px，Tahoe 26+ 为 12px，未知 macOS 版本 6px，Linux 和 Web 为 12px。
 
 SPT-E2E-000 的圆角 token 验收区分 Side Pane 状态：展开时仅检查 Side Pane 外框的 `rounded-md` / `rounded-l-md`，会话外框通过 `--workspace-panel-radius` 保持独立面板圆角；收起后再检查会话外框的 chrome token。两种状态均检查实际计算圆角，避免把展开状态的动态变量误判为缺少 token。
 
 ## 平台外沿尺寸（2026-10-09，取代下文历史尺寸）
 
 - Windows 工作区右侧、底部、顶部额外间隔和 Sidebar 收起后的左留白均为 6px；Linux 均保留 4px，主面板圆角保留 12px。
-- Windows 设置页同步右侧、底部和顶部 6px 留白与 6px 圆角；导航与内容相接的左侧不增加间距。macOS、Web、手机保持现有规则。
+- 原 Windows 设置页使用 6px 外沿留白和圆角。当前桌面内容区采用本文开头的贴边布局。
 - 新任务、会话、插件、Automations 复用共享工作区边界，终端和 Side Pane 同步圆角；对话与 Side Pane 之间为 3px 拖动热区，Sidebar 和 Terminal 保留 4px。
 - 拖动指示线保留 2px、foreground-subtlest/50、沿边延伸及现有显隐规则。Sidebar 指示线端点按平台外沿留白加圆角内缩，Windows 为 12px，Linux 为 16px。
-- SPT-E2E-000 验证平台尺寸、收起左留白和拖动，UP-00 验证设置页；平台函数单测覆盖 Linux、Windows 能力未知、普通和最大化窗口。
+- SPT-E2E-000 验证平台尺寸、收起左留白和拖动。UP-00 验证设置页窗控位置，UP-03 验证窄窗和最大化时的贴边、滚动和窗控。
 
 macOS 版本必须通过 `IPlatformService.getDesktopWindowChromeState` 查询并订阅窗口状态事件，再由 `useAppChromeState` 传入工作区圆角计算。此前 hook 排除了 macOS，导致所有 macOS 都走未知版本的 6px 分支；桌面各平台共用已有查询/事件 revision 防覆盖机制，Web 不查询桌面状态。回归测试须运行真实 hook，验证异步查询后的 Sequoia/Tahoe 圆角及订阅清理，不能只给半径函数注入版本。
 
@@ -39,6 +51,8 @@ Window / Sidebar / transparent body layout
 
 - 保留 `workspace-body-layout`、`conversation-column`、`browser` 和会话/终端的现有持久化 key、最小宽度、拖动和显式关闭边界。Side Pane 不因开关或主视图切换卸载，Browser Guest 截图承载保持原路径。
 - Windows/Linux 窗控属于最右侧 Header 的内联操作组：Side Pane 关闭时由 WorkspaceHeader 承载，打开时由 Side Header/空态顶部承载；不保留独立悬浮层和原生窗控占位。
+- 定时任务、工作流和插件市场共用工作区页面顶栏。Windows/Linux 由该顶栏右侧显示最小化、最大化或还原、关闭按钮。依次切换这三个菜单并返回项目时，右上角始终只有一组窗控。
+- 桌面二级侧栏的「项目」「定时任务」「工作流」「插件市场」「环境」和「设置」共用标题样式与起点。环境、插件市场「发现资源」、定时任务和工作流的内容页头复用同一布局。内容从窗控栏下方起排。窄窗顶部留白 6px、左右留白 16px，`md` 起顶部留白 10px、左右留白 24px。标题和正文一起在右侧内容区水平居中，各页保留正文宽度上限。主标题和正文左边线对齐。二级侧栏可见时，左侧模块标题与右侧页面标题使用同一字号、行高和字重，文字顶边对齐。两边用默认 20px 半粗字和 28px 行高，跟随应用字号设置。市场的刷新、市场源、添加位于标题行右侧，空间不足时换行；来源切换和搜索位于正文第一行。
 - 桌面 Side Pane 标签栏的空白区域支持拖动窗口；标签与按钮排除窗口拖拽，保留标签排序、切换、关闭和菜单操作。Web 与手机覆盖面板不启用窗口拖拽区域。
 - 收起时，WorkspaceHeader 显示展开按钮；展开时该按钮移至 Side Header 右侧，空态也保留同一收起入口。复用现有开关与快捷键，手机覆盖面板继续使用抽屉关闭入口。
 - Side Header 标签总览、新增标签按钮和 tab item 统一使用 ghost 风格。Tab 默认与头部背景一致，hover 使用 `bg-hover`、选中使用 `bg-selected`，均不显示 outline 边框；关闭按钮绝对定位，不占标题空间、不叠加背景遮罩，拖动预览也不显示边框，保留键盘焦点提示。
@@ -65,7 +79,7 @@ Sidebar、Side Pane 和底部终端统一使用 `resize-handle` token：浅色�
 
 ## Linux 对齐 Windows（2026-09-04）
 
-本节取代下文历史记录中 Linux 保持旧布局的约定。Linux 桌面使用与 Windows 相同的 4px 外层留白、四角 5px 完整边框、顶部工具组左侧 13px 和顶部 5px 偏移、Header 两侧 8px padding。普通和最大化窗口一致，Linux 不套用 Windows 10 原生外角例外。
+本节取代下文历史记录中 Linux 保持旧布局的约定。Linux 桌面使用 4px 外层留白、12px 圆角和完整边框、顶部工具组距一级栏右沿 13px 和顶部 5px 偏移、Header 两侧 8px padding。普通和最大化窗口一致，Linux 不套用 Windows 10 原生外角例外。
 
 Windows/Linux 复用同一内联窗控组件，28px 按钮、16px 图标、2px 间距，关闭 hover 为 destructive；收起时跟随 WorkspaceHeader 的 Side Pane 开关，展开时跟随 Side Header（含空态）。删除 Linux 旧悬浮窗控与 120px 占位，WorkspaceHeader 使用常规帮助入口，不保留独立下箭头。设置页窗控与 Windows 一样跟随菜单组。macOS、Web、手机布局不变；Linux 已有 frameless 和 DesktopCommand/状态事件继续复用。
 
@@ -75,10 +89,10 @@ Windows/Linux 复用同一内联窗控组件，28px 按钮、16px 图标、2px �
 
 - macOS Sequoia（15）及更早版本的工作区面板使用 6px 圆角；Tahoe（26）及更高版本使用 12px。版本未知先使用 6px。会话、Side Pane、底部 Terminal 共用该版本选择。Windows、Linux、Web 的现有半径不变。
 
-- 设置页主内容面板在 Windows 使用 5px 圆角，与 Windows 主工作区一致；macOS 和 Linux 暂时保持既有 12px。圆角仅作用于有 4px 外层留白的内容面板，不改变窗口原生外沿。
-- 设置页 Sidebar 比原尺寸增加 4px：紧凑宽度 68px，桌面宽度 268px。Sidebar 与主内容不额外增加间距，内容框左侧保持原有连接方式。
+- 原独立面板方案的设置内容区使用圆角和外层留白。桌面设置的现行验收以本文开头的贴边布局为准。
+- 桌面展开的设置二级栏读取工作区已保存的侧栏宽度，默认 264px，上限为窗口宽度的一半。紧凑布局显示 68px 图标栏，手机 Web 使用横向导航。侧栏与内容直接相接。
 
-- 设置页在 Windows/Linux 移除独立 caption 下箭头，复用 macOS 的问号帮助入口；问号与内联窗控组成同一右侧操作组，窗控行为、关闭 hover 和 8px 右边距保持不变。macOS 继续使用原生窗控，Web 继续只显示问号。
+- Windows/Linux 设置页把问号菜单和窗控放在右上角。macOS 使用原生窗控。问号菜单提供桌面工具，仅在桌面端显示。
 
 - 设置页主内容框在 macOS、Windows、Linux 桌面统一使用 4px 外层 padding：保留左侧导航相邻边的既有 0px 间距，并以 4px 顶部拖拽留白承接内容面板；Web 不增加桌面外框留白。此项只统一大结构边距，不改变设置内容区自身 padding。
 
@@ -91,17 +105,17 @@ Windows/Linux 复用同一内联窗控组件，28px 按钮、16px 图标、2px �
 
 - Windows Header 的终端/Side Pane 按钮采用与 macOS 相同的紧凑样式，不使用 Windows caption 的 48px 整高点击背景和零间距；系统最小化/最大化/关闭按钮预留仍独立保留。
 
-- Windows 左侧顶部工具组使用 12px 水平 padding 加 1px 左 margin，实际左边距 13px，较原来右移 5px；纵向对齐与 Linux/macOS 定位不变。
+- Windows 左侧顶部工具组使用 12px 水平 padding 加 1px 左 margin，距一级导航栏右沿 13px。二级栏开关在组内首位，始终显示当前可执行的收起或展开图标。macOS 窗口态继续避开原生窗控。
 
-- Windows 左侧顶部工具组整体偏移 4px 外层留白 + 1px 面板边框，与主工作区 48px Header 中心线对齐；侧栏展开/收起均适用，macOS/Linux/Web 原有定位不变。
+- Windows 左侧顶部工具组计入 6px 外层留白和 1px 定位补偿，与主工作区 48px Header 中心线对齐，侧栏展开和收起均适用。
 
 - 移除 Windows Header 独立下箭头后，操作区恢复共享 `p-2`，右侧 padding 为 8px；不再保留为旧 caption 菜单设置的 `pr-0`。系统窗口按钮区域的预留独立保留。
 
 - Windows WorkspaceHeader 与 macOS 共用常规操作区，移除终端右侧独立的 caption 下箭头菜单及分隔占位；保留标准帮助入口、系统窗口按钮预留。Linux 和设置页的菜单入口不变。
 
-- Windows 普通窗口和最大化窗口的会话、终端、Side Pane 统一使用 `rounded-md`（6px）布局圆角和完整 1px 边框：面板有外层留白（尺寸以本文开头的平台规则为准），不再直接承担系统窗口外沿。能力未知时采用相同默认值；Windows 10 既有外侧直角规则暂保留，macOS 按版本使用 Sequoia 6px / Tahoe 12px。
+- Windows 普通窗口和最大化窗口的会话、终端、Side Pane 默认使用 `rounded-md`（6px）布局圆角和完整边框。会话与 Side Pane 的边框声明为 0.5px，终端为 1px。Windows 10 保留外侧直角，macOS 按版本使用 Sequoia 6px / Tahoe 12px。
 
-- Windows 与 macOS 主工作区统一保留顶部、右侧、底部 4px 外层 padding；侧栏收起后左侧同样保留 4px。侧栏拖拽线端点同步计入这层留白。Linux、Web 和手机布局保持原有规则，Windows caption 控制区仍按原规则预留。
+- 主工作区顶部、右侧、底部和二级栏收起后的左侧外层留白，Windows 为 6px，macOS 和 Linux 为 4px。侧栏拖拽线端点同步计入这层留白。Windows caption 控制区仍按原规则预留。
 
 - 展开 Side Pane：Header 属于会话面板，两面板独立圆角与背景；顶部/底部差 <= 1px，面板间距 3px。
 - 关闭 Side Pane：左面板恢复原宽度；反复展开不丢失 tab、终端内容或会话。
@@ -175,7 +189,7 @@ Windows/Linux 复用同一内联窗控组件，28px 按钮、16px 图标、2px �
 
 - 2026-09-10 MR !2586 CR-01：修复 macOS 窗口状态查询被 hook 守卫跳过。新增两条真实 hook 回归先失败后通过；26 项相关单测、typecheck、lint（44 个既有警告、0 错误）通过。Windows Electron SPT-E2E-000 通过，运行 ID desktop-e2e-20260910-040930-907。macOS 原生视觉与手机实机未验证。
 
-- Workspace Sidebar 底部 footer 左内边距保持 16px（`pl-4`），右内边距为 12px（`pr-3`）；上下内边距不变。此覆盖仅由 Workspace 调用方传入，Settings 复用的 footer 保持默认左右 16px（`px-4`）。
+- 工作区任务栏底部活动提示区保留左 16px、右 12px 内边距，空态不占位。设置页通过现有各节提供偏好调整。
 
 2026-10-09 圆角补正：Windows 工作区及设置页统一为 6px，保留 6px 外沿留白，Sidebar 指示线端点为 12px。50 项相关单测通过；Windows SPT-E2E-000 run desktop-e2e-20261009071323579-p14952-58feeab7544382d9 和 UP-00 run desktop-e2e-20261009071448683-p19548-4169d17082d86dfb 均通过。typecheck、typecheck:e2e、lint 和架构检查通过。
 

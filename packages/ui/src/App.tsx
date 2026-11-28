@@ -1,3 +1,4 @@
+import { addWorkspacePrimaryViewListener } from "@/project-sidebar/index.js";
 import { GitStatusRepositoryContext } from "@/hooks/useGitRepository.js";
 import { PluginUiWorkspaceProvider } from "@/plugin-ui/index.js";
 /* eslint-disable max-lines -- App 当前集中编排 workspace 级状态、导航、Git 派生数据和 shell wiring；已将新增 side pane memory 桥接抽出，剩余拆分需要按 shell 边界单独重构。 */
@@ -55,7 +56,6 @@ import {
   type SettingsSectionId,
 } from "@/lib/settingsNavigation.js";
 import { runWorkspaceVisibleCommand } from "@/lib/workspaceVisibleCommand.js";
-import appLogoUrl from "@/assets/provider-icons/logo-zai.svg";
 import { resolveTheme } from "@/useTheme.js";
 import { WorkspaceShellLayout } from "@/app-shell/WorkspaceShellLayout.js";
 import { useAppChromeState } from "@/app-shell/useAppChromeState.js";
@@ -922,7 +922,7 @@ export function App({
   const handleNavigateToAutomationsMain = useCallback((target: AutomationsNavigationTarget) => {
     setOpenAutomationId(target.automationId ?? null);
     setOpenAutomationTab(target.automationTab ?? null);
-    setWorkspaceMainView("automations");
+    setWorkspaceMainView(target.automationTab === "workflow" ? "workflows" : "automations");
   }, []);
   const handleNavigateToPluginStoreMain = useCallback(() => {
     setPluginStoreOpenVersion((version) => version + 1);
@@ -956,6 +956,31 @@ export function App({
     onNavigateToAutomations: handleNavigateToAutomationsMain,
     onNavigateToPluginStore: handleNavigateToPluginStoreMain,
   });
+  useEffect(
+    () =>
+      addWorkspacePrimaryViewListener((view) => {
+        if (view === "environment" && !isDesktop) return;
+        if (!isWorkspaceVisible) {
+          preserveNextSettingsExit();
+          onReturnToWorkspace?.();
+        }
+        if (view === workspaceMainView) return;
+        if (view === "chat") handleNavigateToTaskMain();
+        else if (view === "plugin-store") handleOpenPluginStore();
+        else if (view === "environment") setWorkspaceMainView(view);
+        else handleOpenAutomations(undefined, view === "workflows" ? "workflow" : "scheduled");
+      }),
+    [
+      isDesktop,
+      isWorkspaceVisible,
+      preserveNextSettingsExit,
+      onReturnToWorkspace,
+      workspaceMainView,
+      handleNavigateToTaskMain,
+      handleOpenPluginStore,
+      handleOpenAutomations,
+    ],
+  );
   // 完成卡「已保存」芯片的落点（docs/dynamic-workflow/transcript-and-notifications.md「Saving the
   // run, and running it again」）：走「自动化」入口的同一条导航（进历史、切主视图），落在「工作流」
   // 标签，再由深链把中枢定位到那一页。项目档按 workspaceKey 找组，全局档只要名字。
@@ -1038,9 +1063,10 @@ export function App({
   const handleSelectNextConversation = useCallback(() => {
     handleSelectAdjacentConversation("next");
   }, [handleSelectAdjacentConversation]);
-  const handlePrimaryNavigationBack =
-    workspaceMainView === "plugin-store" ? handleNavigateToTaskMain : handleTaskNavBack;
-  const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
+  const returnFromModule =
+    workspaceMainView === "plugin-store" || workspaceMainView === "environment";
+  const handlePrimaryNavigationBack = returnFromModule ? handleNavigateToTaskMain : handleTaskNavBack;
+  const canPrimaryNavigationBack = returnFromModule || canTaskNavBack;
   const shellPanelIds = useMemo(() => ["sidebar", "content"], []);
 
   useAppKeyboard({
@@ -1312,7 +1338,6 @@ export function App({
             isMacDesktop={isMacDesktop}
             isWindowsDesktop={isWindowsDesktop}
             workspaceShellZCodeState={workspaceShellZCodeState}
-            theme={theme}
             isMacFullscreen={isMacFullscreen}
             desktopWindowChromeState={desktopWindowChromeState}
             macWindowControlsLeftPaddingPx={macWindowControlsLeftPaddingPx}
@@ -1370,7 +1395,6 @@ export function App({
             fileChangeFindNavigationRequestId={fileChangeFindState.navigationRequestId}
             fileChangeFindQuery={fileChangeFindState.query}
             onFileChangeFindMatchCountChange={setFileChangeFindMatchCount}
-            appLogoUrl={appLogoUrl}
             platform={platform}
             reloadSessionDisabled={reloadSessionDisabled}
             reloadSessionPending={reloadSessionPending}

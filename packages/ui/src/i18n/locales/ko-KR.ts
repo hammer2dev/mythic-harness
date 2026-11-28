@@ -7220,9 +7220,9 @@ const koKR: Record<string, string> = {
   "chat.error.feedback": "문제 신고",
   "chat.error.feedbackOpened": "오류 컨텍스트가 첨부된 피드백을 열었습니다",
   "chat.error.noAvailableModel":
-    "사용 가능한 모델이 없습니다. 업그레이드하거나 사용자 지정 모델을 설정하세요.",
+    "사용할 수 있는 모델이 없습니다. 모델 게이트웨이에서 모델을 추가하세요.",
   "chat.error.remoteNoAvailableModel":
-    "이 원격 기기에는 아직 사용 가능한 모델이 없습니다. 먼저 이 컴퓨터에서 모델을 구성하세요. 저장하면 원격 기기에 자동으로 동기화됩니다.",
+    "원격 작업 공간에서 사용할 수 있는 모델이 없습니다. 모델 게이트웨이에서 모델을 추가하세요.",
   "chat.error.sendFailed": "보내지 못했습니다. 잠시 후 다시 시도하세요.",
   "chat.error.modelSettings": "모델 설정",
   "chat.error.setModels": "설정",

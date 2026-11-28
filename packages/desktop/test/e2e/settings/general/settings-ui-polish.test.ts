@@ -8,18 +8,19 @@ import {
   TID_CHAT_MODEL_SELECT_GROUP,
   TID_CHAT_MODEL_SELECT_TRIGGER,
   TID_SETTINGS_BACK_BUTTON,
-  TID_LOGIN_TRIGGER,
   TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON,
   TID_MODEL_PROVIDER_ADD_MODEL_BUTTON,
   TID_MODEL_PROVIDER_API_KEY_INPUT,
   TID_MODEL_PROVIDER_API_FORMAT_TRIGGER,
   TID_MODEL_PROVIDER_BASE_URL_INPUT,
+  TID_MODEL_PROVIDER_MODEL_INPUT,
   TID_MODEL_PROVIDER_MODEL_DELETE_BUTTON,
   TID_MODEL_PROVIDER_NAV_ITEM,
   TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON,
   TID_MODEL_PROVIDER_TEMPLATE_ITEM,
   TID_MODEL_PROVIDER_TEMPLATE_PICKER,
   TID_SETTINGS_PAGE,
+  TID_SETTINGS_SECTION_NAV,
   TID_TASK_SETTINGS_BUTTON,
   testId,
 } from "@zcode/shared/test-ids";
@@ -30,6 +31,8 @@ import {
   clickTestIdByDom,
   clickTestIdByWebDriver,
   readModelProvider,
+  restoreElectronRendererContentSize,
+  setCurrentElectronRendererContentSize,
   waitForWorkspaceApp,
 } from "#e2e/helpers/desktop-app";
 import { restartIntoWorkspace, seedReplayProvider } from "#e2e/helpers/model-provider-restart";
@@ -46,6 +49,7 @@ const REORDER_MODEL_IDS = ["e2e-reorder-first", "e2e-reorder-second"] as const;
 const REASONING_EDITOR_PROVIDER_ID = "e2e-reasoning-editor-provider";
 const REASONING_EDITOR_MODEL_ID = "gateway/team/glm-5.3-20260907";
 const DELETE_PROVIDER_ID = "e2e-delete-provider";
+const SETTINGS_PRIMARY_RAIL = `[data-testid="workspace-primary-navigation"]:has(+ ${sel(TID_SETTINGS_PAGE)})`;
 
 describe("设置页 UI polish E2E", () => {
   after(async () => {
@@ -54,9 +58,20 @@ describe("设置页 UI polish E2E", () => {
   });
 
   beforeEach(async () => {
-    // 上一个用例可能停在设置页，先真实关闭遮挡层再操作侧栏项目。
-    const back = $(sel(TID_SETTINGS_BACK_BUTTON));
-    if (await back.isDisplayed()) await back.click();
+    if (await $(sel(TID_SETTINGS_PAGE)).isDisplayed()) {
+      const providerDialog = $(sel("model-provider-dialog"));
+      if (await providerDialog.isExisting()) {
+        await browser.execute(() => {
+          document
+            .querySelector<HTMLButtonElement>(
+              '[data-testid="model-provider-dialog"] [data-slot="dialog-close"]',
+            )
+            ?.click();
+        });
+        await providerDialog.waitForExist({ reverse: true });
+      }
+      await $(SETTINGS_PRIMARY_RAIL).$(sel("workspace-primary-chat")).click();
+    }
     await prepareV4ConversationE2E({ skipProvider: true });
     // prepare 已保证默认项目草稿；窄屏检查会收起侧栏，不能再无条件 hover 新建。
     await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
@@ -67,11 +82,13 @@ describe("设置页 UI polish E2E", () => {
       this.skip();
       return;
     }
+    const titleSelector = sel("workspace-secondary-navigation-title");
+    const projectTitle = await $(`[data-testid="sidebar-primary-navigation"] ${titleSelector}`);
+    const projectLabel = await $(sel("workspace-primary-chat")).getAttribute("aria-label");
+    expect(projectLabel).toBeTruthy();
+    await expect(projectTitle).toHaveText(projectLabel!);
     await clickTestIdByDom(TID_TASK_SETTINGS_BUTTON, { timeout: 15000 });
     await $(sel(TID_SETTINGS_PAGE)).waitForDisplayed({ timeout: 15000 });
-    const panel = await $('[data-settings-panel-frame="true"]');
-    expect(((await panel.getAttribute("class")) ?? "").split(/\s+/)).toContain("rounded-md");
-    expect(await panel.getCSSProperty("border-top-left-radius")).toMatchObject({ value: "6px" });
     expect(
       await $('[data-testid="settings-page"] svg.lucide-circle-question-mark').isDisplayed(),
     ).toBe(true);
@@ -85,144 +102,62 @@ describe("设置页 UI polish E2E", () => {
         '[data-testid="settings-page"] [data-testid="desktop-window-controls"]',
       ).isDisplayed(),
     ).toBe(true);
+    const primaryNavigation = await $(SETTINGS_PRIMARY_RAIL);
+    expect(await primaryNavigation.getSize("width")).toBe(48);
+    expect(await primaryNavigation.$$("img")).toHaveLength(1);
     expect(
-      await browser.execute(() => {
-        const panel = document.querySelector<HTMLElement>('[data-settings-panel-frame="true"]');
-        return panel ? getComputedStyle(panel).borderTopRightRadius : null;
-      }),
-    ).toBe("6px");
-    expect(
-      await browser.execute(() => {
-        const logo = document.querySelector<HTMLElement>(
-          '[data-testid="settings-page"] [data-testid="settings-logo"]',
-        );
-        if (!logo) return null;
-        const rect = logo.getBoundingClientRect();
-        return { left: rect.left, top: rect.top };
-      }),
-    ).toEqual({ left: 17, top: 19 });
-    const settingsLogo = await $('[data-testid="settings-logo"]');
-    expect(await settingsLogo.$("[data-desktop-logo-badge]").getSize("width")).toBe(20);
-    expect(await settingsLogo.$("svg").getSize("width")).toBe(13);
-    expect(await settingsLogo.$("animate").isExisting()).toBe(false);
+      await primaryNavigation.$(sel(TID_TASK_SETTINGS_BUTTON)).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(await $('[data-testid="settings-logo"]').isExisting()).toBe(false);
     for (const theme of ["light", "dark"]) {
       await setPresentation({ locale: "zh-CN", theme });
-      expect(await settingsLogo.$("svg").getSize("width")).toBe(13);
+      expect(await primaryNavigation.$("img").getSize("width")).toBe(22);
+      const settingsSidebar = await $('[data-testid="settings-page"] > aside');
+      await expect(settingsSidebar.$(titleSelector)).toHaveText("设置");
+      expect((await settingsSidebar.getCSSProperty("background-color")).value).toBe(
+        (await primaryNavigation.getCSSProperty("background-color")).value,
+      );
       const screenshotDir = join(process.cwd(), ".e2e-artifacts", "desktop-logo");
       await mkdir(screenshotDir, { recursive: true });
       await browser.saveScreenshot(join(screenshotDir, `settings-${theme}.png`));
     }
     expect(
       await browser.execute(() => {
-        const help = document
-          .querySelector('[data-testid="settings-page"] svg.lucide-circle-question-mark')
-          ?.closest<HTMLElement>("button");
-        const close = document.querySelector<HTMLElement>(
-          '[data-testid="settings-page"] [data-testid="window-control-close"]',
-        );
-        if (!help || !close) return null;
+        const page = document.querySelector('[data-testid="settings-page"]');
+        const help = page?.querySelector("svg.lucide-circle-question-mark")?.closest("button");
+        const close = page?.querySelector('[data-testid="window-control-close"]');
+        if (!page || !help || !close) return null;
         const helpRect = help.getBoundingClientRect();
         const closeRect = close.getBoundingClientRect();
         return {
           helpTop: helpRect.top,
           closeTop: closeRect.top,
-          closeRightInset: window.innerWidth - closeRect.right,
+          closeRightInset: page.getBoundingClientRect().right - closeRect.right,
         };
       }),
     ).toEqual({ helpTop: 17, closeTop: 17, closeRightInset: 15 });
-    expect(
-      await browser.execute(() => {
-        const content = document.querySelector('[data-settings-content-frame="true"]')!;
-        const panel = document.querySelector('[data-settings-panel-frame="true"]')!;
-        const style = getComputedStyle(content);
-        return {
-          right: style.paddingRight,
-          bottom: style.paddingBottom,
-          top: panel.getBoundingClientRect().top - content.getBoundingClientRect().top,
-        };
-      }),
-    ).toEqual({ right: "6px", bottom: "6px", top: 6 });
+    const settingsTitle = await $(`[data-testid="settings-page"] > aside ${titleSelector}`);
+    await openModelProviderSettings();
+    await expect(settingsTitle).toHaveText("环境");
+    await $(SETTINGS_PRIMARY_RAIL).$(sel(TID_TASK_SETTINGS_BUTTON)).click();
+    await expect(settingsTitle).toHaveText("设置");
   });
 
-  it("UP-01: 头像菜单按 language、theme、zoom 顺序展示偏好入口", async function () {
-    this.timeout(60000);
-
-    await clickVisibleTestId(TID_LOGIN_TRIGGER, {
-      timeout: 15000,
-      timeoutMsg: "侧边栏头像菜单入口没有出现",
-    });
-
-    await browser.waitUntil(async () => (await readVisibleProfileMenuItems()).length >= 3, {
-      timeout: 15000,
-      timeoutMsg: "头像菜单的偏好入口没有完整展开",
-    });
-    const menuSnapshot = await readVisibleProfileMenuItems();
-    if (process.platform === "darwin") {
-      // macOS 根框架使用 background-alt；比较语义 utility 的运行时主题色，避免绑定具体色值格式。
-      const backgrounds = await browser.execute(() => {
-        const frame = document.querySelector<HTMLElement>(
-          "div.h-dvh.flex.flex-col.overflow-hidden.border-border.text-foreground",
-        );
-        if (!frame) throw new Error("DesktopWindowFrame 不存在");
-        const reference = document.createElement("div");
-        reference.className = "bg-background-alt";
-        document.body.append(reference);
-        const result = [
-          getComputedStyle(frame).backgroundColor,
-          getComputedStyle(reference).backgroundColor,
-        ];
-        reference.remove();
-        return result;
-      });
-      expect(backgrounds[0]).toBe(backgrounds[1]);
-    }
-    if (process.platform === "linux") {
-      const shellChrome = await browser.execute(() => {
-        const frame = document.querySelector<HTMLElement>('[data-desktop-window-frame="true"]');
-        if (!frame) throw new Error("DesktopWindowFrame 不存在");
-        const style = getComputedStyle(frame);
-        return { radius: style.borderTopLeftRadius, clipPath: style.clipPath };
-      });
-      expect(shellChrome).toEqual({ radius: "16px", clipPath: "inset(0px round 16px)" });
-    }
-
-    // 圆角规范：独立菜单外壳 lg，选项 md；读取计算样式以覆盖实际 CSS 和业务覆盖。
-    const radii = await browser.execute(() => {
-      const menu = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-content"]'),
-      ).find((element) => element.getBoundingClientRect().width > 0);
-      if (!menu) throw new Error("头像菜单浮层没有出现");
-      return {
-        shell: getComputedStyle(menu).borderTopLeftRadius,
-        items: Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]')).map(
-          (item) => getComputedStyle(item).borderTopLeftRadius,
-        ),
-      };
-    });
-    expect(radii.shell).toBe("8px");
-    expect(radii.items.length).toBeGreaterThanOrEqual(3);
-    expect(radii.items.every((radius) => radius === "6px")).toBe(true);
-
-    const languageIndex = menuSnapshot.findIndex((text) => /界面语言|Language/.test(text));
-    const themeIndex = menuSnapshot.findIndex((text) => /界面主题|App theme/.test(text));
-    const zoomIndex = menuSnapshot.findIndex((text) => /界面缩放|Interface zoom/.test(text));
-
-    if (languageIndex < 0 || themeIndex < 0 || zoomIndex < 0) {
-      throw new Error(`头像菜单偏好入口不完整：${JSON.stringify(menuSnapshot)}`);
-    }
-    expect(themeIndex).toBeGreaterThan(languageIndex);
-    expect(zoomIndex).toBeGreaterThan(themeIndex);
-    // 本例遗留的模态菜单会屏蔽下一例真实滚轮；DOM click 不受遮挡，曾掩盖该污染。
-    await browser.keys("Escape");
-    await browser.waitUntil(
-      async () =>
-        (await readVisibleProfileMenuItems()).length === 0 &&
-        (await browser.execute(() => getComputedStyle(document.body).pointerEvents)) !== "none",
-      { timeout: 10000, timeoutMsg: "头像菜单未关闭或指针屏障尚未释放" },
-    );
+  it("UP-01: 设置页提供语言与主题入口，侧栏省去快捷偏好菜单", async () => {
+    const preferences = 'button[aria-label="偏好设置"],button[aria-label="Preferences"]';
+    expect(await $(preferences).isExisting()).toBe(false);
+    await clickTestIdByDom(TID_TASK_SETTINGS_BUTTON, { timeout: 15000 });
+    const settings = await $(sel(TID_SETTINGS_PAGE));
+    await settings.waitForDisplayed({ timeout: 15000 });
+    expect(await settings.$(preferences).isExisting()).toBe(false);
+    await settings.$('[data-settings-search-id="settings.locale"]').waitForDisplayed();
+    await settings.$('[data-settings-section-nav="appearance"]').click();
+    await settings.$('[data-settings-search-id="settings.themeMode"]').waitForDisplayed();
   });
 
-  it("UP-02: 设置页桌面 Sidebar 宽度为 268px 且与内容直接相接", async () => {
+  it("UP-02: 设置和环境二级栏沿用工作区列宽，并与正文相接", async () => {
+    await setPresentation({ locale: "zh-CN", theme: "dark" });
+    const sidebarWidth = await $('[data-workspace-sidebar-panel="true"]').getSize("width");
     await clickTestIdByDom(TID_TASK_SETTINGS_BUTTON, { timeout: 15000 });
     await $(sel(TID_SETTINGS_PAGE)).waitForDisplayed({ timeout: 15000 });
 
@@ -241,182 +176,302 @@ describe("设置页 UI polish E2E", () => {
           gap: contentRect.left - sidebarRect.right,
         };
       }),
-    ).toEqual({ sidebarWidth: 268, contentOffset: 268, gap: 0 });
+    ).toEqual({ sidebarWidth, contentOffset: sidebarWidth, gap: 0 });
+    await openModelProviderSettings();
+    expect(await $(`${sel(TID_SETTINGS_PAGE)} > aside`).getSize("width")).toBe(sidebarWidth);
+    const primaryNavigation = $(SETTINGS_PRIMARY_RAIL);
+    expect(await primaryNavigation.$(sel("workspace-primary-model-gateway")).isExisting()).toBe(
+      false,
+    );
+    await expect(primaryNavigation.$(sel("workspace-primary-environment"))).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const environmentNav = $(sel(TID_SETTINGS_PAGE)).$('nav[aria-label="环境"]');
+    expect(await environmentNav.$$("button").map((button) => button.getText())).toEqual([
+      "Agent应用",
+      "账号管理",
+      "模型设置",
+      "使用统计",
+    ]);
+    await environmentNav.$(sel(testId(TID_SETTINGS_SECTION_NAV, "usage"))).click();
+    await expect($(sel(TID_SETTINGS_PAGE))).toHaveAttribute("data-active-section", "usage");
+    await environmentNav.$(sel("environment-account-management")).click();
+    await expect(
+      $('[data-testid="environment-account-management"]:not([inert] *)'),
+    ).toHaveAttribute("aria-current", "page");
+    await openModelProviderSettings();
   });
 
-  async function readVisibleProfileMenuItems() {
-    return browser.execute(() => {
-      const visibleItems = Array.from(
-        document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
-      ).filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
+  it("UP-03: 设置页窄窗和最大化时贴合窗口并可滚动", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    await clickTestIdByDom(TID_TASK_SETTINGS_BUTTON, { timeout: 15000 });
+    const settings = $(sel(TID_SETTINGS_PAGE));
+    await settings.waitForDisplayed();
+    await settings.$(sel(testId(TID_SETTINGS_SECTION_NAV, "general"))).click();
+    const size = await setCurrentElectronRendererContentSize(930, 760);
+    const maximize = settings.$(sel("window-control-maximize"));
+    const assertEdges = async () => {
+      const { sidebarDivider, ...geometry } = await browser.execute(() => {
+        const page = document.querySelector('[data-testid="settings-page"]')!;
+        const frame = page.querySelector("[data-settings-content-frame]")!;
+        const panel = frame.querySelector("[data-settings-panel-frame]")!;
+        const inset = frame.querySelector("[data-settings-top-inset]")!;
+        const pageBounds = page.getBoundingClientRect();
+        const panelBounds = panel.getBoundingClientRect();
+        const frameStyle = getComputedStyle(frame);
+        const panelStyle = getComputedStyle(panel);
+        const outerSides = ["borderTopWidth", "borderRightWidth", "borderBottomWidth"] as const;
+        return {
+          sameTopSurface: frameStyle.backgroundColor === panelStyle.backgroundColor,
+          rightGap: Math.round(pageBounds.right - panelBounds.right),
+          bottomGap: Math.round(pageBounds.bottom - panelBounds.bottom),
+          sidebarDivider: Number.parseFloat(frameStyle.borderLeftWidth),
+          noOutline: outerSides.every(
+            (side) => frameStyle[side] === "0px" && panelStyle[side] === "0px",
+          ),
+          dragRegion: getComputedStyle(inset).getPropertyValue("app-region"),
+        };
       });
-      return visibleItems.map((element) => element.innerText.trim());
-    });
-  }
+      expect(geometry).toEqual({
+        sameTopSurface: true,
+        rightGap: 0,
+        bottomGap: 0,
+        noOutline: true,
+        dragRegion: "drag",
+      });
+      // 125% 显示缩放会把 1px 边框吸附到一个物理像素，读回 0.8 CSS px。
+      expect(sidebarDivider).toBeGreaterThan(0);
+      expect(sidebarDivider).toBeLessThanOrEqual(1);
+    };
+    try {
+      await setPresentation({ locale: "zh-CN", theme: "dark" });
+      expect(
+        await browser.execute(() => {
+          const main = document.querySelector<HTMLElement>('[data-testid="settings-page"] main')!;
+          main.scrollTop = main.clientHeight;
+          return main.scrollTop;
+        }),
+      ).toBeGreaterThan(0);
+      await browser.saveScreenshot(
+        join(process.env.ZCODE_E2E_ARTIFACT_DIR!, "settings-narrow-dark.png"),
+      );
+      await assertEdges();
+      await expect(maximize).toHaveAttribute("data-maximized", "false");
+      await maximize.click();
+      await expect(maximize).toHaveAttribute("data-maximized", "true");
+      await setPresentation({ locale: "zh-CN", theme: "light" });
+      await assertEdges();
+      await browser.saveScreenshot(
+        join(process.env.ZCODE_E2E_ARTIFACT_DIR!, "settings-maximized-light.png"),
+      );
+    } finally {
+      if ((await maximize.getAttribute("data-maximized")) === "true") {
+        await maximize.click();
+        await expect(maximize).toHaveAttribute("data-maximized", "false");
+      }
+      await restoreElectronRendererContentSize(size);
+    }
+  });
 
-  it("MP-UI-01: 点击新增供应商后原子创建并直接进入普通详情卡", async function () {
+  it("MG-UI-01: 供应商列表和编辑弹窗适配宽窄窗口", async function () {
+    this.timeout(120000);
+    const providerId = "e2e-gateway-provider";
+    const alternateId = "e2e-gateway-alternate";
+    const baseURL = "http://127.0.0.1:9/v1";
+    await restartIntoWorkspace({
+      afterElectronProcessExit: async () => {
+        await seedReplayProvider({
+          id: providerId,
+          name: "Engineering Gateway",
+          apiKey: "e2e-gateway-fixture-key",
+          baseURL,
+          models: [
+            { id: "qwen/Qwen3-Coder", contextWindow: 262144 },
+            { id: "deepseek-ai/DeepSeek-V4-Flash", contextWindow: 1048576 },
+            { id: "moonshotai/Kimi-K2.7-Code", contextWindow: 262144 },
+          ],
+        });
+        await seedReplayProvider({
+          id: alternateId,
+          name: "OpenAI Responses Gateway",
+          apiKey: "e2e-gateway-fixture-key",
+          apiFormat: "openai-responses",
+          baseURL: `${baseURL}/responses`,
+          models: ["gpt-5.4"],
+        });
+        await seedReplayProvider({
+          id: "e2e-gateway-anthropic",
+          name: "Anthropic",
+          apiKey: "e2e-gateway-fixture-key",
+          apiFormat: "anthropic-messages",
+          baseURL,
+          models: ["claude-sonnet-4-6"],
+        });
+      },
+    });
+    await openModelProviderSettings();
+    const page = $(sel(TID_SETTINGS_PAGE));
+    for (const section of ["usage", "modelProvider"]) {
+      await clickTestIdByDom(testId(TID_SETTINGS_SECTION_NAV, section));
+      await expect(page).toHaveAttribute("data-active-section", section);
+      expect((await page.$$("[data-settings-section-nav]")).length).toBe(4);
+      expect(await page.$(sel(TID_SETTINGS_BACK_BUTTON)).isExisting()).toBe(false);
+      expect(await page.$(sel("settings-search-open")).isExisting()).toBe(false);
+      expect(
+        await browser.execute(() => {
+          const frame = document.querySelector("[data-settings-content-frame]")!;
+          const panel = frame.querySelector("[data-settings-panel-frame]")!;
+          const inset = frame.querySelector("[data-settings-top-inset]")!;
+          return {
+            sameBackground:
+              getComputedStyle(frame).backgroundColor === getComputedStyle(panel).backgroundColor,
+            dragRegion: getComputedStyle(inset).getPropertyValue("app-region"),
+          };
+        }),
+      ).toEqual({ sameBackground: true, dragRegion: "drag" });
+    }
+
+    const screenshotDir = join(process.cwd(), ".e2e-artifacts", "model-gateway");
+    await mkdir(screenshotDir, { recursive: true });
+    const initialSize = await setCurrentElectronRendererContentSize(1400, 900);
+    try {
+      if (process.platform === "win32" || process.platform === "linux") {
+        const maximize = page.$(sel("window-control-maximize"));
+        await expect(maximize).toBeDisplayed();
+        const initialState = await maximize.getAttribute("data-maximized");
+        if (initialState !== "true" && initialState !== "false") {
+          throw new Error("设置窗口的最大化状态未就绪");
+        }
+        await maximize.click();
+        await expect(maximize).toHaveAttribute(
+          "data-maximized",
+          initialState === "true" ? "false" : "true",
+        );
+        await maximize.click();
+        await expect(maximize).toHaveAttribute("data-maximized", initialState);
+      }
+      const scenarios = [
+        { name: "wide-dark", width: 1400, theme: "dark" },
+        { name: "wide-light", width: 1400, theme: "light" },
+        { name: "narrow-dark", width: 590, theme: "dark" },
+        { name: "narrow-light", width: 480, theme: "light" },
+      ];
+      for (const scenario of scenarios) {
+        await setCurrentElectronRendererContentSize(scenario.width, 900);
+        await setPresentation({ locale: "zh-CN", theme: scenario.theme });
+        const providerNavId = testId(TID_MODEL_PROVIDER_NAV_ITEM, `custom:${providerId}`);
+        const providerNav = page.$(sel(providerNavId));
+        await providerNav.scrollIntoView({ block: "nearest", inline: "nearest" });
+        await providerNav.click();
+        await expect($(sel("model-provider-dialog"))).toBeDisplayed();
+        await expect($(sel(TID_MODEL_PROVIDER_BASE_URL_INPUT))).toHaveValue(baseURL);
+        await expect($(sel(TID_MODEL_PROVIDER_API_KEY_INPUT))).toHaveAttribute("type", "password");
+        await expect($(sel(TID_MODEL_PROVIDER_ADD_MODEL_BUTTON))).toBeDisplayed();
+        expect(await readModelOrder()).toHaveLength(3);
+        const geometry = await browser.execute(() => {
+          const list = document.querySelector('[data-testid="model-provider-list"]')!;
+          const dialog = document.querySelector('[data-testid="model-provider-dialog"]')!;
+          const bounds = dialog.getBoundingClientRect();
+          return {
+            listFits: list.scrollWidth <= list.clientWidth + 1,
+            dialogFits: bounds.left >= 0 && bounds.right <= window.innerWidth,
+          };
+        });
+        expect(geometry).toEqual({ listFits: true, dialogFits: true });
+        await browser.saveScreenshot(join(screenshotDir, `${scenario.name}.png`));
+        await clickTestIdByWebDriver("model-provider-dialog-done");
+        await $(sel("model-provider-dialog")).waitForExist({ reverse: true });
+      }
+      const alternateNavId = testId(TID_MODEL_PROVIDER_NAV_ITEM, `custom:${alternateId}`);
+      await $(sel(alternateNavId)).scrollIntoView({ block: "nearest", inline: "nearest" });
+      await clickTestIdByWebDriver(alternateNavId);
+      await expect($(sel(TID_MODEL_PROVIDER_BASE_URL_INPUT))).toHaveValue(`${baseURL}/responses`);
+      expect(await readModelOrder()).toEqual(["gpt-5.4"]);
+      await clickTestIdByWebDriver("model-provider-dialog-done");
+      await $(sel("model-provider-dialog")).waitForExist({ reverse: true });
+    } finally {
+      await restoreElectronRendererContentSize(initialSize);
+    }
+    await $(SETTINGS_PRIMARY_RAIL).$(sel("workspace-primary-chat")).click();
+    await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30000);
+  });
+
+  it("MP-UI-01: 在弹窗返回重选，只创建完成配置的供应商", async function () {
     this.timeout(60000);
 
     await openModelProviderSettings();
-    expect(
-      await browser.execute((addProviderTestId) => {
-        const addButton = document.querySelector<HTMLButtonElement>(
-          `[data-testid="${addProviderTestId}"]`,
-        );
-        const actions = addButton?.parentElement;
-        const refreshButton = Array.from(
-          actions?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-        ).find((button) => button !== addButton);
-        return {
-          addVariant: addButton?.dataset.variant,
-          addSize: addButton?.dataset.size,
-          gap: actions ? getComputedStyle(actions).gap : null,
-          refreshBeforeAdd: Boolean(
-            refreshButton &&
-            addButton &&
-            refreshButton.compareDocumentPosition(addButton) & Node.DOCUMENT_POSITION_FOLLOWING,
-          ),
-          refreshVariant: refreshButton?.dataset.variant,
-          refreshSize: refreshButton?.dataset.size,
-        };
-      }, TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON),
-    ).toEqual({
-      addVariant: "default",
-      addSize: "default",
-      gap: "8px",
-      refreshBeforeAdd: true,
-      refreshVariant: "outline",
-      refreshSize: "icon-md",
-    });
-    const selectedProviderTestId = await browser.execute(() => {
-      const selected = document.querySelector<HTMLElement>(
-        '[data-testid^="model-provider-nav-item-"][aria-selected="true"]',
+    const picker = $(sel(TID_MODEL_PROVIDER_TEMPLATE_PICKER));
+    const rows = () => $$(sel("model-provider-row"));
+    const draftModelIds = () =>
+      $$(`[data-testid^="${TID_MODEL_PROVIDER_MODEL_INPUT}"]`).map((row) =>
+        row.getAttribute("title"),
       );
-      return selected?.dataset.testid ?? null;
-    });
-    if (!selectedProviderTestId) throw new Error("进入设置页后没有选中的 Provider");
-    await clickTestIdByDom(TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON, {
-      timeout: 30000,
-      timeoutMsg: "添加模型供应商入口没有出现",
-    });
-    await $(sel(TID_MODEL_PROVIDER_TEMPLATE_PICKER)).waitForDisplayed({
-      timeout: 15000,
-      timeoutMsg: "添加供应商后没有进入 Template 选择页",
-    });
-    const templateLayout = await browser.execute((templateItemPrefix) => {
-      const picker = document.querySelector<HTMLElement>(
-        '[data-testid="model-provider-template-picker"]',
-      );
-      const cards = Array.from(
-        picker?.querySelectorAll<HTMLElement>(`[data-testid^="${templateItemPrefix}"]`) ?? [],
-      );
-      return {
-        cardHeights: cards.map((card) => Math.round(card.getBoundingClientRect().height)),
-        columns: picker
-          ? getComputedStyle(picker.querySelector<HTMLElement>(".grid")!)
-              .gridTemplateColumns.split(" ")
-              .filter(Boolean).length
-          : 0,
-        hasChevron: cards.every((card) => Boolean(card.querySelector(".lucide-chevron-right"))),
-      };
-    }, `${TID_MODEL_PROVIDER_TEMPLATE_ITEM}-`);
-    expect(templateLayout.cardHeights.every((height) => height >= 64)).toBe(true);
-    expect(templateLayout.columns).toBe(2);
-    expect(templateLayout.hasChevron).toBe(true);
-    expect(
-      await browser.execute(() =>
-        Array.from(
-          document.querySelectorAll(
-            '[data-provider-template-group="zhipu"] [data-testid^="model-provider-template-item-"]',
-          ),
-        ).map((node) => node.getAttribute("data-testid")),
-      ),
-    ).toEqual([
-      "model-provider-template-item-bigmodel-api",
-      "model-provider-template-item-zai-api",
-      "model-provider-template-item-bigmodel-standard-api",
-      "model-provider-template-item-zai-standard-api",
-    ]);
-    await clickTestIdByDom(TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON);
-    await browser.waitUntil(
-      async () =>
-        !(await $(sel(TID_MODEL_PROVIDER_TEMPLATE_PICKER)).isDisplayed()) &&
-        (await $(sel(selectedProviderTestId)).getAttribute("aria-selected")) === "true",
-      {
-        timeout: 15000,
-        timeoutMsg: "从 Template 选择页返回后没有恢复原 Provider 详情",
-      },
-    );
+    await expect($(sel(TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON))).toBeEnabled();
+    const before = await rows().length;
     await clickTestIdByDom(TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON);
-    await clickTestIdByDom(testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "deepseek"), {
-      timeout: 15000,
-      timeoutMsg: "Upstream Built-in Template 入口没有出现",
-    });
-    await $(sel("model-provider-actions-button")).waitForDisplayed({
-      timeout: 15000,
-      timeoutMsg: "Built-in Template 创建后没有进入供应商详情",
-    });
-    await browser.waitUntil(
-      async () =>
-        (await $(sel(TID_MODEL_PROVIDER_BASE_URL_INPUT)).getValue()) ===
-        "https://api.deepseek.com/anthropic",
-      {
-        timeout: 30000,
-        timeoutMsg: "Template Endpoint 没有进入新 Provider 的 Effective Config",
-      },
+    await picker.waitForDisplayed();
+    const cards = await picker
+      .$$("button[data-testid]")
+      .map((card) => card.getAttribute("data-testid"));
+    expect(cards).toEqual(
+      [
+        "custom",
+        "openai",
+        "anthropic",
+        "deepseek",
+        "moonshot-kimi",
+        "minimax",
+        "bigmodel-standard-api",
+        "zai-standard-api",
+        "qwen-alibaba-model-studio-cn",
+        "xiaomi-mimo",
+        "xai",
+        "openrouter",
+        "opencode-go-responses",
+        "siliconflow-cn",
+        "tencent-tokenhub-cn",
+        "volcengine-ark",
+        "stepfun",
+      ].map((id) => testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, id)),
+    );
+    await clickTestIdByDom(testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "deepseek"));
+    await expect($(sel(TID_MODEL_PROVIDER_BASE_URL_INPUT))).toHaveValue(
+      "https://api.deepseek.com/anthropic",
     );
     expect(await $(sel(TID_MODEL_PROVIDER_API_FORMAT_TRIGGER)).getText()).toMatch(
       /Anthropic Messages/iu,
     );
-    // Todo113 第二轮官方默认目录已去掉旧 Flash 别名，旧规则兼容另由配置测试覆盖。
-    expect(await readModelOrder()).toEqual(["deepseek-flash", "deepseek-v4-pro"]);
-    expect(
-      await browser.execute((addModelTestId) => {
-        const addModelButton = document.querySelector<HTMLButtonElement>(
-          `[data-testid="${addModelTestId}"]`,
-        );
-        return {
-          parentMarginBottom: addModelButton?.parentElement
-            ? getComputedStyle(addModelButton.parentElement).marginBottom
-            : null,
-          size: addModelButton?.dataset.size,
-          variant: addModelButton?.dataset.variant,
-        };
-      }, TID_MODEL_PROVIDER_ADD_MODEL_BUTTON),
-    ).toEqual({ parentMarginBottom: "4px", size: "default", variant: "secondary" });
-    expect(
-      await browser.execute(() => {
-        const detail = document.querySelector('[data-model-provider-detail-scroll="true"]');
-        return Array.from(detail?.querySelectorAll<HTMLImageElement>("img") ?? []).some((image) => {
-          const rect = image.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0;
-        });
-      }),
-    ).toBe(true);
-
-    await clickTestIdByDom(TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON);
-    await clickTestIdByDom(testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "custom"), {
-      timeout: 15000,
-      timeoutMsg: "自定义供应商 Template 入口没有出现",
-    });
-
-    await $(sel("model-provider-actions-button")).waitForDisplayed({
-      timeout: 15000,
-      timeoutMsg: "原子创建后没有进入普通供应商详情卡",
-    });
-    await $(sel(TID_MODEL_PROVIDER_BASE_URL_INPUT)).waitForDisplayed();
-    await $(sel(TID_MODEL_PROVIDER_API_KEY_INPUT)).waitForDisplayed();
-    await $(sel(TID_MODEL_PROVIDER_ADD_MODEL_BUTTON)).waitForDisplayed();
-
-    expect(
-      await browser.execute(
-        () => document.querySelector('[data-testid="add-provider-footer"]') === null,
-      ),
-    ).toBe(true);
-    // 先验证创建链路，独立滚动故障不能遮蔽模板/自定义 Provider 的实际结果。
-    await assertModelProviderPageScroll();
+    expect(await draftModelIds()).toEqual([]);
+    await expect($(sel("model-provider-header")).$("img")).toBeDisplayed();
+    await expect($(sel(TID_MODEL_PROVIDER_ADD_MODEL_BUTTON))).toBeDisplayed();
+    expect(await rows().length).toBe(before);
+    await clickTestIdByDom(TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON);
+    await picker.waitForDisplayed();
+    await clickTestIdByDom(testId(TID_MODEL_PROVIDER_TEMPLATE_ITEM, "custom"));
+    await expect($(sel(TID_MODEL_PROVIDER_BASE_URL_INPUT))).toBeDisplayed();
+    await expect($(sel(TID_MODEL_PROVIDER_API_KEY_INPUT))).toBeDisplayed();
+    await expect($(sel(TID_MODEL_PROVIDER_ADD_MODEL_BUTTON))).toBeDisplayed();
+    expect(await draftModelIds()).toEqual([]);
+    await clickTestIdByWebDriver(TID_MODEL_PROVIDER_ADD_MODEL_BUTTON);
+    const addModel = $(sel("model-catalog-add-dialog"));
+    await addModel.waitForDisplayed();
+    await addModel.$("input").setValue("e2e/new-provider-model");
+    await addModel.$('button[type="submit"]').click();
+    await addModel.waitForExist({ reverse: true });
+    expect(await draftModelIds()).toEqual(["e2e/new-provider-model"]);
+    await $(sel("model-provider-dialog")).$("button:has(svg.lucide-pencil)").click();
+    await $('[data-model-advanced-trigger="true"]').click();
+    await expect($('[data-model-max-output="true"] input')).toBeDisplayed();
+    await expect($('[data-model-reasoning-level-map-editor="true"] textarea')).toBeDisplayed();
+    await $('[data-no-model-drag="true"]').$('[data-slot="dialog-close"]').click();
+    await $('[data-model-advanced-trigger="true"]').waitForExist({ reverse: true });
+    await clickTestIdByWebDriver("model-provider-dialog-done");
+    await $(sel("model-provider-dialog")).waitForExist({ reverse: true });
+    expect(await rows().length).toBe(before + 1);
   });
 
   it("MP-UI-05: 模型配置页不显示远程配置同步入口", async function () {
@@ -527,7 +582,7 @@ describe("设置页 UI polish E2E", () => {
     });
   });
 
-  it("MP-UI-04: 删除供应商后导航与 Personal Config 同时移除", async function () {
+  it("MP-UI-04: 删除供应商后列表与 Personal Config 同时移除", async function () {
     this.timeout(120000);
 
     await restartIntoWorkspace({
@@ -541,47 +596,15 @@ describe("设置页 UI polish E2E", () => {
     });
     await openModelProviderSettings();
     const navTestId = testId(TID_MODEL_PROVIDER_NAV_ITEM, `custom:${DELETE_PROVIDER_ID}`);
-    await clickTestIdByDom(navTestId, {
-      timeout: 30000,
-      timeoutMsg: "删除测试供应商入口没有出现",
-    });
-
-    // Todo115 删除操作已移入菜单，不再查找标题栏的独立垃圾桶。
-    await clickTestIdByWebDriver("model-provider-actions-button");
+    const edit = $(sel(navTestId));
+    await edit.waitForDisplayed({ timeout: 30000 });
+    const row = $(`[data-testid="model-provider-row"]:has(${sel(navTestId)})`);
+    await row.$(sel("model-provider-row-actions")).click();
     const deleteItem = $('[role="menuitem"]:has(svg.lucide-trash-2)');
     await deleteItem.waitForDisplayed({ timeout: 15000 });
     await deleteItem.click();
 
-    await browser.waitUntil(
-      async () =>
-        browser.execute(() =>
-          Array.from(document.querySelectorAll<HTMLButtonElement>("button")).some((button) => {
-            const rect = button.getBoundingClientRect();
-            return (
-              rect.width > 0 &&
-              rect.height > 0 &&
-              /确认删除|Delete provider/.test(button.innerText.trim())
-            );
-          }),
-        ),
-      {
-        timeout: 15000,
-        timeoutMsg: "删除供应商确认按钮没有出现",
-      },
-    );
-    await browser.execute(() => {
-      const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-        (candidate) => {
-          const rect = candidate.getBoundingClientRect();
-          return (
-            rect.width > 0 &&
-            rect.height > 0 &&
-            /确认删除|Delete provider/.test(candidate.innerText.trim())
-          );
-        },
-      );
-      button?.click();
-    });
+    await clickTestIdByWebDriver("model-provider-dialog-done");
 
     await browser.waitUntil(
       async () =>
@@ -1131,7 +1154,7 @@ describe("设置页 UI polish E2E", () => {
       await badge.waitForDisplayed();
       expect(await badge.getText()).toMatch(/视觉|Vision/);
     }
-    await clickTestIdByDom(TID_SETTINGS_BACK_BUTTON);
+    await $(SETTINGS_PRIMARY_RAIL).$(sel("workspace-primary-chat")).click();
     await clickTestIdByWebDriver(TID_CHAT_MODEL_SELECT_TRIGGER);
     // 合并模型菜单先打开 Provider 分组，再进入具体模型列表。
     await $('[data-testid="composer-provider-trigger"]').click();
@@ -1447,41 +1470,6 @@ async function readModelListBorderSnapshot() {
   });
 }
 
-async function clickVisibleTestId(
-  currentTestId: string,
-  options: {
-    timeout?: number;
-    timeoutMsg?: string;
-  } = {},
-) {
-  const timeout = options.timeout ?? 10000;
-  await browser.waitUntil(
-    async () => {
-      return browser.execute((targetTestId) => {
-        const target = Array.from(document.querySelectorAll<HTMLElement>("[data-testid]")).find(
-          (candidate) => {
-            const rect = candidate.getBoundingClientRect();
-            return candidate.dataset.testid === targetTestId && rect.width > 0 && rect.height > 0;
-          },
-        );
-        if (!target) return false;
-        target.focus();
-        for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-          target.dispatchEvent(
-            new MouseEvent(type, {
-              bubbles: true,
-              cancelable: true,
-              view: window,
-            }),
-          );
-        }
-        return true;
-      }, currentTestId);
-    },
-    { timeout, timeoutMsg: options.timeoutMsg },
-  );
-}
-
 async function waitForEmptyModelState() {
   await browser.waitUntil(async () => (await readEmptyModelStateSnapshot()) !== null, {
     timeout: 30000,
@@ -1558,111 +1546,6 @@ async function sendRendererEmulationCommand(method: string, params: Record<strin
     params,
   );
   expect(sent).toBe(true);
-}
-
-async function assertModelProviderPageScroll() {
-  try {
-    for (const width of [1280, 600]) {
-      await setRendererViewport(width, 800);
-      for (const side of ["navigation", "detail"]) {
-        const geometry = await browser.execute((side) => {
-          const panel = document.querySelector<HTMLElement>(
-            '[data-model-provider-split-panel="true"]',
-          )!;
-          const nav = panel.querySelector<HTMLElement>(
-            '[data-model-provider-navigation-scroll="true"]',
-          )!;
-          const detail = panel.querySelector<HTMLElement>(
-            '[data-model-provider-detail-scroll="true"]',
-          )!;
-          const main = panel.closest("main")!;
-          const probe = document.createElement("div");
-          probe.dataset.modelLayoutProbe = "true";
-          probe.style.height = "1200px";
-          probe.setAttribute("aria-hidden", "true");
-          (side === "navigation" ? nav : detail).append(probe);
-          main.scrollTop = panel.offsetTop;
-          nav.scrollTop = 100;
-          detail.scrollTop = 100;
-          const rect = panel.getBoundingClientRect();
-          const target = (side === "navigation" ? nav : detail).getBoundingClientRect();
-          return {
-            height: rect.height,
-            navHeight: nav.getBoundingClientRect().height,
-            detailHeight: detail.getBoundingClientRect().height,
-            navScroll: nav.scrollTop,
-            detailScroll: detail.scrollTop,
-            minHeight: getComputedStyle(panel).minHeight,
-            mainScroll: main.scrollTop,
-            x: Math.round(target.left + Math.min(target.width / 2, 30)),
-            y: Math.round(Math.max(rect.top, main.getBoundingClientRect().top) + 100),
-          };
-        }, side);
-        expect(geometry.minHeight).toBe("576px");
-        expect(geometry.height).toBeGreaterThan(1200);
-        expect(Math.abs(geometry.navHeight - geometry.detailHeight)).toBeLessThan(1);
-        expect(geometry.navScroll).toBe(0);
-        expect(geometry.detailScroll).toBe(0);
-        await browser.performActions([
-          {
-            type: "wheel",
-            id: "model-page-wheel",
-            actions: [
-              {
-                type: "scroll",
-                duration: 200,
-                x: geometry.x,
-                y: geometry.y,
-                deltaX: 0,
-                deltaY: 160,
-              },
-            ],
-          },
-        ]);
-        try {
-          await browser.waitUntil(
-            async () =>
-              browser.execute((before) => {
-                const panel = document.querySelector('[data-model-provider-split-panel="true"]')!;
-                return panel.closest("main")!.scrollTop > before + 20;
-              }, geometry.mainScroll),
-            { timeout: 3000, timeoutMsg: "Outer settings page did not scroll" },
-          );
-        } catch (error) {
-          const actual = await browser.execute(({ x, y }) => {
-            const panel = document.querySelector('[data-model-provider-split-panel="true"]')!;
-            const main = panel.closest("main")!;
-            const hit = document.elementFromPoint(x, y);
-            return {
-              scrollTop: main.scrollTop,
-              scrollHeight: main.scrollHeight,
-              clientHeight: main.clientHeight,
-              probePresent: Boolean(panel.querySelector("[data-model-layout-probe]")),
-              hit: hit?.tagName,
-              hitClass: hit?.className,
-              hitInsideMain: Boolean(hit && main.contains(hit)),
-            };
-          }, geometry);
-          throw new Error(
-            `Outer settings page did not scroll: ${JSON.stringify({ width, side, geometry, actual })}`,
-            { cause: error },
-          );
-        }
-        await browser.execute(() => {
-          document.querySelector("[data-model-layout-probe]")?.remove();
-          document
-            .querySelector('[data-model-provider-split-panel="true"]')!
-            .closest("main")!.scrollTop = 0;
-        });
-      }
-    }
-  } finally {
-    await browser.releaseActions();
-    await browser.execute(() =>
-      document.querySelectorAll("[data-model-layout-probe]").forEach((e) => e.remove()),
-    );
-    await clearRendererViewport();
-  }
 }
 
 async function assertLongProviderFeedbackVisible() {

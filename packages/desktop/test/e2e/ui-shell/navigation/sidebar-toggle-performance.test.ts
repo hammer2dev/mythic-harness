@@ -5,7 +5,6 @@ import { prepareV4ConversationE2E } from "#e2e/helpers/v4-conversation";
 import { clearAppData } from "#e2e/helpers/desktop-app";
 import { clearRendererViewport, setRendererViewport } from "#e2e/helpers/renderer-viewport";
 
-// macOS 开关没有 test id；使用两个受测语言的可访问名称，避免依赖其他功能分支的标记。
 const leftToggle = 'button[aria-label="切换侧边栏"], button[aria-label="Toggle sidebar"]';
 const rightToggle = '[data-testid="side-pane-toggle"]';
 const artifactDir = resolve(
@@ -37,6 +36,8 @@ describe("STF 左右侧栏开关布局性能", () => {
       [1000, "zai-dark", "en-US"],
     ] as const) {
       await setRendererViewport(width, 900);
+      // 常规和减弱动态场景使用各自的媒体偏好，避免测试取决于启动环境。
+      await setReducedMotion(false);
       await browser.execute(
         (theme, locale) => {
           const actions = (

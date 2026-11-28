@@ -1,22 +1,17 @@
-import {
-  TID_SETTINGS_PAGE,
-  TID_SETTINGS_SECTION_NAV,
-  TID_TASK_SETTINGS_BUTTON,
-  testId,
-} from "@zcode/shared/test-ids";
+import { TID_SETTINGS_PAGE, TID_SETTINGS_SECTION_NAV, testId } from "@zcode/shared/test-ids";
 import { clickTestIdByDom } from "#e2e/helpers/desktop-app";
 import { sel } from "#e2e/helpers/selectors";
 
 export async function openModelProviderSettings() {
-  await clickTestIdByDom(TID_TASK_SETTINGS_BUTTON, {
-    timeout: 15000,
-    timeoutMsg: "没有找到设置入口按钮",
-  });
-  await $(sel(TID_SETTINGS_PAGE)).waitForDisplayed({ timeout: 15000 });
+  const navigation = $('[data-testid="workspace-primary-navigation"]:not([inert] *)');
+  const environment = navigation.$(sel("workspace-primary-environment"));
+  await environment.waitForDisplayed({ timeout: 15000 });
+  if ((await environment.getAttribute("aria-pressed")) !== "true") await environment.click();
   await clickTestIdByDom(testId(TID_SETTINGS_SECTION_NAV, "modelProvider"), {
     timeout: 15000,
-    timeoutMsg: "设置页没有出现模型供应商分区入口",
+    timeoutMsg: "环境菜单没有出现模型设置入口",
   });
+  await expect($(sel(TID_SETTINGS_PAGE))).toHaveAttribute("data-active-section", "modelProvider");
 }
 
 export async function assertNoRemoteModelProviderSyncAction() {

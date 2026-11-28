@@ -14,7 +14,7 @@ This file is meant for coding agents. When generating or editing UI in this repo
 The dedicated `text-ui-*` scale is a mandatory repository-wide constraint for application interface typography:
 
 - UI components must use `text-ui-xl`, `text-ui-lg`, `text-ui-base`, `text-ui-caption`, `text-ui-sm`, or `text-ui-xs`.
-- The shared Settings section heading may use the dedicated `text-ui-settings-title` / `lg:text-ui-settings-title-lg` role defined below.
+- The shared workspace page header and secondary navigation headings use `text-ui-workspace-page-title`. Settings section headings use `text-ui-settings-title` or `lg:text-ui-settings-title-lg`.
 - Do not introduce Tailwind's built-in `text-base`, `text-sm`, or `text-xs` for application UI.
 - Do not introduce arbitrary UI font sizes such as `text-[13px]` or inline `font-size` values.
 - The only content-level exceptions are code, Diff, and terminal rendering that consume their independent numeric font-size settings. Their surrounding controls, labels, headers, and metadata must still use `text-ui-*`.
@@ -86,6 +86,8 @@ Default light and dark CSS variables still exist as fallback foundations, but ne
   Alternate page region background when the layout needs a soft separation.
 - **Header / Panel / Sidebar**: `--color-header`, `--color-panel`, `--color-sidebar`
   Structural layout surfaces only. Do not reuse as generic card colors.
+- **Primary Navigation**: `--color-primary-navigation`
+  The leftmost icon rail (`WorkspacePrimaryNavigation`). It may sit one step darker than `--color-sidebar`; the sidebar and page background stay on their own tokens.
 - **Surface**: `--color-surface`
   Low-elevation container surface.
 - **Surface Hover**: `--color-surface-hover`
@@ -288,12 +290,13 @@ only for graph **axis furniture** — timebase tick labels, channel codes, and u
 suffixes in the workflow timeline — never for content, labels, or metadata.
 Treat any other use as a design-system defect.
 
-The shared Settings section heading uses `text-ui-settings-title` with
-`lg:text-ui-settings-title-lg`: `--ui-font-size + 10px` / `+ 16px` (24px / 30px
-at the default setting), with line-height ratios of `4 / 3` / `1.2` (32px / 36px
-by default). These tokens preserve the larger responsive heading while following
-the interface font setting. They are reserved for this page heading; ordinary
-section titles and controls retain the standard scale.
+The shared workspace page header and secondary navigation headings use
+`text-ui-workspace-page-title` with semibold weight at every window width. The token
+follows the interface font size and defaults to 20px with a 28px line height.
+Settings section headings use `text-ui-settings-title`, which defaults to 24px
+with a 32px line height. On wider windows they can use
+`lg:text-ui-settings-title-lg`, which defaults to 30px with a 36px line height.
+Ordinary section titles and controls use the standard scale.
 
 `text-mobile-input-safe` is a fixed 16px platform-compatibility token. It is
 reserved for editable controls on mobile Web surfaces where iOS focus zoom must

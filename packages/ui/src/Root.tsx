@@ -1119,7 +1119,7 @@ function RootInner({
   ]);
 
   useEffect(() => {
-    if (!workspaceShellPath) {
+    if (!workspaceShellPath && !isSettingsTabActive) {
       return;
     }
 

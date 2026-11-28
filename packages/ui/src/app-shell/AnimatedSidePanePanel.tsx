@@ -369,7 +369,7 @@ export function AnimatedSidePanePanel({
   onBrowserUrlChange,
   onBrowserPageMetadataChange,
   onSelectGitSource,
-  frameClassName = "rounded-xl border border-border",
+  frameClassName = "rounded-xl border-[0.5px] border-border shadow-xs",
   captionControlsStyle,
   showWindowControls,
   onCloseSidePane,
@@ -975,7 +975,6 @@ export function AnimatedSidePanePanel({
           !isScreenshotSurfaceActive &&
           "w-[var(--side-pane-content-width,100%)]",
         !mobileOverlay && frameClassName,
-        !mobileOverlay && "border-[0.5px] shadow-xs",
         mobileStacked && "max-md:rounded-none max-md:border-0",
         mobileOverlay && "min-w-0",
         mobileStacked && "max-md:!w-full",

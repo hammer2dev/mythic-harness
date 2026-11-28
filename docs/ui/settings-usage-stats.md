@@ -1,6 +1,6 @@
 # Settings Usage Stats
 
-设置页新增 `Usage` 分区，用来展示本地 session 快照聚合出来的粗略使用统计。
+桌面端从「环境 → 使用统计」打开 `Usage` 分区，Web 从模型网关打开。统计页展示应用用量与 Coding Plan 用量，套餐额度入口可以直达 Coding Plan 页签。
 
 ## 数据来源
 

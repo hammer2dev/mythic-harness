@@ -124,7 +124,6 @@ export interface ProjectSidebarProps {
   onOpenFolderFromWorkspaceMenu: () => void;
   onOpenRemoteWorkspace?: AppProps["onOpenRemoteWorkspace"];
   webRemoteControlWorkspaceSwitcher?: import("@/root/types.js").WebRemoteControlWorkspaceSwitcherApi;
-  theme: Theme;
   onConnectRemote: (
     options: RemoteTarget,
     requestId?: string,

@@ -37,7 +37,6 @@ import type {
 } from "@/lib/workspaceSidePane.js";
 import type { WorkspaceZCodeUIState } from "@/store/zcodeSessionStore.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
-import type { Theme } from "@/useTheme.js";
 import type {
   ChatSearchResultHighlightRequest,
   ConversationFindMatchState,
@@ -212,7 +211,13 @@ export interface GitChangeSummary {
   removed: number;
 }
 
-export type WorkspaceMainView = "chat" | "automations" | "plugin-store";
+export type WorkspaceMainView =
+  | "chat"
+  | "automations"
+  | "workflows"
+  | "plugin-store"
+  | "environment";
+export type EnvironmentWorkspaceSection = "agents" | "accounts";
 
 export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackService"> {
   workspaceReadOnlyReason?: string;
@@ -233,7 +238,6 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   handleOpenAutomations: OpenAutomationsMain;
   handleOpenPluginStore: () => void;
   workspaceShellZCodeState: WorkspaceShellZCodeState;
-  theme: Theme;
   isMacFullscreen: boolean;
   desktopWindowChromeState: DesktopWindowChromeState | null;
   macWindowControlsLeftPaddingPx: number;
@@ -311,7 +315,6 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   fileChangeFindNavigationRequestId: number;
   fileChangeFindQuery: string;
   onFileChangeFindMatchCountChange: (count: number) => void;
-  appLogoUrl: string;
   platform: IPlatformService;
   reloadSessionDisabled: boolean;
   reloadSessionPending: boolean;

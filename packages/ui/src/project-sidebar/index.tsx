@@ -10,8 +10,6 @@ import { remoteHostIdFromWorkspaceIdentity } from "@/project-sidebar/contract.js
 import type {
   ProjectSidebarProps,
   VirtualProject,
-  Locale,
-  Theme,
   RemoteProjectHost,
 } from "@/project-sidebar/contract.js";
 import { useProjectPinIntent } from "@/project-sidebar/useProjectPinIntent.js";
@@ -38,8 +36,6 @@ import {
   projectHasUnread,
   projectSourceServerId,
 } from "@/project-sidebar/view.js";
-import { TaskGroupedView } from "@/project-sidebar/TaskGroupedView.js";
-import { taskGroupKey } from "@/project-sidebar/grouped-view.js";
 import { ProjectTaskRows } from "@/project-sidebar/ProjectTaskRows.js";
 import {
   ProjectSidebarNode,
@@ -54,13 +50,9 @@ import { ProjectSections } from "@/project-sidebar/ProjectSections.js";
 import { ProjectSidebarListHeader } from "@/project-sidebar/ProjectSidebarListHeader.js";
 import { ProjectSidebarNavigation } from "@/project-sidebar/ProjectSidebarNavigation.js";
 import { HomeOnlyWorkspaceRows } from "@/project-sidebar/HomeOnlyWorkspaceRows.js";
-import { WorkspaceSidebarFooter } from "@/WorkspaceSidebarFooter.js";
 import { SidebarBottomActivity } from "@/sidebar-activity/SidebarBottomActivity.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import { useZCodeStore } from "@/store/StoreProvider.js";
-import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 export { attachRemoteProjectWorkspace } from "@/project-sidebar/remote-navigation.js";
 export { useRemoteWorkspaceConnectionGate } from "@/project-sidebar/useRemoteWorkspaceConnectionGate.js";
 export { resolveEntryProject } from "@/project-sidebar/view.js";
@@ -82,7 +74,6 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
     error,
     loading,
     preferences,
-    groups,
     deviceNames,
   } = useProjectDirectory();
   const { tree, pin } = useProjectPinIntent(authoritativeTree);
@@ -96,14 +87,9 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
     },
     [navigateToTask],
   );
-  const { intl, localePreference, setLocalePreference } = useZCodeIntl();
-  const tabStore = useTabStoreApi();
-  const setTheme = useZCodeStore((state) => state.setTheme);
-  const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
+  const { intl } = useZCodeIntl();
   const { view, setView } = preferences;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [groupedToolbar, setGroupedToolbar] = useState<HTMLDivElement | null>(null);
-  const [groupedSticky, setGroupedSticky] = useState<HTMLDivElement | null>(null);
   const [editor, setEditor] = useState<{ project: VirtualProject | null } | null>(null);
   const [creating, setCreating] = useState(false);
   const [worktreeProject, setWorktreeProject] = useState<VirtualProject | null>(null);
@@ -149,35 +135,14 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
     ],
   );
   const msg = (id: string) => intl.formatMessage({ id: `project.${id}` });
-  const start = async (projectId?: string, hostId?: string, taskGroupId?: string | null) => {
-    const activeTaskId = useZCodeSessionStore
-      .getState()
-      .getWorkspaceState(props.workspacePath, props.workspaceIdentity).activeTaskId;
-    const inheritedGroup =
-      view === "grouped" && !projectId && activeTaskId
-        ? (groups.parents.get(
-            taskGroupKey({
-              taskId: activeTaskId,
-              workspacePath: props.workspacePath,
-              workspaceIdentity: props.workspaceIdentity,
-            }),
-          ) ?? null)
-        : view === "grouped" && !projectId
-          ? (useZCodeSessionStore
-              .getState()
-              .getWorkspaceState(props.workspacePath, props.workspaceIdentity).draftTaskGroupId ??
-            null)
-          : null;
-    props.onCreateTask({
-      projectId: projectId ?? null,
-      taskGroupId: taskGroupId === undefined ? inheritedGroup : taskGroupId,
-      ...(hostId ? { hostId } : {}),
-    });
+  const start = async () => {
+    props.onCreateTask({ projectId: null, taskGroupId: null });
   };
   const projects = preferences.sort(selectSortedProjects(tree));
   const expandableProjects = projects.filter(
     (project) => availability.get(projectKey(project))?.online !== false,
   );
+  const pinnedProjects = projects.filter((project) => project.pinned);
   const hasExpandedProjects = expandableProjects.some(preferences.isExpanded);
   const reorder = (active: string, over: string) => {
     const source = projects.find((item) => projectKey(item) === active);
@@ -219,21 +184,6 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
       onOpenWorktrees={canManageWorktrees ? setWorktreeProject : undefined}
     />
   );
-  const openSettings = useCallback(() => {
-    tabStore.getState().openSettingsTab();
-  }, [tabStore]);
-  const changeLocale = useCallback(
-    (value: string) => setLocalePreference(value as Locale | "system"),
-    [setLocalePreference],
-  );
-  const changeTheme = useCallback((value: string) => setTheme(value as Theme), [setTheme]);
-  const upgrade = useCallback<
-    NonNullable<Parameters<typeof WorkspaceSidebarFooter>[0]["onUpgradeClick"]>
-  >(
-    (providerId, funnelContext) => openCodingPlanUpgrade({ providerId, funnelContext }),
-    [openCodingPlanUpgrade],
-  );
-  const banner = useMemo(() => <SidebarBottomActivity />, []);
   // 手机远控 home-only 没有 base attachment，也就没有项目契约；改用 relay 层工作区列表与重连入口。
   const homeOnlySwitcher = service ? undefined : props.webRemoteControlWorkspaceSwitcher;
   return (
@@ -259,12 +209,10 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
                   onOpenCommandCenter={props.onOpenCommandCenter}
                   view={view}
                   onViewChange={setView}
-                  groupedActionsRef={setGroupedToolbar}
                 />
                 {/* 原因：仅设 overflow-y:auto 会让拖拽位移打开水平滚动；列表始终只允许纵向滚动。 */}
                 {/* 原因：项目侧栏迁移后普通滚动容器遗漏边缘渐隐；复用统一 mask，随实际滚动边界更新。 */}
                 <div className="relative flex min-h-0 flex-1 flex-col">
-                  <div ref={setGroupedSticky} />
                   <ScrollFadeViewport ref={scrollRef} className="overflow-x-hidden">
                     <div className="flex flex-col gap-3 pb-3">
                       {homeOnlySwitcher ? (
@@ -276,11 +224,15 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
                             tasks={selectProjectRows(tree, { kind: "pinned" })}
                             onSelect={onSelectTask}
                             refresh={refresh}
-                          />
-                          <SortableProjects
-                            projects={projects.filter((project) => project.pinned)}
-                            renderProject={renderProject}
-                            onReorder={reorder}
+                            beforeTasks={
+                              pinnedProjects.length > 0 ? (
+                                <SortableProjects
+                                  projects={pinnedProjects}
+                                  renderProject={renderProject}
+                                  onReorder={reorder}
+                                />
+                              ) : null
+                            }
                           />
                           <ProjectSections
                             tree={tree}
@@ -300,35 +252,12 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
                             }
                           />
                         </>
-                      ) : view === "grouped" ? (
-                        <>
-                          <ProjectTaskRows
-                            kind="pinned"
-                            tasks={selectProjectRows(tree, { kind: "pinned" })}
-                            onSelect={onSelectTask}
-                            refresh={refresh}
-                          />
-                          <TaskGroupedView
-                            tasks={tree.tasks}
-                            onSelect={onSelectTask}
-                            refresh={refresh}
-                            scrollRef={scrollRef}
-                            toolbarTarget={groupedToolbar}
-                            stickyTarget={groupedSticky}
-                            workspacePath={props.workspacePath}
-                            workspaceIdentity={props.workspaceIdentity}
-                            onOpenAutomations={props.onOpenAutomations}
-                            onCreate={(groupId) =>
-                              action(() => start(undefined, undefined, groupId))
-                            }
-                          />
-                        </>
                       ) : (
                         <ProjectTaskRows
                           key={view}
-                          kind={view}
+                          kind={view === "grouped" ? "timeline" : view}
                           tasks={selectProjectRows(view === "unread" ? authoritativeTree : tree, {
-                            kind: view,
+                            kind: view === "grouped" ? "timeline" : view,
                           })}
                           onSelect={onSelectTask}
                           refresh={refresh}
@@ -348,25 +277,9 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
                   </ScrollFadeViewport>
                 </div>
               </div>
-              <WorkspaceSidebarFooter
-                className="pr-3"
-                theme={props.theme}
-                localeMenuValue={localePreference}
-                onLocaleChange={changeLocale}
-                onThemeChange={changeTheme}
-                onSettingsButtonClick={openSettings}
-                onUsageClick={openSettings}
-                onUpgradeClick={upgrade}
-                onLogin={props.onLogin}
-                onLogout={props.onLogout}
-                user={props.user}
-                workspacePath={props.workspacePath}
-                // 项目侧栏不再从 tab 反推身份；远控入口必须沿用当前 attachment 的精确 scope。
-                workspaceIdentity={props.workspaceIdentity}
-                workspaceRemoteSessionId={props.workspaceRemoteSessionId}
-                isDesktop={props.isDesktop}
-                banner={banner}
-              />
+              <div className="shrink-0 pl-4 pr-3 pt-2 pb-4 empty:hidden">
+                <SidebarBottomActivity />
+              </div>
             </div>
           </div>
           {creating && service && remoteService ? (
@@ -430,3 +343,20 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
 });
 
 export { ComposerSubmissionPendingContext } from "@/project-sidebar/ComposerSubmissionPendingContext.js";
+
+export {
+  WORKSPACE_PRIMARY_NAVIGATION_WIDTH_PX,
+  WorkspacePrimaryNavigation,
+  WorkspaceSecondaryNavigationTitle,
+  requestWorkspacePrimaryView,
+  addWorkspacePrimaryViewListener,
+} from "./WorkspacePrimaryNavigation.js";
+
+export {
+  WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX,
+  WORKSPACE_SIDEBAR_MAX_WIDTH_RATIO,
+  WORKSPACE_SIDEBAR_MIN_WIDTH_PX,
+  clampWorkspaceSidebarWidth,
+  persistWorkspaceSidebarWidthPx,
+  readStoredWorkspaceSidebarWidthPx,
+} from "./view-preference.js";
