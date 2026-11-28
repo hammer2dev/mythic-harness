@@ -80,17 +80,10 @@ export function extractWorkspaceOpenPath(parsedUrl: URL): string | null {
 }
 
 export function isShareImportUrl(parsedUrl: URL): boolean {
-  return (
-    parsedUrl.protocol === `${DEEP_LINK_SCHEME}:` &&
-    parsedUrl.hostname === SHARE_IMPORT_HOST &&
-    normalizeOAuthCallbackPath(parsedUrl.pathname) === "/import"
-  );
-}
-
-export function extractShareImportCode(parsedUrl: URL): string | null {
-  if (!isShareImportUrl(parsedUrl)) return null;
-  const code = parsedUrl.searchParams.get("code")?.trim();
-  return code && /^[A-Za-z0-9._~-]{1,512}$/u.test(code) ? code : null;
+  if (parsedUrl.protocol !== `${DEEP_LINK_SCHEME}:`) return false;
+  const pathname = normalizeOAuthCallbackPath(parsedUrl.pathname);
+  if (parsedUrl.hostname === SHARE_IMPORT_HOST) return pathname === "/import";
+  return !parsedUrl.hostname && pathname === "/share/import";
 }
 
 function decodeDeepLinkCandidate(value: string): string | null {
@@ -152,14 +145,7 @@ function extractFromCandidate(value: string): string | null {
   return match?.[0].replace(/&amp;/gi, "&").replace(/\\([&=?:/])/g, "$1") ?? null;
 }
 
-function isCompleteDeepLinkUrl(value: string): boolean {
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(value);
-  } catch {
-    return false;
-  }
-
+function isCompleteDeepLinkUrl(parsedUrl: URL): boolean {
   if (isOAuthCallbackUrl(parsedUrl)) {
     return parsedUrl.searchParams.has("state");
   }
@@ -176,10 +162,6 @@ function isCompleteDeepLinkUrl(value: string): boolean {
     return parsedUrl.searchParams.has("path");
   }
 
-  if (isShareImportUrl(parsedUrl)) {
-    return extractShareImportCode(parsedUrl) !== null;
-  }
-
   return true;
 }
 
@@ -190,10 +172,12 @@ export function extractDeepLinkUrlFromArgs(args: readonly string[]): string | nu
     for (const candidate of expandDecodedDeepLinkCandidates(arg)) {
       const match = extractFromCandidate(candidate);
       if (match) {
+        const parsed = URL.parse(match);
+        if (parsed && isShareImportUrl(parsed)) continue;
         // Debian/xdg 的协议回调可能被浏览器或桌面门户多次编码，
         // 也可能把 query 片段拆成相邻 argv。这里先生成有限候选再多轮解码，
         // 避免浏览器确认“打开 ZCode”后主进程拿不到完整回调 URL。
-        if (isCompleteDeepLinkUrl(match)) {
+        if (parsed && isCompleteDeepLinkUrl(parsed)) {
           return match;
         }
         fallbackMatch ??= match;

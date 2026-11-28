@@ -209,13 +209,7 @@ export function createServerRemoteWorkspaceServiceCollection(params: {
     .register(IZCodeTaskService, params.connectionServices.zcodeTaskService)
     .register(IZCodeAgentService, params.connectionServices.zcodeAgentService)
     .register(IZCodeSessionService, params.connectionServices.zcodeSessionService)
-    // R3 的分享属于目标 Environment；不能恢复旧 SSH 的本机 JWT 混装。
-    .register(
-      IConversationShareService,
-      params.targetKind === "server"
-        ? createUnsupportedRemoteConversationShareService()
-        : params.connectionServices.conversationShareService,
-    )
+    .register(IConversationShareService, createUnsupportedRemoteConversationShareService())
     .register(IBotsService, params.connectionServices.botsService)
     .register(IFileWatcherService, params.connectionServices.fileWatcherService)
     .register(IOAuthService, params.connectionServices.oauthService)

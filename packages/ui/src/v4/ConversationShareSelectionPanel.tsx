@@ -338,7 +338,7 @@ function ConversationShareSelectionPanelImpl({
               ref={visualThumbRef}
               aria-hidden="true"
               data-testid="conversation-share-selection-scroll-thumb"
-              className="pointer-events-none absolute right-1 top-0 z-10 hidden w-1.5 rounded-full bg-border opacity-0 transition-opacity group-hover/share-selection-panel:opacity-100 group-focus-within/share-selection-panel:opacity-100 [@media(hover:none)]:opacity-100"
+              className="pointer-events-none absolute right-1 top-0 z-10 hidden w-1 rounded-full bg-border opacity-0 transition-opacity group-hover/share-selection-panel:opacity-100 group-focus-within/share-selection-panel:opacity-100 [@media(hover:none)]:opacity-100"
             />
           </div>
           {onConfirm && onCancel ? (

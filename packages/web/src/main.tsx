@@ -41,21 +41,10 @@ import {
 } from "@zcode/client";
 
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
+import { isConversationSharePath } from "./share/conversationShareRoute.js";
 import { WebLoginPage } from "./auth/WebLoginPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
 import { WEB_ZAI_OAUTH_CONFIG, resolveWebAuthDevReturnTo } from "./auth/webZaiOAuthConfig.js";
-import {
-  ConversationShareLandingLoader,
-  ConversationShareLandingStatus,
-} from "./share/ConversationShareLandingPage.js";
-import {
-  ConversationSharePreviewClient,
-  resolveConversationShareRouteLocale,
-} from "./share/conversationSharePreviewClient.js";
-import {
-  isConversationSharePath,
-  resolveConversationShareCodeFromPath,
-} from "./share/conversationShareRoute.js";
 import type {
   WebRemoteControlFailure,
   WebRemoteControlFailureReason,
@@ -199,10 +188,7 @@ function resolveWebThemePreference(defaultTheme: Theme = WEB_REMOTE_CONTROL_DEFA
 // 初始化主题：默认 Zai dark，后续由 useTheme hook 接管
 // system 模式下需要查询系统偏好；非 system 模式直接用存储值
 {
-  // 分享页没有本地主题配置时使用浅色，已有配置仍然沿用；其他 Web 页面继续默认深色。
-  const saved = resolveWebThemePreference(
-    isConversationSharePath(window.location.pathname) ? "zai-light" : undefined,
-  );
+  const saved = resolveWebThemePreference();
   const resolved =
     saved === "system"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -305,80 +291,6 @@ function renderWebAuthCallbackPage(): void {
       onRetry={() => {
         window.location.replace(safeRetryTarget ?? "/remote/v4");
       }}
-    />,
-  );
-}
-
-async function renderConversationSharePage(): Promise<void> {
-  // 页面语言跟随路径前缀：/cn/share 中文，裸 /share 英文。
-  const routeLocale = resolveConversationShareRouteLocale(window.location.pathname);
-  // index.html 固定 lang="en"；不同步会让中文分享页对无障碍与浏览器翻译都报错语言。
-  document.documentElement.lang = routeLocale;
-  // 分享页必须设置 title：否则浏览器标签只显示 index.html 的通用标题。
-  // 会话标题要等 preview 加载完，先给一个语言正确的兜底。
-  document.title = routeLocale === "zh-CN" ? "ZCode 会话分享" : "ZCode Conversation Share";
-  const shareCode = resolveConversationShareCodeFromPath(window.location.pathname);
-  if (!shareCode) {
-    root.render(
-      <ConversationShareLandingStatus
-        state={{ kind: "error", error: "invalid_contract" }}
-        locale={routeLocale}
-      />,
-    );
-    return;
-  }
-
-  const endpointOrigin =
-    import.meta.env.VITE_ZCODE_BASE_URL?.trim().replace(/\/+$/u, "") || window.location.origin;
-  const mockMode =
-    import.meta.env.DEV && import.meta.env.VITE_CONVERSATION_SHARE_PREVIEW_MOCK === "true";
-  // Share 加载失败不能只有通用 network 文案：需要区分 mock、endpoint 配置或跨域 fetch。
-  // 这里只记录运行时路由与 endpoint，不记录完整 pathname，避免把 share code 写入日志。
-  console.info("[conversation-share-web]", "preview_runtime_initialized", {
-    browserOrigin: window.location.origin,
-    routeKind: "canonical",
-    endpointOrigin,
-    transport: mockMode ? "mock" : "fetch",
-  });
-  const client = mockMode
-    ? new (
-        await import("./share/mockConversationSharePreviewClient.js")
-      ).MockConversationSharePreviewClient()
-    : new ConversationSharePreviewClient({ baseUrl: `${endpointOrigin}/api/v1` });
-  const getMockToken = () =>
-    mockMode && window.sessionStorage.getItem("zcode:share:mock-auth") === "owner"
-      ? "mock-owner-token"
-      : null;
-  const onLogout = () => {
-    if (mockMode) {
-      window.sessionStorage.removeItem("zcode:share:mock-auth");
-      window.location.reload();
-      return;
-    }
-    void webAuthService.logout();
-  };
-  root.render(
-    <ConversationShareLandingLoader
-      shareCode={shareCode}
-      client={client}
-      getAccessToken={() => getMockToken() ?? webAuthService.getZCodeJwtToken()}
-      onLogin={(provider, signal) => {
-        if (mockMode) {
-          window.sessionStorage.setItem("zcode:share:mock-auth", "owner");
-          window.location.reload();
-          return;
-        }
-        return webAuthService.startLogin({
-          signal,
-          provider,
-          appReturnTo: window.location.href,
-          redirectUri: WEB_ZAI_OAUTH_CONFIG.shareRedirectUri,
-          devReturnTo: resolveWebAuthDevReturnTo(WEB_ZAI_OAUTH_CONFIG, "share"),
-        });
-      }}
-      onLogout={onLogout}
-      locale={routeLocale}
-      theme={resolveWebThemePreference("zai-light")}
     />,
   );
 }
@@ -1831,21 +1743,24 @@ async function bootstrapExternalRelayWebRemoteControl(
 
 async function bootstrapWebApp() {
   const params = new URLSearchParams(window.location.search);
-  if (isWebRemoteControlRoute() || isWebRemoteControlOAuthCallback(new URL(window.location.href))) {
-    document.documentElement.lang = resolveWebRemoteControlScreenLocale(navigator.language);
-  }
-  if (isWebOAuthCallback(params)) {
-    renderWebAuthCallbackPage();
-    return;
-  }
-
-  if (isConversationSharePath(window.location.pathname)) {
-    await renderConversationSharePage();
-    return;
-  }
-
-  if (isWebRemoteControlRoute()) {
-    await remoteEntry.start();
+  const share = isConversationSharePath(window.location.pathname);
+  if (share || isWebRemoteControlRoute() || isWebOAuthCallback(params)) {
+    const locale = resolveWebRemoteControlScreenLocale(navigator.language);
+    document.documentElement.lang = locale;
+    const title =
+      locale === "zh-CN"
+        ? share
+          ? "会话分享已下线"
+          : "官方手机远控暂已下线"
+        : share
+          ? "Conversation sharing is unavailable"
+          : "Mobile remote control is unavailable";
+    document.title = `ZCode · ${title}`;
+    root.render(
+      <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground">
+        <h1 className="text-ui-lg font-medium">{title}</h1>
+      </main>,
+    );
     return;
   }
 

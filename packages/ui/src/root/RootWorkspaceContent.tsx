@@ -35,7 +35,6 @@ interface RootWorkspaceContentProps {
   allowRemoteWorkspace: NonNullable<RootProps["allowRemoteWorkspace"]>;
   handleBackFromSettings: () => void;
   // Bugfix：工作区内的设置层显式转发 props，漏掉它会让分享管理解析到会话却不显示「跳转对话」。
-  handleOpenTaskFromSettings: NonNullable<WorkspaceSettingsLayerProps["onOpenTask"]>;
   handleLogout?: () => void;
   onLogin?: () => void;
   user: AppProps["user"];
@@ -78,7 +77,6 @@ export function RootWorkspaceContent({
   remoteWorkspaceSessions,
   allowRemoteWorkspace,
   handleBackFromSettings,
-  handleOpenTaskFromSettings,
   handleLogout,
   onLogin,
   user,
@@ -208,7 +206,6 @@ export function RootWorkspaceContent({
             windowsWindowControlsRightPaddingPx={windowsWindowControlsRightPaddingPx}
             captionWorkspacePath={activeWorkspacePath}
             onBack={activeWorkspacePath ? handleBackFromSettings : undefined}
-            onOpenTask={handleOpenTaskFromSettings}
             onCreateTask={handleCreateTask}
             onOpenWorkspace={handleOpenWorkspace}
             onOpenRemoteWorkspace={handleOpenRemoteWorkspace}
