@@ -49,7 +49,10 @@ function ScrollBar({
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll-area-thumb"
-        className="relative min-h-2 min-w-2 flex-1 rounded-full bg-border"
+        className={cn(
+          "relative flex-1 rounded-full bg-border",
+          orientation === "horizontal" ? "min-w-2" : "min-h-2",
+        )}
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   );
