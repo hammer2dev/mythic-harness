@@ -1,4 +1,5 @@
 import { IGenUiService } from "@zcode/services";
+import { IAgentApplicationsService } from "@zcode/services/agent-applications";
 import { ProxyChannel, type IChannelClient } from "@zcode/rpc";
 import {
   IFileService,
@@ -84,6 +85,7 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly settingService: ISettingService;
   readonly onboardingRecordService: IOnboardingRecordService;
   readonly credentialService: ICredentialService;
+  readonly agentApplicationsService?: IAgentApplicationsService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
   readonly windowControllerService: IWindowControllerService;
@@ -151,6 +153,7 @@ export class RemoteServiceAccess implements IServiceAccessor {
       extensionsService?: boolean;
       managedWorktreeService?: boolean;
       windowProjectDirectory?: boolean;
+      agentApplicationsService?: boolean;
     } = {},
   ) {
     // 远端工作区的 project 必须保留 Source 语义；只有显式能力才创建完整窗口目录组。
@@ -222,6 +225,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
       ? ProxyChannel.toService<IManagedWorktreeService>(
           channelClient.getChannel(IManagedWorktreeService.channelName),
         )
+      : undefined;
+    this.agentApplicationsService = options.agentApplicationsService
+      ? ProxyChannel.toService(channelClient.getChannel(IAgentApplicationsService.channelName))
       : undefined;
     this.zcodeSessionService = ProxyChannel.toService<IZCodeSessionService>(
       channelClient.getChannel(IZCodeSessionService.channelName),

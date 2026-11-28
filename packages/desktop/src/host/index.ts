@@ -3,6 +3,7 @@ import { resolvePreinstalledToolsBinDir } from "@zcode/shared/preinstalled-tools
 import { ZCODE_PRODUCT_FLAVOR, resolveZCodeRuntimeEnv } from "@zcode/shared";
 import { normalizeRemoteConnectionError, sanitizeRemoteConnectionLog } from "@zcode/shared";
 import { createCredentialCipherBridge } from "@zcode/shared/credential-security";
+import { createAgentApplications } from "@zcode/services/agent-applications/node";
 import { join } from "node:path";
 /* eslint-disable max-lines -- Host 入口集中编排 local/remote service wiring，本次退出保护需要在同一处桥接 host 上报。 */
 /* eslint-disable max-lines -- host process 入口集中维护 local/remote 初始化和资源回收，realtime bridge 接入后先保持同文件收口。 */
@@ -283,6 +284,7 @@ const credentialCipherBridge = createCredentialCipherBridge((request) => {
   if (!parentPort) throw new Error("parentPort unavailable");
   parentPort.postMessage({ type: HostResponseTypes.CredentialCipherRequest, ...request });
 });
+let windowHostAgentApplications: ReturnType<typeof createAgentApplications> | undefined;
 const hostNetworkCapture = createHostNetworkCapture(parentPort);
 
 // 进程检索体验优化：host 由 utilityProcess 拉起时外壳仍是 Electron Helper，
@@ -2889,6 +2891,8 @@ function exposeServicesOnMessagePort(
     overrides,
     clientMode,
     attachmentScope,
+    getAgentApplicationsService: () =>
+      (windowHostAgentApplications ??= createAgentApplications()).service,
     windowServices: activeServices ?? undefined,
     ...(isWebRemoteAttachment
       ? { decorateWindowProjectService: webRemoteProjectTreeActivity.decorate }
@@ -3026,6 +3030,8 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
     pluginSandboxRegistrationBridge.dispose();
     windowHostExtensions?.dispose();
     windowHostExtensions = null;
+    const agentApplications = windowHostAgentApplications;
+    windowHostAgentApplications = undefined;
     stopHostNetworkTelemetry();
     hostNetworkCapture.setCaptureId(null);
     hostSelfResourceTelemetry.stop();
@@ -3089,7 +3095,13 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
         : [],
       { phaseTimeoutMs: 3_500, log: (message, details) => logger.warn(message, details) },
     );
-    const results = await Promise.all([remoteDisposal, serviceDisposal]);
+    const agentApplicationsDisposal = runHostShutdownPhases(
+      agentApplications
+        ? [{ name: "agent-applications-dispose", run: () => agentApplications.dispose(), timeoutMs: 3_500 }]
+        : [],
+      { phaseTimeoutMs: 3_500, log: (message, details) => logger.warn(message, details) },
+    );
+    const results = await Promise.all([remoteDisposal, serviceDisposal, agentApplicationsDisposal]);
     const shutdownResult: HostShutdownResult = {
       exitCode: results.some((result) => result.exitCode !== 0) ? 1 : 0,
       failedPhases: results.flatMap((result) => result.failedPhases),
@@ -3123,6 +3135,8 @@ function disposeHostResourcesBestEffort(reason: string): void {
   pluginSandboxRegistrationBridge.dispose();
   windowHostExtensions?.dispose();
   windowHostExtensions = null;
+  void windowHostAgentApplications?.dispose();
+  windowHostAgentApplications = undefined;
   stopHostNetworkTelemetry();
   hostNetworkCapture.setCaptureId(null);
   disposeLocalResourceTelemetry();

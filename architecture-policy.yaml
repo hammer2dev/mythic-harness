@@ -2028,6 +2028,48 @@ modules:
     layers:
       adapters: .
     owner: runtime
+  # agent-applications：由 architecture:adopt 登记
+  - id: agent-applications
+    roots:
+      - packages/services/src/agent-applications
+    managed: true
+    requires:
+      - agent-applications-contract
+      - services
+      - shared
+    publicEntrypoints:
+      - packages/services/src/agent-applications/index.ts
+      - packages/services/src/agent-applications/contract.ts
+    layers:
+      adapters: .
+    owner: desktop
+  # ui-agent-applications：由 architecture:adopt 登记
+  - id: ui-agent-applications
+    roots:
+      - packages/ui/src/agent-applications
+      - packages/ui/src/hooks/useAgentApplications.ts
+    managed: true
+    requires:
+      - agent-applications-contract
+      - shared
+      - ui
+    publicEntrypoints:
+      - packages/ui/src/agent-applications/index.ts
+      - packages/ui/src/agent-applications/contract.ts
+    layers:
+      ui: .
+    owner: desktop
+  # agent-applications-contract：由 architecture:adopt 登记
+  - id: agent-applications-contract
+    roots:
+      - packages/shared/src/agent-applications
+    managed: true
+    requires: []
+    publicEntrypoints:
+      - packages/shared/src/agent-applications/contract.ts
+    layers:
+      domain: .
+    owner: desktop
   # 只纳入本次变更的 Provider 数据校验层。
   - id: provider-config-schema
     roots:

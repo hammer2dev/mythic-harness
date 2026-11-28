@@ -1,4 +1,5 @@
 import { ProxyChannel, type IDisposable, type IChannelServer } from "@zcode/rpc";
+import { IAgentApplicationsService } from "@zcode/services/agent-applications";
 import {
   ServiceCollection,
   type ITerminalService,
@@ -138,6 +139,7 @@ export function exposeWindowHostAttachmentServices(params: {
   overrides?: ReadonlyMap<string, unknown>;
   attachmentScope?: { kind: "local" | "remote" | "source-settings" };
   windowServices?: ServiceCollection;
+  getAgentApplicationsService?: () => IAgentApplicationsService;
   /** 手机窗口目录与 project 频道同样叠加实时交互，避免远端 scope 下列表缺「待处理」。 */
   decorateWindowProjectService?: (service: IProjectService) => IProjectService;
 }): void {
@@ -163,17 +165,23 @@ export function exposeWindowHostAttachmentServices(params: {
       resolveWindowHostServiceExposurePolicy(params.clientMode),
     );
   }
+  const isLocalDesktop =
+    params.clientMode === "desktop-continuous" && params.attachmentScope?.kind === "local";
   params.services.exposeOnChannelServer(
     params.server,
     resolveAttachmentOverrides(params.services, params.clientMode, params.overrides),
     {
       ...resolveWindowHostServiceExposurePolicy(params.clientMode),
       // 只有本机桌面 MessagePort 具备恢复权限；远端、手机和未知 scope 均默认拒绝。
-      ...(params.clientMode === "desktop-continuous" && params.attachmentScope?.kind === "local"
-        ? { credentialStoreRecovery: "local-desktop" as const }
-        : {}),
+      ...(isLocalDesktop ? { credentialStoreRecovery: "local-desktop" as const } : {}),
     },
   );
+  if (isLocalDesktop && params.getAgentApplicationsService) {
+    params.server.registerChannel(
+      IAgentApplicationsService.channelName,
+      ProxyChannel.fromService(params.getAgentApplicationsService()),
+    );
+  }
   if (params.clientMode === "web-remote-replayable") {
     if (params.attachmentScope?.kind === "local") {
       const highspeed = params.services.getOptional(IHighspeedCardService);

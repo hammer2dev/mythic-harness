@@ -345,6 +345,7 @@ function initializeBusinessRoot(port: MessagePort): void {
     sourceServerManagementService: true,
     deviceSyncStateService: true,
     managedWorktreeService: true,
+    agentApplicationsService: true,
     // 扩展门面只在桌面本机 Host 注册（docs/plugins/extension-host.md）。
     extensionsService: true,
   });

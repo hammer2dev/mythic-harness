@@ -1,0 +1,37 @@
+{
+  "retrieved": "2026-11-18",
+  "assets": [
+    {
+      "file": "openai.svg",
+      "application": "Codex",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/openai.svg",
+      "brand": "https://openai.com/brand/",
+      "note": "OpenAI Blossom；对应参考界面中的 Codex 标识，矢量来自 Lobe Icons。"
+    },
+    {
+      "file": "claude.svg",
+      "application": "Claude Agent",
+      "source": "https://claude.com/icon.svg"
+    },
+    {
+      "file": "kimi.png",
+      "application": "Kimi Code",
+      "source": "https://www.kimi.com/pwa-192.png"
+    },
+    {
+      "file": "gemini.png",
+      "application": "Gemini CLI",
+      "source": "https://github.com/google-gemini/gemini-cli/blob/main/packages/vscode-ide-companion/assets/icon.png"
+    },
+    {
+      "file": "opencode-dark.svg",
+      "application": "OpenCode",
+      "source": "https://opencode.ai/brand/files/opencode-logo-dark.svg"
+    },
+    {
+      "file": "opencode-light.svg",
+      "application": "OpenCode",
+      "source": "https://opencode.ai/brand/files/opencode-logo-light.svg"
+    }
+  ]
+}

@@ -230,6 +230,7 @@ function createMainDefines() {
 
 const desktopNodeRuntimeExternals = [
   "electron",
+  "@anthropic-ai/claude-agent-sdk",
   "node-pty",
   "@napi-rs/keyring",
   "ssh2",
