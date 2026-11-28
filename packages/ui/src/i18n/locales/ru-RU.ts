@@ -2839,6 +2839,8 @@ const ruRU: Record<string, string> = {
     "Откройте это рабочее пространство удалённо с помощью камеры телефона.",
   "webRemoteControl.statusTag.phone": "Телефон",
   "webRemoteControl.statusTag.ready": "Готово",
+  "webRemoteControl.botChannel.dialogDescription":
+    "Управляйте рабочей областью ZCode через чат-бота.",
   "webRemoteControl.botChannel.title": "Через канал бота",
   "webRemoteControl.botChannel.description":
     "Подключите чат-бота для долговременного мобильного доступа.",

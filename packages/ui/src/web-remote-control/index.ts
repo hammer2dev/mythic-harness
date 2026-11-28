@@ -1,4 +1,5 @@
 export { WebRemoteControlDialog } from "@/web-remote-control/WebRemoteControlDialog.js";
+export { WorkspaceBotChannelsTrigger } from "./WorkspaceBotChannelsTrigger.js";
 export {
   isSameWebRemoteControlTarget,
   isReusableWebRemoteControlSession,

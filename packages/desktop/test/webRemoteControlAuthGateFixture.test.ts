@@ -82,7 +82,6 @@ it.each([
   "conversation-session-status-panel-inline-layout.test.ts",
   "conversation-session-background-history-layout.test.ts",
   "conversation-session-r3-mobile-startup-restore.test.ts",
-  "conversation-session-project-management.test.ts",
   "conversation-session-highspeed-card.test.ts",
 ])(
   "provides %s with an isolated authenticated relay and the current Web frontend",

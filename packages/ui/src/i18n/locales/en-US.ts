@@ -3393,6 +3393,8 @@ const enUS: Record<string, string> = {
   "webRemoteControl.mobileQr.description": "Use your phone camera to open this workspace remotely.",
   "webRemoteControl.statusTag.phone": "Phone",
   "webRemoteControl.statusTag.ready": "Ready",
+  "webRemoteControl.botChannel.dialogDescription":
+    "Control this ZCode workspace through a chat bot.",
   "webRemoteControl.botChannel.title": "Use a bot channel",
   "webRemoteControl.botChannel.description": "Connect a chat bot for longer-running mobile access.",
   "webRemoteControl.botChannel.weixin.title": "Weixin",

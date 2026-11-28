@@ -2869,6 +2869,8 @@ const jaJP: Record<string, string> = {
     "スマートフォンのカメラでこのワークスペースをリモートで開きます。",
   "webRemoteControl.statusTag.phone": "スマートフォン",
   "webRemoteControl.statusTag.ready": "準備完了",
+  "webRemoteControl.botChannel.dialogDescription":
+    "チャットボットで ZCode ワークスペースを操作できます。",
   "webRemoteControl.botChannel.title": "ボットチャネルを使用",
   "webRemoteControl.botChannel.description":
     "チャットボットを接続すると、より長時間のモバイルアクセスが可能になります。",

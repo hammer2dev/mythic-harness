@@ -2790,6 +2790,8 @@ const koKR: Record<string, string> = {
   "webRemoteControl.mobileQr.description": "휴대폰 카메라로 이 워크스페이스를 원격으로 여세요.",
   "webRemoteControl.statusTag.phone": "휴대폰",
   "webRemoteControl.statusTag.ready": "준비됨",
+  "webRemoteControl.botChannel.dialogDescription":
+    "채팅 봇으로 ZCode 작업 공간을 제어할 수 있습니다.",
   "webRemoteControl.botChannel.title": "봇 채널 사용",
   "webRemoteControl.botChannel.description": "채팅 봇을 연결하여 더 오래 모바일에서 액세스하세요.",
   "webRemoteControl.botChannel.weixin.title": "Weixin",

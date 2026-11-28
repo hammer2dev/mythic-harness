@@ -37,7 +37,6 @@ export async function prepareWebRemoteControlAuthGateFixture(options: {
         spec.endsWith("conversation-session-r3-mobile.test.ts") ||
         spec.endsWith("conversation-session-r3-mobile-permission.test.ts") ||
         spec.endsWith("conversation-session-r3-mobile-startup-restore.test.ts") ||
-        spec.endsWith("conversation-session-project-management.test.ts") ||
         spec.endsWith("conversation-session-r3-soak-dual.test.ts") ||
         spec.endsWith("conversation-session-web-remote-project-directory.test.ts") ||
         spec.endsWith("conversation-session-remote-draft-prewarm.test.ts") ||
@@ -92,7 +91,6 @@ export async function prepareWebRemoteControlAuthGateFixture(options: {
             spec.endsWith("conversation-session-v4-composer-toolbar.test.ts") ||
             spec.endsWith("conversation-session-highspeed-card.test.ts") ||
             spec.endsWith("conversation-session-r3-mobile-startup-restore.test.ts") ||
-            spec.endsWith("conversation-session-project-management.test.ts") ||
             spec.endsWith("conversation-session-new-task-missing-root-mobile.test.ts") ||
             spec.endsWith("conversation-session-draft-model-migration-mobile.test.ts") ||
             spec.endsWith("conversation-session-v4-session-action-locks.test.ts") ||

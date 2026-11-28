@@ -3161,6 +3161,7 @@ const zhCN: Record<string, string> = {
   "webRemoteControl.mobileQr.description": "用手机相机扫码，在手机上打开这个工作区。",
   "webRemoteControl.statusTag.phone": "手机",
   "webRemoteControl.statusTag.ready": "已就绪",
+  "webRemoteControl.botChannel.dialogDescription": "通过聊天机器人控制 ZCode 工作区。",
   "webRemoteControl.botChannel.title": "使用 Bot Channel",
   "webRemoteControl.botChannel.description": "连接聊天 Bot，适合更长时间的移动端访问。",
   "webRemoteControl.botChannel.weixin.title": "微信",

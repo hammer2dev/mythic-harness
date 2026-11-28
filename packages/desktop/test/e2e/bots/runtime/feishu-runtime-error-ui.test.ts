@@ -6,6 +6,7 @@ import {
   seedSettings,
   waitForDefaultWorkspaceReady,
 } from "#e2e/helpers/desktop-app";
+import { clearRendererViewport, setRendererViewport } from "#e2e/helpers/renderer-viewport";
 import {
   createFeishuConfig,
   readBotSyntheticFixture,
@@ -106,10 +107,52 @@ describe("Feishu runtime error Desktop UI", () => {
 });
 
 async function openBotsDialog() {
-  const remoteControl = await $('button[aria-label="移动端远程控制"]');
-  await remoteControl.waitForClickable({ timeout: 20_000 });
+  const remoteControl = await $(
+    '[data-testid="workspace-primary-navigation"] [data-testid="workspace-bot-channels-trigger"]',
+  );
+  await setRendererViewport(390, 620);
+  try {
+    await remoteControl.waitForClickable({ timeout: 20_000 });
+    await remoteControl.click();
+    const narrowDialog = await $('[data-testid="bot-channels-entry-dialog"]');
+    await narrowDialog.waitForDisplayed();
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const dialog = document.querySelector('[data-testid="bot-channels-entry-dialog"]')!;
+        const manage = dialog.querySelector('[data-testid="web-remote-control-open-bots"]')!;
+        const close = dialog.querySelector('[data-slot="dialog-close"]')!;
+        const scroll = manage.closest("section")!.parentElement!;
+        scroll.scrollTo({ top: scroll.scrollHeight, behavior: "instant" });
+        const rect = close.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        return scroll.scrollTop > 0 && close.contains(hit);
+      }),
+    );
+    await narrowDialog.$('[data-slot="dialog-close"]').click();
+    await narrowDialog.waitForExist({ reverse: true });
+  } finally {
+    await clearRendererViewport();
+  }
+
   await remoteControl.click();
-  const openBots = await $('[data-testid="web-remote-control-open-bots"]');
+  const channels = await $('[data-testid="bot-channels-entry-dialog"]');
+  await channels.waitForDisplayed();
+  expect(
+    await browser.execute(() =>
+      Array.from(document.querySelectorAll("[data-bot-channel-provider]"), (card) =>
+        card.getAttribute("data-bot-channel-provider"),
+      ),
+    ),
+  ).toEqual(["weixin", "feishu", "lark", "telegram"]);
+  expect(await $('[data-testid="web-remote-control-scan-card"]').isExisting()).toBe(false);
+  expect(await $('[data-testid="web-remote-control-login"]').isExisting()).toBe(false);
+  await channels.$('[data-bot-channel-provider="feishu"]').click();
+  await browser.waitUntil(() => botsDialogIncludes(BOT_NAME), {
+    timeout: 20_000,
+    timeoutMsg: "飞书渠道卡未打开现有机器人的配置",
+  });
+  await browser.keys("Escape");
+  const openBots = await channels.$('[data-testid="web-remote-control-open-bots"]');
   await openBots.waitForClickable({ timeout: 20_000 });
   await openBots.click();
 }
