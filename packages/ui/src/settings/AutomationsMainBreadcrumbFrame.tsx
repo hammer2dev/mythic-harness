@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import {
   SettingsBreadcrumbProvider,
   SettingsHeaderBreadcrumb,
@@ -6,19 +7,20 @@ import {
 } from "@/settings/SettingsHeaderBreadcrumb.js";
 
 /**
- * 工作区 Automations 不经过 SettingsPage，编辑页的面包屑上报需要 Provider 接收，
- * 所以桌面顶栏只剩空拖拽区；这里让工作区入口复用设置页的同一套面包屑合同。
+ * 这些工作区页面有自己的面包屑，切入时项目标题栏会隐藏，由当前顶栏承接共用窗控。
  */
 export function AutomationsMainBreadcrumbFrame({
   ariaLabel,
   children,
   isDesktop,
   sectionLabel,
+  showWindowControls,
 }: {
   ariaLabel: string;
   children: ReactNode;
   isDesktop: boolean;
   sectionLabel: string;
+  showWindowControls: boolean;
 }) {
   const [items, setItems] = useState<readonly SettingsBreadcrumbItem[]>([]);
 
@@ -27,10 +29,15 @@ export function AutomationsMainBreadcrumbFrame({
       <div className="flex min-h-0 flex-1 flex-col">
         {isDesktop ? (
           <div
-            className="h-12 shrink-0 [app-region:drag]"
+            className="flex h-12 shrink-0 items-center [app-region:drag]"
             data-testid="automations-main-drag-region"
           >
             <SettingsHeaderBreadcrumb ariaLabel={ariaLabel} items={items} />
+            {showWindowControls ? (
+              <div className="ml-auto shrink-0 pr-2">
+                <DesktopWindowControls />
+              </div>
+            ) : null}
           </div>
         ) : null}
         {children}

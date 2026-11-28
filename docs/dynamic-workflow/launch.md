@@ -1542,7 +1542,8 @@ The hub is where a user sees, manages and runs saved workflows without a convers
 
 ### Where it lives
 
-The automations main view has two top-level tabs, and the page title is the switch:
+The desktop workspace has separate Scheduled Tasks and Workflows entries in its primary
+navigation. In the shared automations view outside these workspace entries, the title switches tabs:
 「自动化 / 工作流」 ("Automations / Workflows"), two title-sized words side by side, the
 inactive one in a subtler colour. Arrow keys move between them. The last choice is kept in
 `sessionStorage` under one application-wide key, so returning from a detail page or a
@@ -1550,10 +1551,9 @@ conversation lands on the same tab. A navigation request with `openAutomationTab
 "workflow"` selects the tab. The automations view, and with it the hub, is not offered in
 the web remote-control shell.
 
-Below the title: a subtitle (「保存在已打开项目里的工作流，填好参数就能再跑一次。」), the
-section heading 「已保存的工作流」 with the total count, and, on the right, a ghost button
-「工作流设置」 (Workflow settings) followed by the current mode's label in the tertiary text
-colour, then a refresh button 「刷新」 that makes every group reload past its cache. The
+Below the page title, the section heading 「已保存的工作流」 shows the total count. On the right,
+a ghost button 「工作流设置」 (Workflow settings) shows the current mode in the tertiary text
+colour. The refresh button 「刷新」 reloads each group past its cache. The
 settings button opens Settings › Agent 能力 › 行为与工具, where the mode row lives (see "The user's choice"),
 and is present exactly when that row is, which is whenever the hub is shown, except for a
 snapshot from an older Host.

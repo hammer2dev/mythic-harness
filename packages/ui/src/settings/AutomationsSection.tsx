@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useCodingPlanEntryGate } from "@/settings/CodingPlanEntryButton.js";
 /* eslint-disable max-lines -- 定时任务主视图集中维护列表、创建/编辑整页路由与启停/删除操作，集中更利于交互一致。 */
 import {
@@ -9,7 +10,7 @@ import {
   type ComponentType,
   type SVGProps,
 } from "react";
-import { CircleCheck, RotateCcw, TriangleAlert } from "lucide-react";
+import { CalendarClock, CircleCheck, Clock, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   AUTOMATION_CREATE_LIMIT,
   BUILTIN_MODEL_PROVIDER_IDS,
@@ -100,7 +101,10 @@ import {
   AutomationTrashIcon,
 } from "@/settings/AutomationDesignPrimitives.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
-import { SETTINGS_FRAME_CONTENT_CLASSNAME } from "@/settings/SettingsPageParts.js";
+import {
+  SETTINGS_FRAME_CONTENT_CLASSNAME,
+  WorkspacePageHeader,
+} from "@/settings/SettingsPageParts.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
 import {
@@ -147,6 +151,8 @@ import {
 import { AutomationTemplateSkeletonGrid } from "@/settings/AutomationTemplateSkeletonGrid.js";
 
 interface AutomationsSectionProps {
+  workspacePage?: AutomationsPageTab;
+  secondaryNavigation?: HTMLElement | null;
   workspacePath?: string | null;
   workspaceIdentity?: string;
   /** 「Create via chat」:切到会话让 agent 用 CronCreate 创建;缺省则回退到手动创建整页。
@@ -521,6 +527,8 @@ function AutomationStatusFilterEmpty() {
 }
 
 export function AutomationsSection({
+  workspacePage,
+  secondaryNavigation,
   workspacePath,
   workspaceIdentity,
   onCreateViaChat,
@@ -621,7 +629,9 @@ export function AutomationsSection({
   // 灰度关时忽略 sessionStorage 里记住的「工作流」：只收窄读出来的值，记忆本身不清，
   // 灰度再开时用户仍然回到上次那一页。中枢只在 `pageTab === "workflow"` 分支挂载，
   // 收窄 pageTab 等于 SavedWorkflowsSection 永不挂载，不会有一帧的误挂载去发查询。
-  const pageTab: AutomationsPageTab = dynamicWorkflowEnabled ? storedPageTab : "automation";
+  const pageTab: AutomationsPageTab = dynamicWorkflowEnabled
+    ? (workspacePage ?? storedPageTab)
+    : "automation";
   const setPageTab = useCallback((next: AutomationsPageTab) => {
     setPageTabState(next);
     writeAutomationsPageTab(next);
@@ -633,7 +643,7 @@ export function AutomationsSection({
   const currentWorkspaceIsRemote = isRemoteAutomationWorkspace(activeWorkspaceTab);
   // 灰度中途翻转：只藏创建入口；有非终态存量仍展示并跑到终态。
   const offPeakGrayEnabled = offPeakGrayConfig?.enabled === true;
-  const offPeakCreationEnabled = offPeakGrayEnabled && !currentWorkspaceIsRemote;
+  const offPeakCreationEnabled = !workspacePage && offPeakGrayEnabled && !currentWorkspaceIsRemote;
   // 扫描全部 provider 会把未选中的 Coding Plan 当成当前执行凭证。
   // mock 演示字段仍可覆盖；真实路径只接受与当前 family/selectedKey 一致的脱敏 resolver 快照。
   const offPeakNoPlan =
@@ -642,7 +652,7 @@ export function AutomationsSection({
       !offPeakStoreLoading &&
       !isCurrentOffPeakCodingPlanSupported(offPeakCodingPlanSupport, sharedSettings));
   const offPeakVisible =
-    !currentWorkspaceIsRemote && (offPeakGrayEnabled || offPeakTasks.length > 0);
+    !workspacePage && !currentWorkspaceIsRemote && (offPeakGrayEnabled || offPeakTasks.length > 0);
   const hasAnyTasks = automations.length > 0 || offPeakTasks.length > 0;
   const visibleTabs = resolveVisibleAutomationTabs({
     hasAnyTasks,
@@ -1377,6 +1387,48 @@ export function AutomationsSection({
     );
   }
 
+  const scheduledNavigation =
+    workspacePage === "automation" && secondaryNavigation
+      ? createPortal(
+          <nav
+            className="space-y-1 px-3 py-3"
+            aria-label={intl.formatMessage({ id: "workspaceNavigation.scheduledTasks" })}
+          >
+            <Button
+              size="lg"
+              className="w-full min-w-0 justify-start gap-2.5"
+              variant={view.mode === "list" ? "secondary" : "ghost"}
+              onClick={() => setView({ mode: "list" })}
+            >
+              <Clock aria-hidden="true" className="size-4" strokeWidth={1.75} />
+              <span className="min-w-0 truncate">
+                {intl.formatMessage({ id: "workspaceNavigation.scheduledTasks" })}
+              </span>
+            </Button>
+            {automations.map((automation) => (
+              <Button
+                key={automation.automationId}
+                size="lg"
+                className="w-full min-w-0 justify-start gap-2.5"
+                aria-pressed={
+                  view.mode === "edit" && view.automation.automationId === automation.automationId
+                }
+                variant={
+                  view.mode === "edit" && view.automation.automationId === automation.automationId
+                    ? "secondary"
+                    : "ghost"
+                }
+                onClick={() => setView({ mode: "edit", automation })}
+              >
+                <CalendarClock aria-hidden="true" className="size-4" strokeWidth={1.75} />
+                <span className="min-w-0 truncate">{automation.title}</span>
+              </Button>
+            ))}
+          </nav>,
+          secondaryNavigation,
+        )
+      : null;
+
   // 闲时任务创建/编辑整页（表单范式）。
   if (view.mode === "offpeak-create" || view.mode === "offpeak-edit") {
     const editingTask =
@@ -1414,9 +1466,10 @@ export function AutomationsSection({
   }
 
   // 创建/编辑整页(带 Settings/History tab)。
-  if (view.mode !== "list") {
+  if (pageTab !== "workflow" && view.mode !== "list") {
     return (
       <>
+        {scheduledNavigation}
         <AutomationEditView
           editing={view.mode === "edit" ? view.automation : null}
           initialDraft={view.mode === "create" ? view.draft : null}
@@ -1460,32 +1513,30 @@ export function AutomationsSection({
     );
   }
 
-  // 页标题即顶级切换：「自动化 / 工作流」两个标题词
-  // 并排，30/34 沿用 h1 的页面标题层级；副标题随标签换。
-  const pageHeader = (
-    <div className="flex flex-col gap-3">
-      <AutomationsPageTitle
-        workflowTabEnabled={dynamicWorkflowEnabled}
-        value={pageTab}
-        onValueChange={setPageTab}
-      />
-      <p className="text-ui-base leading-5 text-foreground-subtlest">
-        {intl.formatMessage({
-          id:
-            pageTab === "workflow"
-              ? "workflows.hub.description"
-              : hasAnyTasks
-                ? "automations.description.populated"
-                : "automations.description",
-        })}
-      </p>
-    </div>
+  const isWorkspacePage = Boolean(workspacePage);
+  const pageHeader = isWorkspacePage ? (
+    <WorkspacePageHeader
+      title={intl.formatMessage({
+        id:
+          pageTab === "workflow"
+            ? "workspaceNavigation.workflows"
+            : "workspaceNavigation.scheduledTasks",
+      })}
+    />
+  ) : (
+    <AutomationsPageTitle
+      workflowTabEnabled={dynamicWorkflowEnabled}
+      value={pageTab}
+      onValueChange={setPageTab}
+    />
   );
 
   if (pageTab === "workflow") {
     return (
       <SavedWorkflowsSection
         header={pageHeader}
+        workspacePage={isWorkspacePage}
+        secondaryNavigation={secondaryNavigation}
         workspacePath={workspacePath}
         workspaceIdentity={workspaceIdentity}
         onNavigateToLaunchedRun={onNavigateToLaunchedRun}
@@ -1498,14 +1549,23 @@ export function AutomationsSection({
     );
   }
 
+  const headerGap = isWorkspacePage ? "mt-6" : "mt-8";
+  const startsBelowHeader = visibleTabs.length === 0;
   return (
-    <div data-automations-content className={cn(SETTINGS_FRAME_CONTENT_CLASSNAME, "flex flex-col")}>
+    <div
+      data-automations-content
+      className={cn(
+        "flex flex-col",
+        isWorkspacePage ? "mx-auto w-full max-w-[52rem]" : SETTINGS_FRAME_CONTENT_CLASSNAME,
+      )}
+    >
       {pageHeader}
+      {scheduledNavigation}
 
       {/* Tab：Scheduled 常驻；Idle 仅在灰度命中或有闲时存量时出现（D31），不再提供 All 混排视图。
          有任务时右上对齐创建（4866-1735）；空态创建入口在大卡内（4889-2013），不重复顶栏按钮。 */}
       {visibleTabs.length > 0 ? (
-        <div className="mt-8 flex items-center justify-between">
+        <div className={cn("flex items-center justify-between", headerGap)}>
           {/* 修复原因：tab 曾与右侧操作组共用 12px 间距，未体现最新设计要求的 8px 紧凑节奏。 */}
           <div className="flex items-center gap-2" data-testid={TID_OFFPEAK_TAB}>
             {/* 修复原因：未选中态旧实现强制显示 surface 背景，无法与 hover、选中态形成层级。 */}
@@ -1589,7 +1649,12 @@ export function AutomationsSection({
       ) : null}
 
       {loading && automations.length === 0 && offPeakTasks.length === 0 ? (
-        <div className="mt-8 flex h-40 items-center justify-center">
+        <div
+          className={cn(
+            "flex h-40 items-center justify-center",
+            startsBelowHeader ? headerGap : "mt-8",
+          )}
+        >
           <Spinner className="size-5" />
         </div>
       ) : (
@@ -1597,7 +1662,7 @@ export function AutomationsSection({
           className={cn(
             "flex flex-col gap-8",
             // 列表态提示栏与 action row 旧间距为 16px，小于设计稿要求的 20px。
-            hasAnyTasks ? "mt-5" : "mt-8",
+            isWorkspacePage && startsBelowHeader ? headerGap : hasAnyTasks ? "mt-5" : "mt-8",
           )}
         >
           <div className="flex w-full flex-col gap-4">

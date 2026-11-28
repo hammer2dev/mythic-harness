@@ -6785,8 +6785,6 @@ const ruRU: Record<string, string> = {
   "automations.pageTab.ariaLabel": "Страница автоматизаций",
   "automations.pageTab.automation": "Автоматизации",
   "automations.pageTab.workflow": "Рабочие процессы",
-  "workflows.hub.description":
-    "Рабочие процессы, сохранённые в открытых проектах. Заполните аргументы и запустите их снова.",
   "workflows.hub.sectionTitle": "Сохранённые рабочие процессы",
   "workflows.hub.refresh": "Обновить",
   "workflows.hub.openSettings": "Настройки рабочих процессов",
@@ -8167,9 +8165,6 @@ const ruRU: Record<string, string> = {
   "automations.noWorkspace":
     "Откройте рабочее пространство, чтобы управлять его запланированными задачами.",
   "automations.workspace.label": "Проект",
-  "automations.description":
-    "Планируйте регулярные задачи или ставьте в очередь фоновую работу на время простоя.",
-  "automations.description.populated": "Запускайте задачи по расписанию или когда нужно.",
   "automations.refresh": "Обновить",
   "automations.refreshing": "Обновление…",
   "automations.create": "Создать",

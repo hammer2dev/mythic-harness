@@ -7346,8 +7346,6 @@ const enUS: Record<string, string> = {
   "automations.pageTab.ariaLabel": "Automations page",
   "automations.pageTab.automation": "Automations",
   "automations.pageTab.workflow": "Workflows",
-  "workflows.hub.description":
-    "Workflows saved in your open projects. Fill in the arguments and run them again.",
   "workflows.hub.sectionTitle": "Saved workflows",
   "workflows.hub.refresh": "Refresh",
   "workflows.hub.openSettings": "Workflow settings",
@@ -8715,9 +8713,6 @@ const enUS: Record<string, string> = {
   "settings.automations.betaBadge": "Beta",
   "automations.noWorkspace": "Open a workspace to manage its scheduled tasks.",
   "automations.workspace.label": "Project",
-  "automations.description":
-    "Schedule recurring tasks or queue background work that runs during idle time.",
-  "automations.description.populated": "Run tasks on a schedule or whenever you need them.",
   "automations.refresh": "Refresh",
   "automations.refreshing": "Refreshing…",
   "automations.create": "Create",

@@ -2,7 +2,6 @@ import { openStatusCapsule } from "#e2e/helpers/status-capsule";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
-  TID_AUTOMATIONS_PAGE_TAB,
   TID_CHAT_WORKFLOW_RUN_DIGEST,
   TID_WORKFLOW_ACTION_DELETE,
   TID_WORKFLOW_ACTION_MOVE,
@@ -29,7 +28,6 @@ import {
   TID_WORKFLOWS_EMPTY,
 } from "@zcode/shared";
 import {
-  TID_AUTOMATIONS_OPEN,
   TID_CONFIRM_DIALOG_CONFIRM,
   TID_TASK_ITEM,
   TID_V4_TIMELINE,
@@ -94,6 +92,7 @@ beforeEach(async () => {
     Boolean(document.querySelector("[data-automations-content]")),
   );
   if (automationsOpen) {
+    await clickTestIdByWebDriver("workspace-primary-chat");
     await startDraftFromProject(DEFAULT_WORKSPACE);
   }
 });
@@ -104,6 +103,12 @@ beforeEach(async () => {
  * 必须在 workspace 就绪之后调（此前 renderer 还没注册 __testActions），且每条 case 都调：
  * 各 describe 的 after 会 clearAppData，把语言设置一起清掉。
  */
+async function openSavedWorkflows(): Promise<void> {
+  await clickTestIdByDom("workspace-primary-workflows", {
+    timeoutMsg: "一级导航没有出现工作流入口",
+  });
+}
+
 async function prepareHubCase(): Promise<void> {
   await prepareConversationE2E({ skipProvider: true });
   await pinE2ELocale("zh-CN");
@@ -163,13 +168,8 @@ describe("已保存工作流中枢 E2E", () => {
     expect(configStatus.mode).toBe("alwaysOn");
     expect(configStatus.configRequests).toBeGreaterThan(0);
 
-    // 1) 打开自动化页，页标题切到「工作流」。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, {
-      timeoutMsg: "侧栏没有出现自动化入口",
-    });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    // 1) 从一级导航打开独立的工作流页。
+    await openSavedWorkflows();
 
     // 2) 全局视图按项目分组：默认工作区（folder 名 ZCodeProject）自成一组，组头带名字，
     //    组内「通过对话创建」按钮带以 workspaceKey 收尾的 test id。
@@ -332,10 +332,7 @@ describe("全局工作流中枢 E2E", () => {
     await prepareHubCase();
 
     // 1) 自动化页 →「工作流」标签。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
 
     // 2) 顶部「全局」组出现，且含预置的 global-note 卡片。
     await waitForTestIdByDom(TID_WORKFLOW_GLOBAL_GROUP, {
@@ -697,10 +694,7 @@ describe("直接启动 E2E", () => {
     await prepareHubCase();
 
     // 1) 自动化页 →「工作流」标签 → 常量工作流的卡片。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     const okCardTestId = testId(TID_WORKFLOW_CARD, LAUNCH_OK_NAME);
     await waitForTestIdByDom(okCardTestId, {
       timeout: 20000,
@@ -793,10 +787,7 @@ describe("直接启动 E2E", () => {
     await prepareHubCase();
 
     // 1) 自动化页 →「工作流」标签 → 编译失败工作流的卡片（frontmatter 合法，卡片照常出现）。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     const failCardTestId = testId(TID_WORKFLOW_CARD, LAUNCH_FAIL_NAME);
     await waitForTestIdByDom(failCardTestId, {
       timeout: 20000,
@@ -844,10 +835,7 @@ describe("直接启动 E2E", () => {
 
     await prepareHubCase();
 
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     await waitForTestIdByDom(testId(TID_WORKFLOW_CARD, LAUNCH_MANY_NAME), {
       timeout: 20000,
       timeoutMsg: "工作流列表没有出现实参很多的工作流卡片",
@@ -909,10 +897,7 @@ describe("直接启动 E2E", () => {
 
     await prepareHubCase();
 
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     await waitForTestIdByDom(testId(TID_WORKFLOW_CARD, LAUNCH_MODEL_NAME), {
       timeout: 20000,
       timeoutMsg: "工作流列表没有出现点名未知模型的工作流卡片",
@@ -962,10 +947,7 @@ describe("直接启动 E2E", () => {
     await prepareHubCase();
 
     // 1) 自动化页 →「工作流」标签 → 无实参的项目档点「运行」即跑（不弹实参窗、不弹确认窗）。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     await waitForTestIdByDom(testId(TID_WORKFLOW_CARD, LAUNCH_SLEEP_NAME), {
       timeout: 20000,
       timeoutMsg: "工作流列表没有出现停留 running 的常量工作流卡片",
@@ -1088,10 +1070,7 @@ describe("直接启动 E2E", () => {
     await prepareHubCase();
 
     // 1) 跑那条停留 running 的常量工作流（world.run sleep 40s），打开它的 run 侧板。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     await waitForTestIdByDom(testId(TID_WORKFLOW_CARD, LAUNCH_SLEEP_NAME), {
       timeout: 20000,
       timeoutMsg: "工作流列表没有出现停留 running 的常量工作流卡片",
@@ -1167,10 +1146,7 @@ describe("直接启动 E2E", () => {
     await prepareHubCase();
 
     // 1) 中枢「运行」无实参的项目档：点即跑，新会话顶部的 run 卡跑到 completed。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     await waitForTestIdByDom(testId(TID_WORKFLOW_CARD, LAUNCH_SAVE_NAME), {
       timeout: 20000,
       timeoutMsg: "工作流列表没有出现保存用例的工作流卡片",
@@ -1271,10 +1247,7 @@ describe("直接启动 E2E", () => {
     await prepareHubCase();
 
     // 1) 中枢「运行」无实参的项目档：点即跑，run 发布一份 markdown 产物后 completed。
-    await clickTestIdByDom(TID_AUTOMATIONS_OPEN, { timeoutMsg: "侧栏没有出现自动化入口" });
-    await clickTestIdByDom(testId(TID_AUTOMATIONS_PAGE_TAB, "workflow"), {
-      timeoutMsg: "自动化页标题没有「工作流」切换",
-    });
+    await openSavedWorkflows();
     await waitForTestIdByDom(testId(TID_WORKFLOW_CARD, LAUNCH_ARTIFACT_NAME), {
       timeout: 20000,
       timeoutMsg: "工作流列表没有出现产物用例的工作流卡片",

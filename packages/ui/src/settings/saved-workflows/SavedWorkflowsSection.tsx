@@ -1,6 +1,7 @@
+import { createPortal } from "react-dom";
 import { useSavedWorkflowProjectOptions } from "@/project-sidebar/useSavedWorkflowProjectOptions.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Plus, Settings2 } from "lucide-react";
+import { FileCode, Plus, Settings2, Workflow } from "lucide-react";
 import {
   TID_WORKFLOWS_CREATE_VIA_CHAT,
   TID_WORKFLOWS_EMPTY,
@@ -45,7 +46,9 @@ export type SavedWorkflowsOpenTarget =
 
 interface SavedWorkflowsSectionProps {
   /** 页头（标题切换 + 副标题）；只在列表态渲染，详情页与定时任务编辑页一样独占整页。 */
+  secondaryNavigation?: HTMLElement | null;
   header?: ReactNode;
+  workspacePage: boolean;
   /** 活动 workspace：只用来打「当前」标记和作全局空态的创建目标。 */
   workspacePath?: string | null;
   workspaceIdentity?: string;
@@ -82,7 +85,9 @@ function resolveOptionKey(option: AutomationWorkspaceOption): string {
  * 其下按已打开项目分组。页只持有刷新计数器、每组的加载态、详情态；「项目」= `buildAutomationWorkspaceOptions`。
  */
 export function SavedWorkflowsSection({
+  secondaryNavigation,
   header,
+  workspacePage,
   workspacePath,
   workspaceIdentity,
   onNavigateToLaunchedRun,
@@ -137,7 +142,9 @@ export function SavedWorkflowsSection({
         prev &&
         prev.loaded === next.loaded &&
         prev.empty === next.empty &&
-        prev.count === next.count
+        prev.count === next.count &&
+        prev.workflowNames?.every((name, index) => name === next.workflowNames?.[index]) &&
+        prev.workflowNames?.length === next.workflowNames?.length
       ) {
         return current;
       }
@@ -214,37 +221,101 @@ export function SavedWorkflowsSection({
     onMoved: handleMoved,
   };
 
+  const workspaceDirectory = secondaryNavigation
+    ? createPortal(
+        <nav
+          aria-label={intl.formatMessage({ id: "workspaceNavigation.workflows" })}
+          className="space-y-1 px-3 py-3"
+        >
+          <Button
+            variant={view.mode === "list" ? "secondary" : "ghost"}
+            size="lg"
+            className="w-full min-w-0 justify-start gap-2.5"
+            onClick={() => setView({ mode: "list" })}
+          >
+            <Workflow aria-hidden="true" className="size-4" strokeWidth={1.75} />
+            <span className="min-w-0 truncate">
+              {intl.formatMessage({ id: "workspaceNavigation.workflows" })}
+            </span>
+          </Button>
+          {(
+            [
+              ["global", intl.formatMessage({ id: "workflows.hub.global.title" })],
+              ...projects.map((project) => [resolveOptionKey(project), project.label] as const),
+            ] as const
+          ).map(([key, title]) => (
+            <section key={key} aria-label={title}>
+              <h3 className="truncate px-2 py-1 text-ui-sm font-medium text-foreground-subtle">
+                {title}
+              </h3>
+              {readiness[key]?.workflowNames?.map((name) => {
+                const matches =
+                  view.mode === "detail" &&
+                  view.name === name &&
+                  (view.scope === "global" ? key === "global" : view.workspaceKey === key);
+                return (
+                  <Button
+                    key={name}
+                    variant={matches ? "secondary" : "ghost"}
+                    size="lg"
+                    className="w-full min-w-0 justify-start gap-2.5"
+                    onClick={() =>
+                      setView(
+                        key === "global"
+                          ? { mode: "detail", scope: "global", name }
+                          : { mode: "detail", scope: "project", workspaceKey: key, name },
+                      )
+                    }
+                  >
+                    <FileCode aria-hidden="true" className="size-4" strokeWidth={1.75} />
+                    <span className="min-w-0 truncate">{name}</span>
+                  </Button>
+                );
+              })}
+            </section>
+          ))}
+        </nav>,
+        secondaryNavigation,
+      )
+    : null;
+
   // 详情态：只渲染选中的那一组（它内部渲染整页详情），不带页头 / 工具行。
   if (view.mode === "detail" && view.scope === "global") {
     return (
-      <SavedWorkflowGlobalGroup
-        {...globalGroupCommonProps}
-        mode={{ kind: "detail", name: view.name }}
-        onOpenDetail={(name) => setView({ mode: "detail", scope: "global", name })}
-        onBack={() => setView({ mode: "list" })}
-      />
+      <>
+        {workspaceDirectory}
+        <SavedWorkflowGlobalGroup
+          {...globalGroupCommonProps}
+          mode={{ kind: "detail", name: view.name }}
+          onOpenDetail={(name) => setView({ mode: "detail", scope: "global", name })}
+          onBack={() => setView({ mode: "list" })}
+        />
+      </>
     );
   }
   if (view.mode === "detail") {
     const project = projects.find((candidate) => resolveOptionKey(candidate) === view.workspaceKey);
     if (project) {
       return (
-        <SavedWorkflowProjectGroup
-          key={view.workspaceKey}
-          project={project}
-          isCurrent={activeKey === view.workspaceKey}
-          refreshSeq={refreshSeq}
-          mode={{ kind: "detail", name: view.name }}
-          onStateChange={handleStateChange}
-          onOpenDetail={(name) =>
-            setView({ mode: "detail", scope: "project", workspaceKey: view.workspaceKey, name })
-          }
-          onBack={() => setView({ mode: "list" })}
-          onNavigateToLaunchedRun={onNavigateToLaunchedRun}
-          onCreateViaChat={onCreateViaChat}
-          onOpenWorkflowRun={onOpenWorkflowRun}
-          onOpenWorkflowArtifact={onOpenWorkflowArtifact}
-        />
+        <>
+          {workspaceDirectory}
+          <SavedWorkflowProjectGroup
+            key={view.workspaceKey}
+            project={project}
+            isCurrent={activeKey === view.workspaceKey}
+            refreshSeq={refreshSeq}
+            mode={{ kind: "detail", name: view.name }}
+            onStateChange={handleStateChange}
+            onOpenDetail={(name) =>
+              setView({ mode: "detail", scope: "project", workspaceKey: view.workspaceKey, name })
+            }
+            onBack={() => setView({ mode: "list" })}
+            onNavigateToLaunchedRun={onNavigateToLaunchedRun}
+            onCreateViaChat={onCreateViaChat}
+            onOpenWorkflowRun={onOpenWorkflowRun}
+            onOpenWorkflowArtifact={onOpenWorkflowArtifact}
+          />
+        </>
       );
     }
     // 项目在详情打开后被关闭：上面的 effect 会把 view 复位为列表，这里先落回列表渲染。
@@ -270,10 +341,17 @@ export function SavedWorkflowsSection({
   );
 
   return (
-    <div data-automations-content className={cn(SETTINGS_FRAME_CONTENT_CLASSNAME, "flex flex-col")}>
+    <div
+      data-automations-content
+      className={cn(
+        "flex flex-col",
+        workspacePage ? "mx-auto w-full max-w-[52rem]" : SETTINGS_FRAME_CONTENT_CLASSNAME,
+      )}
+    >
+      {workspaceDirectory}
       {header}
 
-      <div className="mt-8 flex items-center justify-between">
+      <div className={cn("flex items-center justify-between", workspacePage ? "mt-6" : "mt-8")}>
         <h2 className="text-ui-base font-medium leading-5 text-foreground-subtle">
           {intl.formatMessage({ id: "workflows.hub.sectionTitle" })}
           {totalCount > 0 ? (

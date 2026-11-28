@@ -147,8 +147,13 @@ export function SavedWorkflowProjectGroup({
   const empty = state.loaded && state.entries.length === 0 && state.invalid.length === 0;
   const count = state.loaded ? state.entries.length : 0;
   useEffect(() => {
-    onStateChange(workspaceKey, { loaded: state.loaded, empty, count });
-  }, [count, empty, onStateChange, state.loaded, workspaceKey]);
+    onStateChange(workspaceKey, {
+      loaded: state.loaded,
+      empty,
+      count,
+      workflowNames: state.entries.map((entry) => entry.name),
+    });
+  }, [count, empty, onStateChange, state.entries, state.loaded, workspaceKey]);
 
   const lastRuns = useMemo(() => lastRunByWorkflowName(state.runs), [state.runs]);
 

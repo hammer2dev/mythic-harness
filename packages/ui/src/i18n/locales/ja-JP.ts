@@ -6812,8 +6812,6 @@ const jaJP: Record<string, string> = {
   "automations.pageTab.ariaLabel": "オートメーションページ",
   "automations.pageTab.automation": "オートメーション",
   "automations.pageTab.workflow": "ワークフロー",
-  "workflows.hub.description":
-    "開いているプロジェクトに保存されたワークフローです。引数を入力して再実行できます。",
   "workflows.hub.sectionTitle": "保存済みのワークフロー",
   "workflows.hub.refresh": "更新",
   "workflows.hub.openSettings": "ワークフローの設定",
@@ -8210,10 +8208,6 @@ const jaJP: Record<string, string> = {
   "settings.automations.betaBadge": "Beta",
   "automations.noWorkspace": "ワークスペースを開くと、そのスケジュールタスクを管理できます。",
   "automations.workspace.label": "プロジェクト",
-  "automations.description":
-    "定期的なタスクをスケジュールしたり、アイドル時間に実行するバックグラウンド作業をキューに入れたりできます。",
-  "automations.description.populated":
-    "スケジュールに沿って、または必要なときにいつでもタスクを実行します。",
   "automations.refresh": "更新",
   "automations.refreshing": "更新中…",
   "automations.create": "作成",

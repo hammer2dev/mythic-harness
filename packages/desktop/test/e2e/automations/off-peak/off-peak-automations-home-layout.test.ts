@@ -136,10 +136,14 @@ describe("Automations 空首页 Figma 布局 E2E", () => {
         const manualCreate = requireElement(`[data-testid="${manualCreateTestId}"]`);
         const idleCreate = requireElement(`[data-testid="${offPeakCreateTestId}"]`);
         const contentStyle = getComputedStyle(content);
+        const contentRect = rect(content);
+        const viewport = content.closest("[data-workspace-page-content]")!.parentElement!;
+        const viewportCenter = rect(viewport).left + viewport.clientLeft + viewport.clientWidth / 2;
 
         return {
+          centerOffset: contentRect.left + contentRect.width / 2 - viewportCenter,
           contentWidth:
-            content.getBoundingClientRect().width -
+            contentRect.width -
             Number.parseFloat(contentStyle.paddingLeft) -
             Number.parseFloat(contentStyle.paddingRight),
           empty: rect(empty),
@@ -158,9 +162,9 @@ describe("Automations 空首页 Figma 布局 E2E", () => {
       TID_AUTOMATION_CREATE_MANUALLY,
     );
 
-    // Settings 统一内容框当前为 max-w-4xl（896px）+ 左右 32px padding，内列应为 832px；
-    // 旧 802px 是收敛 Settings 框架前的历史值，不能继续当作当前布局的回归基线。
+    // 宽窗下 52rem 的内容列应居中，左右剩余空间相同。
     assertNear(layout.contentWidth, 832, 1, "桌面内容列宽度");
+    assertNear(layout.centerOffset, 0, 1, "桌面内容列与右侧视口中心偏移");
     assertNear(layout.empty.height, 226, 1, "空状态卡高度");
     assertNear(layout.keepAwake.height, 44, 1, "Keep-awake 提示条高度");
     assertNear(layout.keepAwake.top - layout.empty.bottom, 16, 1, "空状态与提示条间距");

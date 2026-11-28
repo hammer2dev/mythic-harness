@@ -36,7 +36,10 @@ import { selectSavedWorkflowState, useSavedWorkflowStore } from "@/store/savedWo
 interface UseSavedWorkflowGlobalGroupParams {
   refreshSeq: number;
   mode: SavedWorkflowGroupMode;
-  onStateChange: (key: "global", state: { loaded: boolean; empty: boolean; count: number }) => void;
+  onStateChange: (
+    key: "global",
+    state: { loaded: boolean; empty: boolean; count: number; workflowNames: string[] },
+  ) => void;
   onOpenDetail: (name: string) => void;
   onBack: () => void;
   /** 「运行」= GUI 直接启动：accepted 后切到新会话。 */
@@ -107,8 +110,13 @@ export function useSavedWorkflowGlobalGroup({
   const empty = state.loaded && state.entries.length === 0 && state.invalid.length === 0;
   const count = state.loaded ? state.entries.length : 0;
   useEffect(() => {
-    onStateChange("global", { loaded: state.loaded, empty, count });
-  }, [count, empty, onStateChange, state.loaded]);
+    onStateChange("global", {
+      loaded: state.loaded,
+      empty,
+      count,
+      workflowNames: state.entries.map((entry) => entry.name),
+    });
+  }, [count, empty, onStateChange, state.entries, state.loaded]);
 
   const lastRuns = useMemo(() => lastRunByWorkflowName(state.runs), [state.runs]);
   const resolveRunProject = useMemo(
